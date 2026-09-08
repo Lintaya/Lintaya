@@ -306,6 +306,13 @@ test("a recognized Git failure reaches the client as its own code, not the gener
   // "nothing to commit", which the classifier maps to a 400 the UI can explain.
   const { spawnSync } = require("node:child_process");
   spawnSync("git", ["-C", clonePath, "init", "-q"]);
+  // The fixture carries its own identity. Without one, `git commit` stops at
+  // "Author identity unknown" before it ever reaches "nothing to commit", so
+  // the classifier sees an error it does not recognize and answers 502 — which
+  // is what happens on a clean machine and on CI, where no global identity is
+  // configured. The test is about the classifier, not about git config.
+  spawnSync("git", ["-C", clonePath, "config", "user.email", "fixture@example.test"]);
+  spawnSync("git", ["-C", clonePath, "config", "user.name", "Fixture"]);
   harness.store.set("gitlab-clone-state", { "project-1": { path: clonePath } });
 
   const result = await harness.invoke("POST", "/api/connectors/:provider/projects/:id/git/commit", {
