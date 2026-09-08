@@ -907,29 +907,29 @@ function CodeViewer({ projectId, provider, path, branch, source = "remote", edit
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-    
+
     // Simple regex-based highlighting
     let highlighted = escaped;
-    
+
     // Keywords (JS/TS/Python/Go/Rust)
     const keywords = /\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|class|extends|import|export|default|from|async|await|try|catch|finally|throw|new|this|super|typeof|instanceof|in|of|void|delete|yield|static|get|set|constructor)\b/g;
     highlighted = highlighted.replace(keywords, '<span style="color:#c084fc">$1</span>');
-    
+
     // Strings
     highlighted = highlighted.replace(/(["'`])(?:(?!\1|\\).|\\.)*\1/g, '<span style="color:#86efac">$&</span>');
-    
+
     // Numbers
     highlighted = highlighted.replace(/\b(\d+\.?\d*)\b/g, '<span style="color:#fcd34d">$1</span>');
-    
+
     // Comments (single line)
     highlighted = highlighted.replace(/(\/\/.*$)/gm, '<span style="color:#6b7280">$1</span>');
-    
+
     // Comments (multi-line)
     highlighted = highlighted.replace(/(\/\*[\s\S]*?\*\/)/g, '<span style="color:#6b7280">$1</span>');
-    
+
     // Functions
     highlighted = highlighted.replace(/\b([a-zA-Z_]\w*)\s*(?=\()/g, '<span style="color:#60a5fa">$1</span>');
-    
+
     return highlighted;
   }, []);
 
@@ -1186,7 +1186,7 @@ function CodeViewer({ projectId, provider, path, branch, source = "remote", edit
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--muted)", flexWrap: "wrap" }}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, flex: 1, minWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{path}</span>
-        
+
         {/* View mode buttons */}
         {canPreview && (
           <div style={{ display: "flex", gap: 2, background: "#e5e7eb", borderRadius: 5, padding: 2 }}>
@@ -1195,7 +1195,7 @@ function CodeViewer({ projectId, provider, path, branch, source = "remote", edit
             <button onClick={() => { setSplitView(true); setPreview(true); }} style={btnStyle(splitView)} title="Split view">⊞ Split</button>
           </div>
         )}
-        
+
         {!imageDataUri && (
           <>
             <button onClick={onToggleEdit} title={window.I18N.t("ui.repos.localEdit", "Local editing")} style={btnStyle(editable)}>
@@ -1207,7 +1207,7 @@ function CodeViewer({ projectId, provider, path, branch, source = "remote", edit
           </>
         )}
       </div>
-      
+
       {/* Search bar */}
       {showSearch && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>

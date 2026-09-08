@@ -20,7 +20,7 @@ function createApp(options = {}) {
 
   application.use(requestContext());
   application.use(express.json());
-  
+
   // Public health check
   application.get("/api/health", (req, res) => {
     res.json({ ok: true, ts: Date.now(), version: application.locals.lintaya.version });

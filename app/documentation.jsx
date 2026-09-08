@@ -269,8 +269,8 @@ function DocumentationView() {
           {isAPISection ? (
             /* API Tab - Show Swagger UI */
             <div style={{ height: "100%", border: 0, width: "100%" }}>
-              <iframe 
-                src="/docs" 
+              <iframe
+                src="/docs"
                 style={{ width: "100%", height: "100%", border: 0 }}
                 title="API Documentation"
               />

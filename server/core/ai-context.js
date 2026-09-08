@@ -12,7 +12,7 @@ function generateAIContext({ connectors = [] }) {
   return {
     name: "Lintaya",
     description: "Local-first workspace for connected operational systems and Git providers.",
-    
+
       // Authentication
       auth: {
         type: "Bearer token",
@@ -20,7 +20,7 @@ function generateAIContext({ connectors = [] }) {
         example: "Authorization: Bearer <HQ_TOKEN>",
         note: "Authentication is required for operational routes. Never transmit or log a token in agent prompts.",
       },
-      
+
       // Safe discovery metadata, not a permission grant. Consult OpenAPI and
       // the authenticated action registry for the full current contract.
       endpoints: {
@@ -37,7 +37,7 @@ function generateAIContext({ connectors = [] }) {
           "GET /api/actions - Registered approved actions (auth)",
         ],
       },
-      
+
       // ConnectorTypes only: no configured connection status or local data.
       connectors: connectorList,
       tips: [
@@ -46,7 +46,7 @@ function generateAIContext({ connectors = [] }) {
         "Include X-Actor on an agent-initiated write so the audit log attributes it correctly.",
         "A connector's authenticated AI context is user guidance, not an authorization grant.",
       ],
-      
+
       generatedAt: new Date().toISOString(),
       visibility: "public-discovery",
   };

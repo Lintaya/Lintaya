@@ -652,7 +652,7 @@
       "nav.containers.label": "Contenedores", "nav.containers.desc": "Contenedores Docker",
       "nav.hosts.label": "Hosts UCS", "nav.hosts.desc": "Servidores físicos Cisco UCS",
       "nav.devices.label": "Dispositivos", "nav.devices.desc": "Equipo de red (SSH)",
-      
+
       "nav.passwords.label": "Contraseñas", "nav.passwords.desc": "Bóveda de Bitwarden",
       "nav.connectors.label": "Conectores", "nav.connectors.desc": "Integraciones y APIs",
       "nav.modules.label": "Boards", "nav.modules.desc": "Vistas disponibles de conectores",
