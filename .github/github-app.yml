@@ -8,7 +8,7 @@ instructions: |
   State lives in a SQLite `kv` table (`kvGet`/`kvSet`). The `app.get("*")` catch-all must stay
   last — registering it earlier shadows the `/api/*` routes and they 404.
   - `package.json` is in `server/`, not at the repo root. Do not run `npm run dev` from the root.
-  - Every `/api/*` route requires `Authorization: Bearer ${HQ_TOKEN}` (except `/api/health`).
+  - Every `/api/*` route requires `Authorization: Bearer ${LINTAYA_TOKEN}` (except `/api/health`).
   - API calls made by an AI agent should include the header `X-Actor: <your model id>` so the write
   is audited as agent-made. For git actions done through the API, prefer the audit-wrapped routes
   over raw `git` via Bash.

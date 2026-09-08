@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write docs/app/get-started/via-mcp.md
 
-docs/app/get-started/via-mcp.md: a81434b4b01635b29c63283360c67288e03b6d44
-docs/app/get-started/via-mcp.es.md: 171beef36dd575d2aae83c0e26f5b1cd54e8852c
+docs/app/get-started/via-mcp.md: 6e42d6f70c07a2bc4a34c927926a46a76140553c
+docs/app/get-started/via-mcp.es.md: 119bb9cb4ebe9b51de4bbc411aab77d371aaad3f

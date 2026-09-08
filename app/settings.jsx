@@ -7,6 +7,9 @@ const st = (key, fallback, vars) => window.I18N?.t(key, fallback, vars) || fallb
 // file. Maintaining a second copy here is what left Settings five entries
 // behind the sidebar.
 const navRoutes = () => window.NAV_ROUTES || [];
+// Mismo registro compartido: los grupos del sidebar y su orden por defecto.
+const navGroups = () => window.SIDEBAR_NAV_GROUPS || [];
+const coreNavOrder = () => window.CORE_NAV_ORDER || {};
 
 const ACCENT_OPTIONS = [
   { value: "#2563eb", label: "Blue" },
@@ -85,16 +88,19 @@ function Section({ title, desc, children }) {
 // texto se partía en cuatro líneas contra un campo intacto. Con flexWrap el
 // control baja de línea cuando ya no cabe y la etiqueta se queda con el ancho
 // entero; donde hay sitio, se ve exactamente igual que antes.
-function Row({ label, desc, children, last }) {
+function Row({ label, desc, children, last, indent = 0, leading = null }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      flexWrap: "wrap", padding: "13px 16px", gap: 16,
+      flexWrap: "wrap", padding: "13px 16px", paddingLeft: 16 + indent, gap: 16,
       borderBottom: last ? 0 : "1px solid var(--border)",
     }}>
-      <div style={{ minWidth: 0, flex: "1 1 190px" }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>{label}</div>
-        {desc && <div style={{ fontSize: 11.5, color: "var(--muted-fg)", marginTop: 1 }}>{desc}</div>}
+      <div style={{ minWidth: 0, flex: "1 1 190px", display: "flex", alignItems: "center", gap: 8 }}>
+        {leading}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--fg)" }}>{label}</div>
+          {desc && <div style={{ fontSize: 11.5, color: "var(--muted-fg)", marginTop: 1 }}>{desc}</div>}
+        </div>
       </div>
       <div style={{ flexShrink: 0 }}>{children}</div>
     </div>
@@ -534,33 +540,141 @@ function ReorderButton({ dir, disabled, onClick, label }) {
   );
 }
 
-function NavigationPane({ hiddenRoutes, navOrderIds, onMoveRoute, onToggleRoute }) {
+// Plegar un grupo en esta lista es solo comodidad para no recorrer 23 filas;
+// no cambia nada de lo que se guarda, a diferencia del toggle de al lado.
+function GroupDisclosure({ open, onClick, label }) {
+  return (
+    <button
+      type="button" onClick={onClick} aria-expanded={open} aria-label={label} title={label}
+      style={{
+        width: 18, height: 18, flexShrink: 0, display: "inline-flex", alignItems: "center",
+        justifyContent: "center", border: 0, background: "none", cursor: "pointer",
+        color: "var(--muted-fg)", padding: 0,
+        transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease",
+      }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  );
+}
+
+function NavigationPane({ hiddenRoutes, navOrderIds, onReorderNav, onToggleRoute }) {
   const locale = window.I18N.useLocale();
   const t = window.I18N.t;
   const all = navRoutes();
-  const orderIds = navOrderIds && navOrderIds.length ? navOrderIds : all.map(r => r.id);
-  // Reorder `all` to match the saved order; anything not yet in that order
-  // (e.g. a route added after the user last reordered) is appended so it
-  // keeps showing up instead of silently disappearing from the list.
   const byId = Object.fromEntries(all.map(r => [r.id, r]));
-  const routes = [...orderIds.map(id => byId[id]).filter(Boolean), ...all.filter(r => !orderIds.includes(r.id))];
-  const hiddenCount = routes.filter(i => hiddenRoutes.includes(i.id)).length;
+  // Sin orden guardado el de referencia es CORE_NAV_ORDER, el mismo que pinta
+  // el sidebar. Usar el orden de declaracion de NAV_ROUTES hacia que esta lista
+  // contara una historia distinta de la del menu que dice configurar.
+  const rank = coreNavOrder();
+  const fallbackIds = all.map(r => r.id).sort((left, right) => (rank[left] ?? 200) - (rank[right] ?? 200));
+  const saved = navOrderIds && navOrderIds.length ? navOrderIds : [];
+  // Lo que no este en el orden guardado (una ruta anadida despues) se anexa en
+  // vez de desaparecer en silencio.
+  const ids = [...saved.filter(id => byId[id]), ...fallbackIds.filter(id => !saved.includes(id))];
+
+  // Mismo arbol que arma el sidebar: el grupo ocupa la posicion de su hijo mas
+  // alto y se lleva a los demas consigo.
+  const [collapsed, setCollapsed] = useState([]);
+  const groupOf = new Map();
+  navGroups().forEach(g => g.children.forEach(id => groupOf.set(id, g)));
+  const nodes = [];
+  const placed = new Set();
+  for (const id of ids) {
+    const group = groupOf.get(id);
+    if (!group) { nodes.push({ kind: "route", ids: [id] }); continue; }
+    if (placed.has(group.id)) continue;
+    placed.add(group.id);
+    nodes.push({ kind: "group", group, ids: ids.filter(candidate => groupOf.get(candidate) === group) });
+  }
+
+  const commit = next => onReorderNav(next.flatMap(node => node.ids));
+  // Un grupo se mueve como bloque, y su vecino puede ser otro bloque: se
+  // intercambian nodos enteros, no ids sueltos.
+  const moveNode = (index, direction) => {
+    const to = index + direction;
+    if (to < 0 || to >= nodes.length) return;
+    const next = nodes.slice();
+    [next[index], next[to]] = [next[to], next[index]];
+    commit(next);
+  };
+  // Un hijo solo se mueve dentro de su grupo: sacarlo lo dejaria en un grupo al
+  // que no pertenece segun SIDEBAR_NAV_GROUPS, y el sidebar lo devolveria igual.
+  const moveChild = (nodeIndex, childIndex, direction) => {
+    const node = nodes[nodeIndex];
+    const to = childIndex + direction;
+    if (to < 0 || to >= node.ids.length) return;
+    const childIds = node.ids.slice();
+    [childIds[childIndex], childIds[to]] = [childIds[to], childIds[childIndex]];
+    const next = nodes.slice();
+    next[nodeIndex] = { ...node, ids: childIds };
+    commit(next);
+  };
+
+  const label = id => t(`nav.${id}.label`, id);
+  const rows = [];
+  nodes.forEach((node, nodeIndex) => {
+    const first = nodeIndex === 0;
+    const last = nodeIndex === nodes.length - 1;
+    if (node.kind === "group") {
+      const children = node.ids;
+      const anyVisible = children.some(id => !hiddenRoutes.includes(id));
+      rows.push({
+        key: "group:" + node.group.id, indent: 0,
+        label: label(node.group.id),
+        desc: t("settings.navGroup", "", { count: children.length }),
+        groupId: node.group.id,
+        up: () => moveNode(nodeIndex, -1), down: () => moveNode(nodeIndex, 1),
+        upOff: first, downOff: last,
+        checked: anyVisible,
+        onToggle: visible => children.forEach(id => onToggleRoute(id, visible)),
+        name: label(node.group.id),
+      });
+      if (collapsed.includes(node.group.id)) return;
+      children.forEach((id, childIndex) => rows.push({
+        key: id, indent: 18, label: label(id), desc: t(`nav.${id}.desc`, ""),
+        up: () => moveChild(nodeIndex, childIndex, -1), down: () => moveChild(nodeIndex, childIndex, 1),
+        upOff: childIndex === 0, downOff: childIndex === children.length - 1,
+        checked: !hiddenRoutes.includes(id),
+        onToggle: visible => onToggleRoute(id, visible),
+        name: label(id),
+      }));
+      return;
+    }
+    const id = node.ids[0];
+    rows.push({
+      key: id, indent: 0, label: label(id), desc: t(`nav.${id}.desc`, ""),
+      up: () => moveNode(nodeIndex, -1), down: () => moveNode(nodeIndex, 1),
+      upOff: first, downOff: last,
+      checked: !hiddenRoutes.includes(id),
+      onToggle: visible => onToggleRoute(id, visible),
+      name: label(id),
+    });
+  });
+
+  const hiddenCount = ids.filter(id => hiddenRoutes.includes(id)).length;
   return (
     <Section
       title={t("settings.sidebarLinks")}
-      desc={hiddenCount ? t("settings.hidden", "", { count: hiddenCount, plural: hiddenCount === 1 ? "" : "s", total: routes.length }) : t("settings.visible", "", { count: routes.length })}
+      desc={hiddenCount ? t("settings.hidden", "", { count: hiddenCount, plural: hiddenCount === 1 ? "" : "s", total: ids.length }) : t("settings.visible", "", { count: ids.length })}
     >
-      {routes.map((item, i) => (
-        <Row key={item.id} label={t(`nav.${item.id}.label`, item.id)} desc={t(`nav.${item.id}.desc`, "")} last={i === routes.length - 1}>
+      {rows.map((row, i) => (
+        <Row key={row.key} label={row.label} desc={row.desc} indent={row.indent} last={i === rows.length - 1}
+          leading={row.groupId ? (
+            <GroupDisclosure
+              open={!collapsed.includes(row.groupId)}
+              onClick={() => setCollapsed(prev => prev.includes(row.groupId) ? prev.filter(x => x !== row.groupId) : [...prev, row.groupId])}
+              label={t("settings.groupRows", "", { label: row.name })}
+            />
+          ) : null}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <ReorderButton dir="up" disabled={i === 0} onClick={() => onMoveRoute(item.id, -1)} label={t("settings.moveUp", "", { label: t(`nav.${item.id}.label`, item.id) })} />
-              <ReorderButton dir="down" disabled={i === routes.length - 1} onClick={() => onMoveRoute(item.id, 1)} label={t("settings.moveDown", "", { label: t(`nav.${item.id}.label`, item.id) })} />
+              <ReorderButton dir="up" disabled={row.upOff} onClick={row.up} label={t("settings.moveUp", "", { label: row.name })} />
+              <ReorderButton dir="down" disabled={row.downOff} onClick={row.down} label={t("settings.moveDown", "", { label: row.name })} />
             </div>
             <Toggle
-              checked={!hiddenRoutes.includes(item.id)}
-              label={t("settings.show", "", { label: t(`nav.${item.id}.label`, item.id) })}
-              onChange={visible => onToggleRoute(item.id, visible)}
+              checked={row.checked}
+              label={t("settings.show", "", { label: row.name })}
+              onChange={row.onToggle}
             />
           </div>
         </Row>
@@ -791,7 +905,7 @@ function BackupPane() {
 }
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
-function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onMoveRoute, tweaks, onSetTweak }) {
+function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onReorderNav, tweaks, onSetTweak }) {
   const [pane, setPane] = useState("profile");
   const [query, setQuery] = useState("");
   // El rail medía 216 px fijos sin punto de corte, así que a 393 px se comía
@@ -829,7 +943,7 @@ function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onMoveRoute, t
   const visible = groups.flatMap(g => g.items);
   const active = visible.some(i => i.id === pane) ? pane : (visible[0]?.id || pane);
 
-  const paneProps = { hiddenRoutes, onToggleRoute, navOrderIds, onMoveRoute, tweaks, onSetTweak };
+  const paneProps = { hiddenRoutes, onToggleRoute, navOrderIds, onReorderNav, tweaks, onSetTweak };
   const PANES = {
     profile:    <ProfilePane {...paneProps} />,
     ai:         <AiPane />,

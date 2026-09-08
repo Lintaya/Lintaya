@@ -31,7 +31,7 @@ node .\start-dev.js
 ```
 
 Open the Local URL printed by the server, normally http://localhost:3000. Set a
-strong HQ_TOKEN in the gitignored start-dev.js before using a real connector.
+strong LINTAYA_TOKEN in the gitignored start-dev.js before using a real connector.
 
 ## First browser session
 

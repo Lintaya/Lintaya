@@ -754,7 +754,7 @@ function generateOpenAPISpec({ connectors = [] } = {}) {
           properties: {
             type: { type: "string", enum: ["Bearer token"] },
             header: { type: "string", enum: ["Authorization"] },
-            example: { type: "string", enum: ["Authorization: Bearer <HQ_TOKEN>"] },
+            example: { type: "string", enum: ["Authorization: Bearer <LINTAYA_TOKEN>"] },
             note: { type: "string" },
           },
         },
@@ -868,7 +868,7 @@ function generateOpenAPISpec({ connectors = [] } = {}) {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          bearerFormat: "HQ_TOKEN",
+          bearerFormat: "LINTAYA_TOKEN",
           description: "Opaque Lintaya token configured by the operator. Never place it in prompts, URLs, or logs."
         }
       }
