@@ -71,12 +71,22 @@ test("POST honors explicit icon, active:false, and showInSidebar:false", async (
   assert.equal(page.showInSidebar, false);
 });
 
+// updatedAt es un ISO con milisegundos: en un runner rápido el POST y el PUT
+// caen en el mismo milisegundo, así que la marca se reescribe con el mismo
+// valor y la prueba fallaba sin que la ruta tuviera nada malo. Se espera a que
+// el reloj avance antes de editar.
+async function nextMillisecond() {
+  const start = Date.now();
+  while (Date.now() === start) await new Promise((resolve) => setTimeout(resolve, 1));
+}
+
 test("PUT updates an existing page and bumps updatedAt; 404s on unknown id", async () => {
   const { app, headers, auditLog } = setup();
   const created = await request(app, "POST", "/api/module-pages", {
     headers, body: { title: "Ops", tree: SAMPLE_TREE },
   });
   const page = created.json();
+  await nextMillisecond();
 
   const updatedTree = { t: "s", k: "s1", dir: "v", ratio: 0.5, a: SAMPLE_TREE, b: { t: "z", k: "z2", blocks: [] } };
   const updated = await request(app, "PUT", `/api/module-pages/${page.id}`, {

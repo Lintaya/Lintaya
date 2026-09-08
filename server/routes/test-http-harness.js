@@ -48,6 +48,14 @@ function request(application, method, url, { headers = {}, body } = {}) {
     const socket = new PassThrough();
     req.connection = socket;
     req.socket = socket;
+    // Express reassigns the prototype of every request it handles, so this
+    // Readable also inherits http.IncomingMessage.prototype — and with it an
+    // _destroy that, from Node 24 on, tears down an abort signal and a socket
+    // that only exist on a request Node's own HTTP server built. It throws
+    // "Cannot read properties of undefined (reading 'removeListener')" the
+    // moment the stream ends. Keep the plain Readable teardown instead, which
+    // is all a test double needs.
+    req._destroy = Readable.prototype._destroy;
 
     const res = {
       statusCode: 200,
