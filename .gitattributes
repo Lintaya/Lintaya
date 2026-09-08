@@ -1,3 +1,9 @@
+# Text files live in the repository with LF and are checked out with LF on every
+# platform. Without this a Windows checkout hands CRLF back when the file is
+# committed, and `git diff --check` in CI then reports every added line as
+# trailing whitespace — the CR is the whitespace it sees.
+* text=auto eol=lf
+
 # Vendored third-party bundles are checked in verbatim and some are pinned by
 # Subresource Integrity hashes in Lintaya.html — any line-ending conversion
 # (e.g. core.autocrlf on Windows) changes their bytes and breaks that hash,

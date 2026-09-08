@@ -5,23 +5,23 @@
 // mismo patrón visual que VMs. Para editar el layout real hay que ir a Home;
 // "+ Nuevo Bloque" abre el Block Builder para armar uno custom.
 const { useState, useEffect } = React;
-const bct = (key, fallback, vars) => window.I18N?.t(key, fallback, vars) || fallback || key;
-
-// ── Ancho del panel de preview ───────────────────────────────────────────────
-// Por navegador y no por cuenta, igual que el del Assistant (ai-chat.jsx): es
-// una preferencia de esta ventana, no un ajuste que valga la pena sincronizar.
-const PREVIEW_WIDTH_KEY = "hq-blocks-preview-width";
-const PREVIEW_MIN_WIDTH = 300;
-const PREVIEW_DEFAULT_WIDTH = 400;
-const previewMaxWidth = () => Math.round(window.innerWidth * 0.6);
-
-function loadPreviewWidth() {
-  try {
-    const stored = Number(localStorage.getItem(PREVIEW_WIDTH_KEY));
-    return Number.isFinite(stored) && stored > 0 ? Math.min(stored, previewMaxWidth()) : PREVIEW_DEFAULT_WIDTH;
-  } catch {
-    return PREVIEW_DEFAULT_WIDTH;
-  }
+const bct = (key, fallback, vars) => window.I18N?.t(key, fallback, vars) || fallback || key;
+
+// ── Ancho del panel de preview ───────────────────────────────────────────────
+// Por navegador y no por cuenta, igual que el del Assistant (ai-chat.jsx): es
+// una preferencia de esta ventana, no un ajuste que valga la pena sincronizar.
+const PREVIEW_WIDTH_KEY = "hq-blocks-preview-width";
+const PREVIEW_MIN_WIDTH = 300;
+const PREVIEW_DEFAULT_WIDTH = 400;
+const previewMaxWidth = () => Math.round(window.innerWidth * 0.6);
+
+function loadPreviewWidth() {
+  try {
+    const stored = Number(localStorage.getItem(PREVIEW_WIDTH_KEY));
+    return Number.isFinite(stored) && stored > 0 ? Math.min(stored, previewMaxWidth()) : PREVIEW_DEFAULT_WIDTH;
+  } catch {
+    return PREVIEW_DEFAULT_WIDTH;
+  }
 }
 
 const BLOCK_CONNECTOR_STYLE = {
@@ -103,60 +103,60 @@ function BlockCatalogActionButton({ label, title = label, iconName, onClick, dan
   );
 }
 
-// Mismo patrón que ChatResizeHandle (ai-chat.jsx) y BoardResizeSeparator
-// (custom-page-view.jsx): arrastre por pointer con flechas para teclado. El
-// borde que se arrastra es el izquierdo, así que el panel crece hacia la
-// izquierda y un delta negativo del mouse lo agranda.
-function BlockPreviewResizeHandle({ width, onResize, onCommit }) {
-  const onPointerDown = (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.focus(); // preventDefault() se come el foco por clic
-    const startX = event.clientX;
-    const startWidth = width;
-    let latest = startWidth;
-    const move = (moveEvent) => {
-      latest = Math.min(previewMaxWidth(), Math.max(PREVIEW_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)));
-      onResize(latest);
-    };
-    const end = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      onCommit(latest);
-    };
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
-  };
-  const onKeyDown = (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    const next = Math.min(previewMaxWidth(), Math.max(PREVIEW_MIN_WIDTH, width + (event.key === "ArrowLeft" ? 24 : -24)));
-    onResize(next);
-    onCommit(next);
-  };
-  return (
-    <div
-      role="separator" tabIndex={0} aria-orientation="vertical"
-      aria-label={bct("ui.blocks.resizePreviewPanel", "Resize the preview panel")}
-      aria-valuemin={PREVIEW_MIN_WIDTH} aria-valuemax={previewMaxWidth()} aria-valuenow={width}
-      onPointerDown={onPointerDown} onKeyDown={onKeyDown}
-      title={bct("ui.resize", "Drag to resize · arrow keys also work")}
-      style={{
-        position: "absolute", left: 0, top: 0, bottom: 0, width: 8, zIndex: 5,
-        cursor: "col-resize", touchAction: "none",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-      <span aria-hidden="true" style={{ width: 3, height: 42, borderRadius: 99, background: "var(--border)" }} />
-    </div>
-  );
-}
-
+// Mismo patrón que ChatResizeHandle (ai-chat.jsx) y BoardResizeSeparator
+// (custom-page-view.jsx): arrastre por pointer con flechas para teclado. El
+// borde que se arrastra es el izquierdo, así que el panel crece hacia la
+// izquierda y un delta negativo del mouse lo agranda.
+function BlockPreviewResizeHandle({ width, onResize, onCommit }) {
+  const onPointerDown = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.focus(); // preventDefault() se come el foco por clic
+    const startX = event.clientX;
+    const startWidth = width;
+    let latest = startWidth;
+    const move = (moveEvent) => {
+      latest = Math.min(previewMaxWidth(), Math.max(PREVIEW_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)));
+      onResize(latest);
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      onCommit(latest);
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+  const onKeyDown = (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const next = Math.min(previewMaxWidth(), Math.max(PREVIEW_MIN_WIDTH, width + (event.key === "ArrowLeft" ? 24 : -24)));
+    onResize(next);
+    onCommit(next);
+  };
+  return (
+    <div
+      role="separator" tabIndex={0} aria-orientation="vertical"
+      aria-label={bct("ui.blocks.resizePreviewPanel", "Resize the preview panel")}
+      aria-valuemin={PREVIEW_MIN_WIDTH} aria-valuemax={previewMaxWidth()} aria-valuenow={width}
+      onPointerDown={onPointerDown} onKeyDown={onKeyDown}
+      title={bct("ui.resize", "Drag to resize · arrow keys also work")}
+      style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: 8, zIndex: 5,
+        cursor: "col-resize", touchAction: "none",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+      <span aria-hidden="true" style={{ width: 3, height: 42, borderRadius: 99, background: "var(--border)" }} />
+    </div>
+  );
+}
+
 function BlockCatalogView({ isMobile }) {
   window.I18N?.useLocale();
   const [connectorBlocks, setConnectorBlocks] = useState(null); // null = cargando
@@ -168,15 +168,15 @@ function BlockCatalogView({ isMobile }) {
   // eligió/tiene guardado).
   const [connectorColors, setConnectorColors] = useState({});
   // null = cerrado; "new" = creando; un objeto block = editándolo.
-  const [builderTarget, setBuilderTarget] = useState(null);
-  // null = panel cerrado; un block = el que se está previsualizando.
-  const [previewBlock, setPreviewBlock] = useState(null);
+  const [builderTarget, setBuilderTarget] = useState(null);
+  // null = panel cerrado; un block = el que se está previsualizando.
+  const [previewBlock, setPreviewBlock] = useState(null);
   const [previewWidth, setPreviewWidth] = useState(loadPreviewWidth);
   // Borrar un block es irreversible y el botón vive en la propia fila: sin
   // confirmación, un clic de más se lleva el block por delante.
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const commitPreviewWidth = (next) => {
-    try { localStorage.setItem(PREVIEW_WIDTH_KEY, String(next)); } catch { /* modo privado */ }
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const commitPreviewWidth = (next) => {
+    try { localStorage.setItem(PREVIEW_WIDTH_KEY, String(next)); } catch { /* modo privado */ }
   };
   const [q, setQ] = useState("");
   const [connectorFilter, setConnectorFilter] = useState("all");
