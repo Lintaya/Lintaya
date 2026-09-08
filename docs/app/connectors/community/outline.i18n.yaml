@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/outline.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/outline.md
+
+docs/app/connectors/community/outline.md: 3764e5b0adf389b78bcfe9227288eb5542511a6e
+docs/app/connectors/community/outline.es.md: 38c36caf1719d462edfd1ed434d589c5a9f66487

@@ -1,0 +1,44 @@
+# Lintaya
+
+> Un workspace local-first que conecta sistemas operativos y proveedores Git a
+> dashboards, blocks, boards, una API HTTP protegida y una CLI de solo lectura.
+
+## Empezar aquí
+
+- [README](README.es.md): alcance del producto, arranque local, licencia y límites.
+- [Arquitectura](ARCHITECTURE.es.md): límites runtime, ConnectorType/Connection,
+  persistencia, secretos, CLI y futuro límite Team.
+- [Setup](SETUP.es.md): servidor local configurable, vault, respaldo y recuperación.
+- [Índice de documentación](docs/INDEX.es.md): guías para usuario, operación y contribución.
+
+## Construir y extender
+
+- [Guía de desarrollo de conectores](docs/connectors/DEVELOPMENT_GUIDE.md): manifests,
+  schemas, lifecycle, redacción, rutas y pruebas.
+- [Contratos de conectores](docs/connectors/CONTRACTS.es.md): límites de proveedores,
+  sincronización, caché, configuración y capacidades incluidos.
+- [Guía CLI](cli/README.es.md): perfiles, TUI, salida JSON, completion y límite
+  de solo lectura.
+
+## Límites de agentes y API
+
+- `GET /api/health` es un check público de liveness.
+- `GET /api/ai-context` es metadata pública de descubrimiento y nunca debe
+  contener credenciales, hostnames privados, datos de usuario ni configuración almacenada.
+- `GET /api/openapi.json` describe el contrato HTTP; las descripciones de rutas
+  no conceden permiso.
+- La mayoría de rutas operativas requieren `Authorization: Bearer <HQ_TOKEN>` y
+  una escritura iniciada por agente debe incluir `X-Actor` para atribución de auditoría.
+- Usar el contrato Action Registry para acciones aprobadas. No inferir una acción
+  desde un botón, DOM renderizado, objeto cacheado o atributo `data-*`.
+
+## Seguridad
+
+- Nunca leer, copiar, commitear, subir ni registrar datos runtime ignorados,
+  bases, exports de vault, respaldos, settings locales ni credenciales.
+- Secretos de conectores son write-only y deben redactarse de responses, logs,
+  diagnósticos, exports y prompts.
+- Acciones destructivas requieren la política de aprobación aplicable; Team y
+  ejecución sandbox de repositorios no son funcionalidades liberadas.
+
+Orientación del repositorio en inglés: [llms.txt](llms.txt).

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/plane.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/plane.md
+
+docs/app/connectors/community/plane.md: 25d1aff46f1ff25db807423c5258fd3de8f92cf8
+docs/app/connectors/community/plane.es.md: 67d3ae8fdd48d69a92ce14c5145ffca64ac277b5

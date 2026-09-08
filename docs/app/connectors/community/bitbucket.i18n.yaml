@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/bitbucket.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/bitbucket.md
+
+docs/app/connectors/community/bitbucket.md: 8a1d42171fee44683827d98ea67206f4f297a107
+docs/app/connectors/community/bitbucket.es.md: 113c3d227b3984391a2f74683efab3a8b9a586c2

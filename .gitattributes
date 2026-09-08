@@ -1,0 +1,6 @@
+# Vendored third-party bundles are checked in verbatim and some are pinned by
+# Subresource Integrity hashes in Lintaya.html — any line-ending conversion
+# (e.g. core.autocrlf on Windows) changes their bytes and breaks that hash,
+# causing the browser to block the script entirely. Treat them as binary so
+# git never touches them on checkout/checkin.
+vendor/* -text

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/release/README.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/release/README.md
+
+docs/release/README.md: f014ec8eba1ab38a65c04a2a521742aa0867cac4
+docs/release/README.es.md: 1b054101f2028d47c1bc59d8d6023e8dc6167446

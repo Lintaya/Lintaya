@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Express server (full app + API)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/server/start-dev.js",
+      "cwd": "${workspaceFolder}/server",
+      "console": "integratedTerminal",
+      "env": {
+        "PORT": "3001"
+      },
+      "skipFiles": ["<node_internals>/**"],
+      "serverReadyAction": {
+        "pattern": "Lintaya running at https?://\\S+:([0-9]+)",
+        "uriFormat": "http://localhost:%s",
+        "action": "openIntegratedBrowser"
+      }
+    }
+  ]
+}

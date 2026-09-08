@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "outline",
+  "displayName": "Outline",
+  "version": "0.2.0",
+  "tier": "community",
+  "lifecycle": "beta",
+  "license": "Apache-2.0",
+  "capabilities": ["collections.read", "documents.read", "documents.write", "documents.delete"],
+  "implementation": { "mode": "package", "source": "server/connectors/community/outline/index.js" },
+  "instantiable": true,
+  "blocks": [
+    { "id": "recent-docs", "title": "Outline — últimos cambios", "icon": "📄", "type": "list" }
+  ]
+}

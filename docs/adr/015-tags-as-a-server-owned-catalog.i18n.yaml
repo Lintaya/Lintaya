@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/adr/015-tags-as-a-server-owned-catalog.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/adr/015-tags-as-a-server-owned-catalog.md
+
+docs/adr/015-tags-as-a-server-owned-catalog.md: bc72658920912f81c694d685c56f87d73dcff32c
+docs/adr/015-tags-as-a-server-owned-catalog.es.md: d6c05302cd78442d3e612b9f4d4d0e3d6b33c87b

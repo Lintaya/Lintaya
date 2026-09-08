@@ -1,0 +1,69 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+server/node_modules/
+
+# ── Database (contains stored secrets & session data) ────────────────────────
+server/personal-hq.db
+server/personal-hq.db-shm
+server/personal-hq.db-wal
+server/hq.db
+server/hq.db-shm
+server/hq.db-wal
+server/repos.db
+server/repos.db-shm
+server/repos.db-wal
+
+# ── Runtime user data (uploaded .docx for OnlyOffice) ────────────────────────
+server/docs-files/
+server/backups/
+
+# ── Repos module — clones of OTHER git repos browsed via el módulo Repos.
+# Cada uno es su propio repositorio; no se versionan como archivos sueltos aquí.
+server/gitlab-clones/
+
+# ── Secrets & credentials — NEVER commit these ───────────────────────────────
+# real vault passwords — copy vault-seed.example.js → vault-seed.js
+server/vault-seed.js
+# BW_CLIENTID / BW_CLIENTSECRET — copy start-dev.example.js → start-dev.js
+server/start-dev.js
+# Bitwarden installation key
+bitwarden/settings.env
+
+# ── Env files ────────────────────────────────────────────────────────────────
+.env
+.env.local
+*.env
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+*.err
+server/server.log
+server/server.err
+server.err
+server/ssh-logs/
+
+# ── Claude Code internal config (tokens, session state) ──────────────────────
+.claude/
+.mcp.json
+.cursorignore
+
+# ── Transient ───────────────────────────────────────────────────────────────
+sw.js.tmp
+tmp/
+assets/brand/_preview*.png
+assets/brand/_test*.png
+/*.docx
+
+# ── Parked features — pulled out of this release, kept on disk (not tracked)
+# for a future implementation. See parked/*/README.md for what's there.
+/parked/
+
+# ── OS / editor noise ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/launch.json
+.idea/
+
+# Documentos internos de planificación: se quedan en la máquina, no en el repo público.
+docs/internal/

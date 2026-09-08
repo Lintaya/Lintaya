@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (CONTRIBUTING.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write CONTRIBUTING.md
+
+CONTRIBUTING.md: 81fbb75e2a5c0eec9a522cb8cb86e48ca3d8dbd8
+CONTRIBUTING.es.md: d9249b0785bde6b7939cfa6bb8cb4b2971c81b65

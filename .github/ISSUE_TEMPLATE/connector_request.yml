@@ -1,0 +1,39 @@
+name: Connector request
+description: Propose support for a Git hosting provider or external service.
+title: "[Connector]: "
+labels:
+  - connector
+  - enhancement
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Provider or service
+      placeholder: GitHub Enterprise, GitLab, Bitbucket, Gitea...
+    validations:
+      required: true
+  - type: input
+    id: documentation
+    attributes:
+      label: Official API documentation
+      placeholder: https://...
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Required capabilities
+      description: For example discovery, clone, branches, pull requests, webhooks, or authentication.
+    validations:
+      required: true
+  - type: textarea
+    id: authentication
+    attributes:
+      label: Authentication model
+      description: Describe the expected OAuth, token, app, SSH, or anonymous flow without sharing credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Reference implementations or notes

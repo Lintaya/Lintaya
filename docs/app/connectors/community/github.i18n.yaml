@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/github.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/github.md
+
+docs/app/connectors/community/github.md: f685853fe766ea22ee960bf2ceaaf320d2cae6c8
+docs/app/connectors/community/github.es.md: 54a812baa1494db14526e11f815f6790b21c9649

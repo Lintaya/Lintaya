@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.local/schemas/workspace-package.schema.json",
+  "title": "Lintaya portable workspace package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "exportedAt", "resources"],
+  "properties": {
+    "format": { "const": "lintaya-workspace-package" },
+    "version": { "const": 1 },
+    "exportedAt": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$" },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocks", "requirements", "boards", "dashboards"],
+      "properties": {
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" }, "maxItems": 500 },
+        "requirements": { "type": "array", "items": { "$ref": "#/$defs/requirement" }, "maxItems": 500 },
+        "boards": { "type": "array", "items": { "$ref": "#/$defs/board" }, "maxItems": 200 },
+        "dashboards": { "type": "array", "items": { "$ref": "#/$defs/dashboard" }, "maxItems": 100 }
+      }
+    }
+  },
+  "$defs": {
+    "key": { "type": "string", "pattern": "^(block|requirement|board|dashboard):[a-z0-9][a-z0-9._-]{0,79}$" },
+    "blockRef": { "type": "string", "pattern": "^(block|requirement):[a-z0-9][a-z0-9._-]{0,79}$" },
+    "block": {
+      "type": "object", "additionalProperties": false,
+      "required": ["key", "kind", "title", "format", "content"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" }, "kind": { "const": "content" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": ["string", "null"], "maxLength": 2000 },
+        "icon": { "type": ["string", "null"], "maxLength": 80 },
+        "format": { "enum": ["md", "html"] }, "content": { "type": "string", "maxLength": 250000 },
+        "prompt": { "type": ["string", "null"], "maxLength": 20000 },
+        "rules": { "type": ["string", "null"], "maxLength": 20000 }
+      }
+    },
+    "requirement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["key", "connectorTypeId", "blockId", "connectionAlias"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "connectorTypeId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "blockId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "connectionAlias": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 200 },
+        "scope": { "type": ["string", "null"], "maxLength": 500 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 1000 }
+      }
+    },
+    "zone": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["t", "key", "blocks"], "properties": { "t": { "const": "z" }, "key": { "type": "string", "maxLength": 80 }, "blocks": { "type": "array", "items": { "$ref": "#/$defs/blockRef" }, "maxItems": 100 } } },
+        { "type": "object", "additionalProperties": false, "required": ["t", "key", "dir", "ratio", "a", "b"], "properties": { "t": { "const": "s" }, "key": { "type": "string", "maxLength": 80 }, "dir": { "enum": ["v", "h"] }, "ratio": { "type": "number", "minimum": 0.05, "maximum": 0.95 }, "a": { "$ref": "#/$defs/zone" }, "b": { "$ref": "#/$defs/zone" } } }
+      ]
+    },
+    "board": {
+      "type": "object", "additionalProperties": false, "required": ["key", "title", "icon", "tree"],
+      "properties": { "key": { "$ref": "#/$defs/key" }, "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "icon": { "type": "string", "maxLength": 80 }, "tree": { "$ref": "#/$defs/zone" } }
+    },
+    "dashboard": {
+      "type": "object", "additionalProperties": false, "required": ["key", "title", "icon", "boards", "selectedBoard"],
+      "properties": { "key": { "$ref": "#/$defs/key" }, "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "icon": { "type": "string", "maxLength": 80 }, "boards": { "type": "array", "items": { "type": "string", "pattern": "^board:[a-z0-9][a-z0-9._-]{0,79}$" }, "uniqueItems": true, "maxItems": 200 }, "selectedBoard": { "type": ["string", "null"], "pattern": "^board:[a-z0-9][a-z0-9._-]{0,79}$" } }
+    }
+  }
+}

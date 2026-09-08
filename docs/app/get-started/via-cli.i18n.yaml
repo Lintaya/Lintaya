@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/get-started/via-cli.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/get-started/via-cli.md
+
+docs/app/get-started/via-cli.md: a00d1ed12f4deb7a3a0dfc89e67ce8f10bb1fc19
+docs/app/get-started/via-cli.es.md: f96f3a06f1ab326272e2be4896563a97f061b3ee

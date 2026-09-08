@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/portainer-config-v1.json",
+  "title": "Portainer connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl"],
+  "description": "Authenticate with either an API key or a username/password pair. The API key takes precedence when both are present.",
+  "anyOf": [
+    { "title": "API Key", "required": ["apiKey"] },
+    { "title": "Usuario y contraseña", "required": ["username", "password"] }
+  ],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Portainer instance base URL, e.g. https://10.0.0.1."
+    },
+    "apiKey": {
+      "type": "string",
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Portainer API access token, sent as the X-API-Key header."
+    },
+    "username": {
+      "type": "string",
+      "description": "Portainer username, used to mint a JWT when no API key is set."
+    },
+    "password": {
+      "type": "string",
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Password for the username above."
+    }
+  }
+}

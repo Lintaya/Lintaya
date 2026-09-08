@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/connectors/CONTRACTS.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/connectors/CONTRACTS.md
+
+docs/connectors/CONTRACTS.md: 37151691f6d81b16038c4ef44eb9b9ac9b1a22b0
+docs/connectors/CONTRACTS.es.md: dd1302080d9494013774f45b043d8258103c247d

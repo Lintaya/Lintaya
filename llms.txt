@@ -1,0 +1,44 @@
+# Lintaya
+
+> A local-first workspace that connects operational systems and Git providers
+> to dashboards, blocks, boards, a guarded HTTP API, and a read-only CLI.
+
+## Start here
+
+- [README](README.md): product scope, local startup, license, and limitations.
+- [Architecture](ARCHITECTURE.md): runtime boundaries, ConnectorType/Connection,
+  persistence, secrets, CLI, and future Team boundary.
+- [Setup](SETUP.md): configurable local server, vault, backup, and recovery.
+- [Documentation index](docs/INDEX.md): user, operator, and contributor guides.
+
+## Build and extend
+
+- [Connector development guide](docs/connectors/DEVELOPMENT_GUIDE.md): manifests,
+  schemas, lifecycle, redaction, routes, and tests.
+- [Connector contracts](docs/connectors/CONTRACTS.md): shipped provider limits,
+  synchronization, cache, configuration, and capabilities.
+- [CLI guide](cli/README.md): profiles, TUI, JSON output, completion, and the
+  read-only boundary.
+
+## Agent and API boundaries
+
+- `GET /api/health` is a public liveness check.
+- `GET /api/ai-context` is public discovery metadata and must never contain
+  credentials, private hostnames, user data, or stored configuration.
+- `GET /api/openapi.json` describes the HTTP contract; route descriptions do
+  not grant permission.
+- Most operational routes require `Authorization: Bearer <HQ_TOKEN>` and an
+  agent-originated write must include `X-Actor` for audit attribution.
+- Use the Action Registry contract for approved actions. Do not infer an action
+  from a button, rendered DOM, cached object, or `data-*` attribute.
+
+## Safety
+
+- Never read, copy, commit, upload, or log ignored runtime data, databases,
+  vault exports, backups, local settings, or credentials.
+- Connector secrets are write-only and must be redacted from responses, logs,
+  diagnostics, exports, and prompts.
+- Destructive actions require the applicable approval policy; Team and sandboxed
+  repository execution are not released features.
+
+Spanish repository orientation: [llms.es.txt](llms.es.txt).

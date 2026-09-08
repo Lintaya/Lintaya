@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/bitwarden-config-v1.json",
+  "title": "Bitwarden CLI connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["serverUrl"],
+  "description": "Points the bw CLI at a server and optionally holds an API key for unattended login. Reading secrets still needs the vault unlocked with the master password, which is never stored.",
+  "properties": {
+    "serverUrl": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://localhost:8443",
+      "description": "Bitwarden server base URL. Health is checked at /alive."
+    },
+    "email": {
+      "type": "string",
+      "description": "Account e-mail, kept for display only."
+    },
+    "clientId": {
+      "type": "string",
+      "description": "API key client id, used for unattended `bw login --apikey`."
+    },
+    "clientSecret": {
+      "type": "string",
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "API key client secret. Passed to the CLI as an environment variable, never as an argument."
+    }
+  }
+}

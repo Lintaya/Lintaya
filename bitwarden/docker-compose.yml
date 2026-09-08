@@ -1,0 +1,16 @@
+services:
+  bitwarden:
+    image: ghcr.io/bitwarden/lite
+    container_name: bitwarden
+    restart: unless-stopped
+    env_file:
+      - settings.env
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    volumes:
+      - bitwarden_data:/etc/bitwarden
+    mem_limit: 512m
+
+volumes:
+  bitwarden_data:

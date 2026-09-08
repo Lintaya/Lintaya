@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/connectors/REVIEW_CHECKLIST.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/connectors/REVIEW_CHECKLIST.md
+
+docs/connectors/REVIEW_CHECKLIST.md: f339da05bb3c97f1dbd1340d44ab9f83f910195f
+docs/connectors/REVIEW_CHECKLIST.es.md: 60bd53e21d036273fd97457125cc333f776136c2

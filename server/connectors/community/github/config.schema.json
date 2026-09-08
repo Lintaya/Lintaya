@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/github-config-v1.json",
+  "title": "GitHub connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["token"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://api.github.com",
+      "description": "GitHub REST API base URL, including /api/v3 for GitHub Enterprise Server."
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Fine-grained or classic Personal Access Token."
+    }
+  }
+}

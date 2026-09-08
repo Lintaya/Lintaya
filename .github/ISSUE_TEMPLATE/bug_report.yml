@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible problem in Lintaya.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve Lintaya. Do not include credentials, tokens, or private repository content.
+  - type: input
+    id: version
+    attributes:
+      label: Lintaya version or commit
+      placeholder: v0.x.x or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Repository management
+        - Analysis engine
+        - Connector
+        - Web interface / PWA
+        - Server / API
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the current and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Lintaya with ...
+        2. Analyze a repository containing ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Windows/Linux/macOS, Node.js version, browser, Git provider
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or evidence
+      description: Redact tokens, repository URLs, usernames, and sensitive file content.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched for an existing issue describing this problem.
+          required: true
+        - label: I removed secrets and private data from the report.
+          required: true

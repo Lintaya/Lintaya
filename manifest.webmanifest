@@ -1,0 +1,23 @@
+{
+  "name": "Lintaya — Every project tells a story",
+  "short_name": "Lintaya",
+  "description": "Administra y analiza proyectos de GitHub, GitLab, Bitbucket y más.",
+  "start_url": "./Lintaya.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8fafc",
+  "theme_color": "#0891b2",
+  "lang": "es",
+  "icons": [
+    { "src": "icons/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "VMs",         "url": "./Lintaya.html#vms",       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Hosts UCS",   "url": "./Lintaya.html#hosts",     "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Accesos",     "url": "./Lintaya.html#apps",      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Contraseñas", "url": "./Lintaya.html#passwords", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

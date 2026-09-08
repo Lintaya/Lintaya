@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Lintaya — Every project tells a story</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0891b2" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Lintaya" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    color-scheme: light;
+    --brand-ink: #0f172a;
+    --brand-structure: #64748b;
+    --brand-glass: #0891b2;
+    --brand-glass-active: #22d3ee;
+    --brand-glow: #67e8f9;
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --fg: #0f172a;
+    --muted: #f1f5f9;
+    --muted-fg: #64748b;
+    --border: #cbd5e1;
+    --row-hover: #f1f5f9;
+    /* Alto de TODA barra de cabecera: sidebar, editor de bloques, asistente,
+       detalle de conector y pestañas de Logs. Cada una lo sacaba de su propio
+       padding y acababan en 45, 55.8 y 60.5; con un token compartido coinciden
+       a cualquier resolución. 56 - 8 - 8 - 1 = 39 px de contenido, que cubre
+       al más alto (35.5 px del detalle de conector). */
+    --header-h: 56px;
+    --accent: #0891b2;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --err: #dc2626;
+    --scrollbar: #cbd5e1;
+    --scrollbar-hover: #94a3b8;
+    --font-sans: 'Geist', system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --surface: #111827;
+    --surface-elevated: #1e293b;
+    --fg: #f8fafc;
+    --muted: #1e293b;
+    --muted-fg: #94a3b8;
+    --border: #334155;
+    --row-hover: #172033;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --scrollbar: #334155;
+    --scrollbar-hover: #475569;
+  }
+  /* Compatibilidad con vistas antiguas que todavía usan superficies blancas
+     inline; los componentes nuevos deben consumir var(--surface). */
+  :root[data-theme="dark"] [style*="background: white"] {
+    background: var(--surface) !important;
+  }
+  :root[data-theme="dark"] [style*="background-color: white"] {
+    background-color: var(--surface) !important;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow-x: hidden; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  #root { height: 100%; }
+  button { font-family: inherit; }
+  body, aside, header, nav, main, button, input, select, textarea {
+    transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+  }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--brand-glass-active);
+    outline-offset: 2px;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 5px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+  .board-block-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+    overscroll-behavior: contain;
+  }
+  .board-block-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+  .board-block-scroll::-webkit-scrollbar-track { background: transparent; }
+  .board-block-scroll::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border: 0;
+    border-radius: 999px;
+  }
+  .board-block-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+  .board-block-scroll:focus-visible {
+    outline: 2px solid var(--brand-glass-active);
+    outline-offset: -2px;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Mobile-first ajustes — los componentes leen var(--is-mobile) del JS */
+  .mobile-hidden { display: none !important; }
+  @media (max-width: 800px) {
+    body { font-size: 13.5px; }
+    /* Padding inferior para que el bottom-nav no tape contenido */
+    main.app-main {
+      width: 100%; min-width: 0;
+      padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+      overscroll-behavior: contain;
+    }
+    main.app-main > div { width: 100%; min-width: 0; max-width: 100%; }
+    .home-view { padding: 14px 12px 84px !important; width: 100%; }
+    .home-dashboard-grid {
+      grid-template-columns: minmax(0, 1fr) !important;
+      gap: 12px !important;
+    }
+    .home-dashboard-grid > div { gap: 12px !important; }
+    .mobile-drawer { width: min(86vw, 300px) !important; max-width: 100%; }
+    .mobile-drawer .app-sidebar { width: 100% !important; height: 100% !important; }
+
+    /* Los catálogos usan mínimos de escritorio (260–420 px). En teléfono cada
+       tarjeta ocupa una sola columna y nunca ensancha el documento. */
+    main.app-main [style*="grid-template-columns: repeat(auto-fill"],
+    main.app-main [style*="grid-template-columns: repeat(auto-fit"] {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+  }
+  @media (max-width: 520px) {
+    main.app-main [style*="grid-template-columns: repeat(4"],
+    main.app-main [style*="grid-template-columns: repeat(3"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    /* En el catálogo de Boards, nombre y acciones son la información
+       primaria. Las columnas descriptivas se omiten en teléfono para que los
+       controles nunca queden recortados fuera del viewport. */
+    .boards-catalog-table { table-layout: fixed; }
+    .boards-catalog-secondary { display: none !important; }
+    .boards-catalog-icon { width: 44px; padding-left: 8px !important; padding-right: 8px !important; }
+    .boards-catalog-title { overflow-wrap: anywhere; }
+    .boards-catalog-actions { width: 112px; padding-left: 6px !important; padding-right: 8px !important; }
+    .blocks-catalog-table { table-layout: fixed; }
+    .blocks-catalog-secondary { display: none !important; }
+    .blocks-catalog-icon { width: 44px; padding-left: 8px !important; padding-right: 8px !important; }
+    .blocks-catalog-title { overflow-wrap: anywhere; }
+    .blocks-catalog-actions { width: 112px; padding-left: 6px !important; padding-right: 8px !important; }
+    .dashboards-catalog-table { table-layout: fixed; }
+    .dashboards-catalog-secondary { display: none !important; }
+    .dashboards-catalog-icon { width: 44px; padding-left: 8px !important; padding-right: 8px !important; }
+    .dashboards-catalog-title { overflow-wrap: anywhere; }
+    .dashboards-catalog-actions { width: 148px; padding-left: 6px !important; padding-right: 8px !important; }
+  }
+  /* Touch targets mínimos en móvil */
+  @media (pointer: coarse) {
+    button, [role="button"], a { min-height: 36px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  }
+</style>
+
+<!-- Every third-party script below is vendored locally (vendor/), not loaded
+     from a CDN: Lintaya has to keep working with no internet access, so the
+     shell can't depend on a live fetch to an external host on every load.
+     integrity= is kept where it already existed — it still gets verified for
+     same-origin requests, it's just no longer why this doesn't break offline. -->
+
+<!-- React + Babel pinned -->
+<script src="vendor/react.development.js?v=1" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"></script>
+<script src="vendor/react-dom.development.js?v=1" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"></script>
+<script src="vendor/babel.min.js?v=1" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"></script>
+
+<!-- Mermaid — renders ```mermaid fences inside Outline document previews -->
+<script src="vendor/mermaid.min.js"></script>
+
+<!-- Marked — renders .md preview in the Repos code viewer -->
+<script src="vendor/marked.min.js"></script>
+
+<!-- DOMPurify — sanitizes Block Builder "content" blocks (Markdown/HTML pasted
+     by hand or generated by AI) before they hit dangerouslySetInnerHTML. -->
+<script src="vendor/purify.min.js"></script>
+
+<!-- Data first -->
+<script src="app/public-data.js"></script>
+<script src="app/api.js"></script>
+<script src="app/zone-tree.js?v=2.0.127"></script>
+<script src="app/i18n.js?v=1"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Components -->
+<script type="text/babel" src="app/pagination.jsx"></script>
+<script type="text/babel" src="app/confirm-modal.jsx"></script>
+<script type="text/babel" src="app/tweaks-panel.jsx"></script>
+<script type="text/babel" src="app/tags.jsx"></script>
+<script type="text/babel" src="app/home.jsx?v=2.0.130"></script>
+<script type="text/babel" src="app/vms.jsx"></script>
+<script type="text/babel" src="app/hosts.jsx"></script>
+<script type="text/babel" src="app/devices.jsx"></script>
+<script type="text/babel" src="app/passwords.jsx"></script>
+<script type="text/babel" src="app/schema-form.jsx"></script>
+<script type="text/babel" src="app/connectors.jsx"></script>
+<script type="text/babel" src="app/documentation.jsx"></script><script type="text/babel" src="app/block-builder.jsx"></script>
+<script type="text/babel" src="app/block-catalog.jsx?v=2.0.132"></script>
+<script type="text/babel" src="app/custom-page-view.jsx?v=2.0.148"></script>
+<script type="text/babel" src="app/module-builder.jsx?v=2.0.150"></script>
+<script type="text/babel" src="app/dashboard.jsx?v=2.0.164"></script>
+<script type="text/babel" src="app/calls.jsx"></script>
+<script type="text/babel" src="app/mail.jsx"></script>
+<script type="text/babel" src="app/containers.jsx"></script>
+<script type="text/babel" src="app/repos.jsx"></script>
+<script type="text/babel" src="app/ssh-logs.jsx"></script>
+<script type="text/babel" src="app/approvals.jsx"></script>
+<script type="text/babel" src="app/settings.jsx?v=1"></script>
+<script type="text/babel" src="app/cmdk.jsx?v=1"></script>
+<script type="text/babel" src="app/ai-chat.jsx"></script>
+<script type="text/babel" src="app/app.jsx?v=2.0.138"></script>
+
+<!-- Registrar service worker -->
+<script>
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    // `?registration=2` bypasses the first cache-first worker shipped by
+    // Lintaya.  Once this worker is installed, sw.js itself is always served
+    // from the network (see sw.js), so future development restarts update
+    // normally without clearing browser data.
+    navigator.serviceWorker.register("./sw.js?registration=2", { updateViaCache: "none" })
+      .catch(err => console.warn("SW:", err));
+  });
+}
+</script>
+</body>
+</html>

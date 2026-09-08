@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/adr/014-connector-distribution-and-drop-in.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/adr/014-connector-distribution-and-drop-in.md
+
+docs/adr/014-connector-distribution-and-drop-in.md: b7653e56e6ed814011fb7d9f0ad522ebbe283324
+docs/adr/014-connector-distribution-and-drop-in.es.md: 2437a9f7618eba29d39c65b60bbaf4aed926fb08

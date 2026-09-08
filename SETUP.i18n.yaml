@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (SETUP.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write SETUP.md
+
+SETUP.md: 4cfd38d37bd8311327e2c081e021881112d63ff3
+SETUP.es.md: 4114ee6dd1ba64db0102f2d976db127c7b630552

@@ -1,0 +1,18 @@
+Lintaya
+Copyright 2026 Ender Abelardo Sanchez Guerrero
+
+This product is developed and maintained by Ender Abelardo Sanchez Guerrero.
+It includes software developed by the Lintaya project and its contributors.
+Contributions are welcome and are licensed under the Apache License 2.0.
+
+Third-party software vendored under vendor/ (bundled locally so Lintaya keeps
+working with no internet access, instead of loading from a CDN):
+
+  - React & React DOM 18.3.1 — Copyright Meta Platforms, Inc. and affiliates — MIT License
+  - Babel Standalone 7.29.0 — Copyright 2014-present Sebastian McKenzie and Babel contributors — MIT License
+  - Mermaid 10.9.1 — Copyright 2014-present Knut Sveidqvist and Mermaid contributors — MIT License
+  - Marked 12.0.2 — Copyright 2011-2024 Christopher Jeffrey — MIT License
+  - DOMPurify 3.1.6 — Copyright Cure53 and other contributors — Apache License 2.0 / Mozilla Public License 2.0
+
+Each retains its own license and copyright notice; none are modified from
+their published releases.

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/translation-rules.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/i18n/translation-rules.md
+
+docs/i18n/translation-rules.md: 1c4198ec9d0c6737d13fa8995262f4eec362fa84
+docs/i18n/translation-rules.es.md: 8abd3410a10bfbe9a3fc8891a940b671531d8e79

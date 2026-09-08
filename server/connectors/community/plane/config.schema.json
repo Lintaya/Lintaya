@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/plane-config-v1.json",
+  "title": "Plane.so connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiKey", "workspace"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://api.plane.so",
+      "description": "Plane instance base URL, without the /api/v1 prefix — the connector adds it. A trailing /api or /api/v1 is stripped on save."
+    },
+    "apiKey": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Plane API token from Settings → API Tokens, sent as the X-Api-Key header."
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Workspace slug, as it appears in the Plane URL."
+    },
+    "userId": {
+      "type": "string",
+      "description": "Cached id of the token's own user, resolved during sync so \"my issues\" works between syncs. Not user-editable."
+    }
+  }
+}

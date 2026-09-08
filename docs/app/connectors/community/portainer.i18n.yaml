@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/portainer.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/portainer.md
+
+docs/app/connectors/community/portainer.md: 694ad946eae50d5dfde29c232cd04cf9e8f6bcc0
+docs/app/connectors/community/portainer.es.md: f89ad8da5a36c37297ff295d375c8e6c50124c18

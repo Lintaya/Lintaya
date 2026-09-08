@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (CODE_OF_CONDUCT.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write CODE_OF_CONDUCT.md
+
+CODE_OF_CONDUCT.md: 1793096bc902911713a0b95b23e5630703a885ea
+CODE_OF_CONDUCT.es.md: 3b4cae477bdc7a3a24df8135257d2d2dbb0d4e71

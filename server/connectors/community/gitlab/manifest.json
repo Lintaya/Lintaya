@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "id": "gitlab",
+  "displayName": "GitLab",
+  "version": "0.2.0",
+  "tier": "community",
+  "lifecycle": "beta",
+  "license": "Apache-2.0",
+  "capabilities": ["repositories.read", "repositories.clone", "pull-requests.read", "deployments.read", "workflows.read", "commits.read"],
+  "implementation": { "mode": "package", "source": "server/connectors/community/gitlab/index.js" },
+  "instantiable": true,
+  "blocks": [
+    { "id": "recent-commits", "title": "GitLab — últimos commits", "icon": "🔧", "type": "list" }
+  ],
+  "modules": [
+    { "id": "repositories", "label": "Repos {connectorName}", "icon": "repos", "component": "ReposView", "navOrder": 90 }
+  ]
+}

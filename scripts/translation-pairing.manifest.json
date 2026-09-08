@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "sourceLocale": "en",
+  "targetLocale": "es",
+  "excluded": [
+    "docs/i18n/terminology.md"
+  ]
+}

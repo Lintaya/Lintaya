@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (ARCHITECTURE.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write ARCHITECTURE.md
+
+ARCHITECTURE.md: 81adb744aa8a4dfb0a88f6ffad54fc1abe18d0d7
+ARCHITECTURE.es.md: 9dec99d5f41cd43e6b89325af6e7d6b6179f92b1

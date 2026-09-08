@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/adr/011-connector-actions-rest-mcp.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/adr/011-connector-actions-rest-mcp.md
+
+docs/adr/011-connector-actions-rest-mcp.md: 68121c97e17eb67b3c36afc604eeeec0ae83da10
+docs/adr/011-connector-actions-rest-mcp.es.md: 73f8dc7b4e10167f67f814389445eef2dbbfca00

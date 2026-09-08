@@ -1,0 +1,35 @@
+instructions: |
+  Lintaya is a PWA (no build step) backed by an Express monolith. Read AGENTS.md and ARCHITECTURE.md
+  first for full context.
+  - The frontend lives in `app/*.jsx`, loaded via `<script type="text/babel">` from `Lintaya.html`.
+  There is no bundler — edit and reload. Modules expose themselves as `window.XxxView` and are
+  consumed by `app/app.jsx`. There is no `import` between modules.
+  - The backend is `server/server.js` (Express), with the app factory + auth in `server/app.js`.
+  State lives in a SQLite `kv` table (`kvGet`/`kvSet`). The `app.get("*")` catch-all must stay
+  last — registering it earlier shadows the `/api/*` routes and they 404.
+  - `package.json` is in `server/`, not at the repo root. Do not run `npm run dev` from the root.
+  - Every `/api/*` route requires `Authorization: Bearer ${HQ_TOKEN}` (except `/api/health`).
+  - API calls made by an AI agent should include the header `X-Actor: <your model id>` so the write
+  is audited as agent-made. For git actions done through the API, prefer the audit-wrapped routes
+  over raw `git` via Bash.
+  - Connectors follow the `config`/`test`/`sync` pattern under `server/connectors/<tier>/<id>/`, with
+  UI in `connectors.jsx` and a `README.md` next to each `manifest.json`.
+  - Tests: `cd server && npm test` (full suite); `npm run test:connectors` (connectors only).
+  - Gitignored secrets (do not commit): `server/personal-hq.db`, `server/start-dev.js`,
+  `server/vault-seed.js`, `bitwarden/settings.env`. `.example` files exist to recreate them.
+scripts:
+  - name: Setup
+    command: Set-Location server; npm install
+    triggers:
+      - session.create
+  - name: Run
+    command: Set-Location server; if (-not (Test-Path node_modules\express)) { npm install }; npm run dev
+  - name: Archive cleanup
+    command: if (Test-Path server\node_modules) { Remove-Item -Recurse -Force server\node_modules }
+    triggers:
+      - session.archive
+server_ready_pattern: 'Local:\s+(https?://\S+)'
+auto_open_in_browser: true
+automation:
+  auto_issue_session: true
+  remote_control: false

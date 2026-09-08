@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/adr/013-cli-local-and-team-boundary.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/adr/013-cli-local-and-team-boundary.md
+
+docs/adr/013-cli-local-and-team-boundary.md: d3556505b05259773f51d89b6b73582e5a46dd16
+docs/adr/013-cli-local-and-team-boundary.es.md: f38626fdbe046e1d4511daa22aa1195d9d667475

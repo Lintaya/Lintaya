@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/release/RELEASE_PROCESS.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/release/RELEASE_PROCESS.md
+
+docs/release/RELEASE_PROCESS.md: 36ebfec3435d5f154544e9e4bc7aee423129e34e
+docs/release/RELEASE_PROCESS.es.md: 22c2ca0bcc1894589fed2a40ed27dad747e1b69b

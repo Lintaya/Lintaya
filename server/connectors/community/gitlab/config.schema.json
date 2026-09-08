@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/gitlab-config-v1.json",
+  "title": "GitLab connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl", "token"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://gitlab.com",
+      "description": "GitLab instance base URL."
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "GitLab Personal, Project, or Group Access Token."
+    }
+  }
+}

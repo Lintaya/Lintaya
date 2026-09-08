@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/connectors/README.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/connectors/README.md
+
+docs/connectors/README.md: f2f3124cb192e332c49d374d5fcf82ba18dc7ca9
+docs/connectors/README.es.md: a2bec56d4c5da4279217ed6369275a04b27d17a3

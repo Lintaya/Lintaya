@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/Ender618X/personalhq/discussions
+    about: Ask usage questions in GitHub Discussions after the public repository is configured.
+  - name: Security vulnerability
+    url: https://github.com/Ender618X/personalhq/security/advisories/new
+    about: Report vulnerabilities privately. Do not create a public issue.

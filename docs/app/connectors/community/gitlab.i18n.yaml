@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/gitlab.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/gitlab.md
+
+docs/app/connectors/community/gitlab.md: 24d0e6916639ef723d82cc28f22cd55f2f622c81
+docs/app/connectors/community/gitlab.es.md: cc92c908dfd02b39576130641abf6b1cbc9344d7

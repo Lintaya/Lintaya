@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (SECURITY.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write SECURITY.md
+
+SECURITY.md: de70a3c24960e08b448786c1d4672b8bf83541cc
+SECURITY.es.md: b0f68e5c40774a149673d96c494541ab815741e5

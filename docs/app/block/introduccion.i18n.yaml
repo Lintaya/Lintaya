@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/block/introduccion.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/block/introduccion.md
+
+docs/app/block/introduccion.md: 1157714bb1da569479a3ef889b1b581469fe2630
+docs/app/block/introduccion.es.md: 9dd95b0d3adf4f50bda00adc5cd765b384c3c9a3

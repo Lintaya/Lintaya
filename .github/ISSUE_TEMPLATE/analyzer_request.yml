@@ -1,0 +1,51 @@
+name: Analyzer request
+description: Propose a new technology, framework, repository type, or analysis rule.
+title: "[Analyzer]: "
+labels:
+  - analyzer
+  - enhancement
+body:
+  - type: input
+    id: technology
+    attributes:
+      label: Technology or rule set
+      placeholder: Laravel, Spring Boot, documentation-only repositories, EOL policy...
+    validations:
+      required: true
+  - type: dropdown
+    id: repository_type
+    attributes:
+      label: Repository type
+      options:
+        - Web application
+        - API / backend
+        - Static site
+        - Library used by a web application
+        - CLI / desktop
+        - Documentation
+        - Infrastructure / GitOps
+        - Data / machine learning
+        - Template / starter
+        - Monorepo
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: detection
+    attributes:
+      label: Detection evidence
+      description: List files, manifests, or other static signals that identify this technology.
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Proposed checks
+      description: Describe rules, severity, evidence, remediation, and authoritative sources.
+    validations:
+      required: true
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: Public fixture repositories
+      description: Add small public examples that can be used safely in tests.

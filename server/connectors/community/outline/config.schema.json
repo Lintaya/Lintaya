@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/outline-config-v1.json",
+  "title": "Outline connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl", "apiKey"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Root URL of the Outline installation."
+    },
+    "apiKey": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Outline API key with the required collection and document permissions."
+    }
+  }
+}

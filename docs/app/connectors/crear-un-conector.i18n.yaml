@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/crear-un-conector.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/crear-un-conector.md
+
+docs/app/connectors/crear-un-conector.md: 68888e4308008133110cf4300c31ac18d6734000
+docs/app/connectors/crear-un-conector.es.md: 6c7ac81c231536ac90fae889ce855834465f3855

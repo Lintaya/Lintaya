@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connector-manifest-v1.json",
+  "title": "Lintaya connector manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifestVersion",
+    "id",
+    "displayName",
+    "version",
+    "tier",
+    "lifecycle",
+    "license",
+    "capabilities",
+    "implementation"
+  ],
+  "properties": {
+    "manifestVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "tier": {
+      "enum": [
+        "community",
+        "enterprise",
+        "development"
+      ]
+    },
+    "lifecycle": {
+      "enum": [
+        "stable",
+        "beta",
+        "development",
+        "deprecated"
+      ]
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.-]*$"
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "source"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "legacy",
+            "package"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "upstreamApi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supportedUntil": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "docs": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "type"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "list"
+            ]
+          }
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "icon",
+          "component"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "type": "string",
+            "minLength": 1
+          },
+          "component": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+          },
+          "navOrder": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "autoSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scheduled-sync behaviour. Omit unless this connector is an exception: the default is the fast group on POST /api/connectors/<id>/sync.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Set false to keep this connector out of the scheduler."
+        },
+        "group": {
+          "enum": [
+            "fast",
+            "slow"
+          ],
+          "description": "Cadence group; 'slow' is for a sync too expensive to run on the fast interval."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/api/",
+          "description": "Sync route, when it is not /api/connectors/<id>/sync."
+        }
+      }
+    },
+    "instantiable": {
+      "type": "boolean",
+      "description": "Whether more than one connection of this type may exist. The base connection keeps the type id; extras register under their own."
+    },
+    "transport": {
+      "type": "string",
+      "enum": [
+        "http",
+        "script",
+        "cli"
+      ],
+      "description": "How the connector reaches its provider. Absent means http, which is what the simple HTTP connectors use."
+    },
+    "os": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "win32",
+          "darwin",
+          "linux"
+        ]
+      },
+      "minItems": 1,
+      "description": "The platforms this connector can run on. Omit it unless the connector is genuinely bound to one — a connector that names platforms is not mounted on any other."
+    },
+    "requires": {
+      "type": "string",
+      "description": "What must be present on the machine beyond the connector itself, in words a person can act on. Shown next to the connector when it cannot run here."
+    }
+  }
+}

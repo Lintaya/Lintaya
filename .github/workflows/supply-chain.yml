@@ -1,0 +1,94 @@
+name: Supply chain
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  history-secrets:
+    name: Secret history
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan current files and history
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: Dependency and license review
+    # GitHub supports this action for public repositories; a private repository
+    # needs GitHub Advanced Security. The public snapshot always runs it.
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review newly introduced dependency risk
+        uses: actions/dependency-review-action@v5
+        with:
+          config-file: ./.github/dependency-review-config.yml
+
+  npm-audit:
+    name: Runtime audit · ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, cli]
+    defaults:
+      run:
+        working-directory: ${{ matrix.component }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      # `npm audit` exits non-zero on a finding, which would skip the upload and
+      # leave no evidence. The report is always kept; the next step decides.
+      - name: Create runtime vulnerability report
+        shell: bash
+        run: |
+          npm audit --omit=dev --audit-level=high --package-lock-only --json > npm-audit.json || true
+
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ matrix.component }}
+          path: ${{ matrix.component }}/npm-audit.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Fail on high or critical runtime vulnerabilities
+        shell: bash
+        run: node ../scripts/check-npm-audit.mjs npm-audit.json
+
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          artifact-name: lintaya-sbom
+          format: spdx-json
+          upload-artifact-retention: 30
+          upload-release-assets: false

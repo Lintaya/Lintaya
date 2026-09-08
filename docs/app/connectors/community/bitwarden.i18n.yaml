@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/connectors/community/bitwarden.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/connectors/community/bitwarden.md
+
+docs/app/connectors/community/bitwarden.md: d1101ed627af94ea6b14d91ba0acd65934699a88
+docs/app/connectors/community/bitwarden.es.md: 7764cbf9bd9d54b8eb1de63c8013a70e29931a61

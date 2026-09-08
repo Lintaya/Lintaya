@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/release/SUPPLY_CHAIN.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/release/SUPPLY_CHAIN.md
+
+docs/release/SUPPLY_CHAIN.md: 188a6f35cd06738749b76472d7ec5e2818eaf058
+docs/release/SUPPLY_CHAIN.es.md: b52edf4c88bce9051c0550ec80035666b181413c

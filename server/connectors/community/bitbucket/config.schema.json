@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/bitbucket-config-v1.json",
+  "title": "Bitbucket connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "token"],
+  "properties": {
+    "type": {
+      "enum": ["cloud", "server"],
+      "default": "cloud"
+    },
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Required for Bitbucket Server or Data Center."
+    },
+    "username": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Bitbucket Cloud username."
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional Bitbucket Cloud workspace scope."
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Cloud API token/app password or Server Personal Access Token."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "cloud" } } },
+      "then": { "required": ["username"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "server" } } },
+      "then": { "required": ["baseUrl"] }
+    }
+  ]
+}

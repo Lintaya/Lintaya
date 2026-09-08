@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/adr/012-canonical-dashboard-pages-blocks-bindings.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/adr/012-canonical-dashboard-pages-blocks-bindings.md
+
+docs/adr/012-canonical-dashboard-pages-blocks-bindings.md: 3b593b29517e7b7a2fcadf9fa0170f3c3493662e
+docs/adr/012-canonical-dashboard-pages-blocks-bindings.es.md: 98ab15d11ba980def1a22abe502992863fee7877

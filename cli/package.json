@@ -1,0 +1,21 @@
+{
+  "name": "@lintaya/cli",
+  "version": "0.1.0-beta.1",
+  "description": "Cliente multiplataforma para la API de Lintaya.",
+  "private": true,
+  "license": "Apache-2.0",
+  "bin": {
+    "lintaya": "bin/lintaya.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check bin/lintaya.js && node --check src/index.js && node --input-type=module -e \"import('./src/tui.mjs')\" && npm test"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "react": "^19.2.0"
+  }
+}
