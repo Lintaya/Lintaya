@@ -369,11 +369,17 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
   const matches = (row) =>
     (connectorFilter === "all" || row.connectorId === connectorFilter) &&
     (typeFilter === "all" || row.typeKey === typeFilter) &&
-    (estadoFilter === "all" || row.statusKey === estadoFilter) &&
+    (estadoFilter === "all"
+      ? row.statusKey !== "disconnected"
+      : row.statusKey === estadoFilter) &&
     (tagFilter === "all" || (row.tags || []).includes(tagFilter)) &&
     (!term || row.title.toLowerCase().includes(term) || row.connectorLabel.toLowerCase().includes(term));
   const tagOptions = window.tagFilterOptions ? window.tagFilterOptions(boardRows) : [];
   const rows = allRows.filter(matches);
+  const filtersActive = !!term
+    || connectorFilter !== "all" || typeFilter !== "all"
+    || estadoFilter !== "all" || tagFilter !== "all";
+  const showEmptyPanel = rows.length === 0 && !filtersActive;
   const pagination = usePagination(rows, { key: "boards" });
 
   const connectorOptions = [...new Set(moduleRows.map(r => r.connectorId).filter(Boolean))].sort()
@@ -393,6 +399,17 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
         </button>
       </div>
 
+      {showEmptyPanel ? (
+        <window.LintayaEmptyState
+          icon="🗂️"
+          title={totalCount === 0 ? t("boards.emptyTitle", "No boards yet") : t("boards.allDisconnectedTitle", "Nothing connected yet")}
+          body={totalCount === 0 ? t("boards.empty") : t("boards.allDisconnected", "", { count: totalCount })}
+          action={totalCount === 0 ? t("boards.new") : t("boards.disconnected")}
+          onAction={totalCount === 0
+            ? () => { window.__moduleBuilderIntent = "new"; onNavigate("module-builder"); }
+            : () => setEstadoFilter("disconnected")}
+        />
+      ) : (<>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <div style={{ position: "relative", flex: "0 0 220px" }}>
           <span style={{ position: "absolute", left: 9, top: 8, color: "var(--muted-fg)", fontSize: 13 }}>⌕</span>
@@ -426,12 +443,7 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
             </tr>
           </thead>
           <tbody>
-            {totalCount === 0 && (
-              <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>
-                {t("boards.empty")}
-              </td></tr>
-            )}
-            {totalCount > 0 && rows.length === 0 && (
+            {rows.length === 0 && (
               <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>
                 {t("boards.noResults")}
               </td></tr>
@@ -480,6 +492,7 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
         </table>
       </div>
       {rows.length > 0 && <PaginationBar {...pagination} />}
+      </>)}
 
       {confirmBoard && (
         <window.ConfirmModal

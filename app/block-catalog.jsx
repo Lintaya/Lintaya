@@ -293,6 +293,13 @@ function BlockCatalogView({ isMobile }) {
             style={{ height: 32, padding: "0 12px", border: "1px solid var(--accent)", background: "var(--accent)", color: "white", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer", fontWeight: 600 }}>{window.I18N.t("ui.blocks.new", "+ New Block")} </button>
         </div>
 
+        {totalCount === 0 ? (
+          <window.LintayaEmptyState
+            icon="🧱"
+            title={window.I18N.t("ui.blocks.emptyTitle", "No blocks yet")}
+            body={window.I18N.t("ui.blocks.empty", "No active blocks — connect a system in Connectors to see data here.")}
+          />
+        ) : (<>
         <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
           <div style={{ position: "relative", flex: "0 0 220px" }}>
             <span style={{ position: "absolute", left: 9, top: 8, color: "var(--muted-fg)", fontSize: 13 }}>⌕</span>
@@ -326,9 +333,6 @@ function BlockCatalogView({ isMobile }) {
               </tr>
             </thead>
             <tbody>
-              {totalCount === 0 && (
-                <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>{window.I18N.t("ui.blocks.empty", "No active blocks — connect a system in Connectors to see data here.")} </td></tr>
-              )}
               {totalCount > 0 && visibleCount === 0 && (
                 <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>{window.I18N.t("ui.blocks.noMatches", "No results — adjust the filters or search.")} </td></tr>
               )}
@@ -402,6 +406,7 @@ function BlockCatalogView({ isMobile }) {
           </table>
         </div>
         {visibleCount > 0 && <PaginationBar {...pagination} />}
+        </>)}
       </div>
 
       {previewBlock && (

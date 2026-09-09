@@ -3951,7 +3951,7 @@ function ConnectorsView() {
             </div>
           </div>
 
-          <AutoSyncPanel />
+          {visible.length > 0 && <AutoSyncPanel />}
 
           {connsLoading && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "24px 0", color: "var(--muted-fg)", fontSize: 13 }}>
@@ -3959,9 +3959,13 @@ function ConnectorsView() {
             </div>
           )}
           {!connsLoading && !visible.length && (
-            <div style={{ padding: "24px 0", color: "var(--muted-fg)", fontSize: 13 }}>
-              {t("connectors.view.emptyState", "", { button: t("connectors.view.newConnection") })}
-            </div>
+            <window.LintayaEmptyState
+              icon="🔌"
+              title={t("connectors.view.emptyTitle", "No connections yet")}
+              body={t("connectors.view.emptyState", "", { button: t("connectors.view.newConnection") })}
+              action={t("connectors.view.newConnection")}
+              onAction={() => setShowNewConn(true)}
+            />
           )}
           <div role="list" aria-label={t("connectors.view.listAria")} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 10 }}>
             {connectorsPagination.pageItems.map(c => (

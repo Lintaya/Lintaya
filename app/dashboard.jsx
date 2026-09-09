@@ -334,8 +334,8 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
 
   return (
     <section style={{ padding: "20px", width: "100%", maxWidth: 1480, margin: "0 auto" }} aria-labelledby="dashboards-title">
-      <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-        <div style={{ flex: 1 }}><h1 id="dashboards-title" style={{ margin: 0, fontSize: 22 }}>{dsh("dashboards.title", "Dashboards")}</h1><p style={{ margin: "4px 0 0", color: "var(--muted-fg)", fontSize: 12.5 }}>{dsh("dashboards.subtitle", "Group Boards as tabs without duplicating their content.")}</p></div>
+      <header style={{ display: "flex", alignItems: "flex-end", gap: 12, marginBottom: 18 }}>
+        <div style={{ flex: 1 }}><h1 id="dashboards-title" style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: -0.2 }}>{dsh("dashboards.title", "Dashboards")}</h1><p style={{ margin: "4px 0 0", color: "var(--muted-fg)", fontSize: 13 }}>{dsh("dashboards.subtitle", "Group Boards as tabs without duplicating their content.")}</p></div>
         <input ref={importInputRef} type="file" accept="application/json,.json" onChange={previewImport} style={{ display: "none" }} aria-label={window.I18N.t("ui.dashboards.selectPackage", "Select a Lintaya package")} />
         <button type="button" disabled={importing} onClick={() => importInputRef.current?.click()} style={dashboardButton}>{importing ? window.I18N.t("ui.dashboards.validating", "Validating…") : window.I18N.t("connectors.view.import", "Import")}</button>
         <button type="button" onClick={() => { setCreating(true); setEditing(null); }} style={{ ...dashboardButton, border: 0, background: "var(--accent)", color: "#fff" }}>{dsh("dashboards.new", "New Dashboard")}</button>
@@ -376,9 +376,13 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
         </>}
       </section>}
       {dashboards.length === 0 ? (
-        <div style={{ minHeight: 240, border: "1px dashed var(--border)", borderRadius: 10, display: "grid", placeItems: "center", textAlign: "center", color: "var(--muted-fg)", padding: 20 }}>
-          <div><strong style={{ display: "block", color: "var(--fg)", marginBottom: 5 }}>{dsh("dashboards.empty", "No dashboards")}</strong>{dsh("dashboards.emptyBody", "Create one to organize several Boards as tabs.")}</div>
-        </div>
+        <window.LintayaEmptyState
+          icon="📊"
+          title={dsh("dashboards.empty", "No dashboards")}
+          body={dsh("dashboards.emptyBody", "Create one to organize several Boards as tabs.")}
+          action={dsh("dashboards.new", "New Dashboard")}
+          onAction={() => { setCreating(true); setEditing(null); }}
+        />
       ) : <>
         <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
           <div style={{ position: "relative", flex: "0 0 220px" }}>
