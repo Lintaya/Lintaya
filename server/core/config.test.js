@@ -24,7 +24,7 @@ test("loadConfig validates required authentication", () => {
     () => loadConfig({}, { requireToken: true }),
     (error) => error instanceof ConfigError
       && error.code === "CONFIG_INVALID"
-      && error.field === "HQ_TOKEN",
+      && error.field === "LINTAYA_TOKEN",
   );
 });
 
@@ -41,7 +41,7 @@ test("loadConfig rejects invalid ports and modes", () => {
 
 test("loadConfig centralizes explicit runtime values", () => {
   const config = loadConfig({
-    HQ_TOKEN: " test-token ",
+    LINTAYA_TOKEN: " test-token ",
     PORT: "4100",
     VAULT_MODE: "demo",
     NODE_ENV: "production",

@@ -27,7 +27,7 @@
   contener credenciales, hostnames privados, datos de usuario ni configuración almacenada.
 - `GET /api/openapi.json` describe el contrato HTTP; las descripciones de rutas
   no conceden permiso.
-- La mayoría de rutas operativas requieren `Authorization: Bearer <HQ_TOKEN>` y
+- La mayoría de rutas operativas requieren `Authorization: Bearer <LINTAYA_TOKEN>` y
   una escritura iniciada por agente debe incluir `X-Actor` para atribución de auditoría.
 - Usar el contrato Action Registry para acciones aprobadas. No inferir una acción
   desde un botón, DOM renderizado, objeto cacheado o atributo `data-*`.

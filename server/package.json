@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node -e \"process.env.HQ_TOKEN='dev-token';process.env.VAULT_MASTER_PASSWORD='dev-master';process.env.PORT='3000';require('./server.js').startServer()\"",
+    "dev": "node -e \"process.env.LINTAYA_TOKEN='dev-token';process.env.VAULT_MASTER_PASSWORD='dev-master';process.env.PORT='3000';require('./server.js').startServer()\"",
     "test": "npm run test:analysis && npm run test:http && npm run test:core && npm run test:routes && npm run test:connectors",
     "test:analysis": "node analysis/analysis.test.js",
     "test:http": "node --test app.test.js",

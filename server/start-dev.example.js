@@ -1,12 +1,12 @@
 // start-dev.example.js — Dev entry-point with environment configuration.
 // Copy this file to start-dev.js and fill in your real values.
 // start-dev.js is gitignored so your secrets stay local.
-process.env.HQ_TOKEN   = process.env.HQ_TOKEN   || "change-me-strong-token";
-process.env.VAULT_MODE = process.env.VAULT_MODE  || "demo"; // "demo" | "bitwarden"
+process.env.LINTAYA_TOKEN = process.env.LINTAYA_TOKEN || "change-me-strong-token";
+process.env.VAULT_MODE    = process.env.VAULT_MODE    || "demo"; // "demo" | "bitwarden"
 process.env.LINTAYA_SECRET_STORE = process.env.LINTAYA_SECRET_STORE || "legacy"; // "legacy" | "local"
 // Required when LINTAYA_SECRET_STORE=local; keep it outside the repository.
 process.env.LINTAYA_SECRET_KEY = process.env.LINTAYA_SECRET_KEY || "change-this-local-secret-key";
-process.env.PORT       = process.env.PORT        || "3000";
+process.env.PORT          = process.env.PORT          || "3000";
 // Where connectors that do not ship with Lintaya are installed (ADR-014).
 // Defaults to ~/.lintaya/connectors/; set it only to keep them somewhere else.
 // A missing directory is fine — most installs have no private connector.

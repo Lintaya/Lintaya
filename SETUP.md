@@ -42,7 +42,7 @@ Copy the example without committing the resulting file:
 Copy-Item start-dev.example.js start-dev.js
 ```
 
-Set HQ_TOKEN to a strong, unique value in start-dev.js, then start the server:
+Set LINTAYA_TOKEN to a strong, unique value in start-dev.js, then start the server:
 
 ```powershell
 node .\start-dev.js
@@ -52,7 +52,7 @@ In the browser, enter that token in Settings when prompted. Browser storage is
 per origin: http://localhost:3000 and http://localhost:3001 each ask once for
 the same server token. The unauthenticated GET /api/health endpoint is useful
 for checking that the server is alive; authenticated API routes require
-Authorization: Bearer <HQ_TOKEN>.
+Authorization: Bearer <LINTAYA_TOKEN>.
 
 Do not commit start-dev.js, personal-hq.db, vault exports, backup files, tokens,
 or private keys.

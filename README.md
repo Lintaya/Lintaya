@@ -51,7 +51,7 @@ npm run dev
 Open `http://localhost:3000`. The development command uses local demonstration
 defaults only. For a configurable local server, copy
 `server/start-dev.example.js` to the gitignored `server/start-dev.js`, set a
-strong `HQ_TOKEN`, and run:
+strong `LINTAYA_TOKEN`, and run:
 
 ```powershell
 node .\start-dev.js

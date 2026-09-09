@@ -33,7 +33,7 @@ node .\start-dev.js
 ```
 
 Abre la URL Local que imprime el servidor, normalmente http://localhost:3000.
-Define un HQ_TOKEN robusto en start-dev.js, que está ignorado por Git, antes de
+Define un LINTAYA_TOKEN robusto en start-dev.js, que está ignorado por Git, antes de
 usar un conector real.
 
 ## Primera sesión de navegador

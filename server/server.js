@@ -1365,7 +1365,7 @@ app.use(errorMiddleware(log));
 
 function startServer() {
   if (!TOKEN) {
-    throw new Error("HQ_TOKEN env var not set. Set it before starting the server.");
+    throw new Error("LINTAYA_TOKEN env var not set. Set it before starting the server.");
   }
 
   httpServer.listen(PORT, HOST, () => {

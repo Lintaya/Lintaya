@@ -20,9 +20,9 @@ node start-dev.js
 
 > **Different port on purpose** (`.vscode/launch.json` forces `PORT=3001` for Cursor, Claude Code
 > uses the default `3000`): this lets you run both at the same time without a port clash. The
-> tradeoff is that `http://localhost:3001` is a **new origin for the browser** → the `HQ_TOKEN`
+> tradeoff is that `http://localhost:3001` is a **new origin for the browser** → the `LINTAYA_TOKEN`
 > saved in `localStorage` on `:3000` doesn't apply there. The first time you open `:3001` the UI
-> will look "empty" (401 on every `/api/*`) until you paste the `HQ_TOKEN` again in that tab — it's
+> will look "empty" (401 on every `/api/*`) until you paste the `LINTAYA_TOKEN` again in that tab — it's
 > a one-time re-login, not missing data on the server (the SQLite file is the same for both ports).
 
 `package.json` lives in `server/`, not at the repo root. Don't run `npm run dev` from the root (and
@@ -61,7 +61,7 @@ The `/api/ai-context` endpoint returns:
   `server/app.js`). State lives in a SQLite `kv` table (`kvGet`/`kvSet`). **The `app.get("*")`
   catch-all must stay last**, after every `/api/*` route — registering it earlier shadows them and
   they'll 404.
-- **Auth:** every `/api/*` route requires `Authorization: Bearer ${HQ_TOKEN}` (except `/api/health` and `/api/ai-context`).
+- **Auth:** every `/api/*` route requires `Authorization: Bearer ${LINTAYA_TOKEN}` (except `/api/health` and `/api/ai-context`).
   Client: `window.HQ_API` (`app/api.js`).
 - **API calls made by an AI agent** (rather than by the user from the browser) should include the
   header `X-Actor: <your model id>` (e.g. `claude-sonnet-5`, `claude-opus-5`, `gpt-5-codex` — the

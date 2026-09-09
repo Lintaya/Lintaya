@@ -35,6 +35,27 @@ const NAV_ROUTES = [
 // rather than at module scope.
 window.NAV_ROUTES = NAV_ROUTES;
 
+// Nombre con prefijo a propósito: settings.jsx declara su propio NAV_GROUPS
+// (los paneles de Ajustes) y ambos archivos comparten el scope global.
+// Blocks, Boards y Dashboards son tres caras de lo mismo: construir. El grupo
+// vive SOLO en el render del sidebar — NAV_ROUTES y las preferencias guardadas
+// (orden y ocultos de Settings → Navegación) siguen tratando las tres rutas por
+// separado, así que ocultar o reordenar una sigue funcionando sin migrar nada.
+// El grupo se pinta donde caiga el primero de sus hijos que sobreviva a esos
+// filtros, y se lleva a los demás consigo.
+// Cada grupo se pinta en la posición de su hijo más alto, así que el orden por
+// defecto sale de CORE_NAV_ORDER y las flechas de Settings → Navegación siguen
+// mandando: subir un hijo sube su grupo entero.
+// Los iconos del padre no repiten forma con ningún hijo — "server" quedó fuera
+// de Infra justamente porque son las mismas barras apiladas que Hosts.
+const SIDEBAR_NAV_GROUPS = [
+  { id: "builder",   icon: "builder", children: ["block-catalog", "modules", "dashboards"] },
+  { id: "infra",     icon: "network", children: ["devices", "vms", "containers", "hosts"] },
+  { id: "workspace", icon: "apps",    children: ["passwords", "repos-gitlab", "repos-github", "repos-bitbucket", "calls", "correo"] },
+  { id: "system",    icon: "sliders", children: ["connectors", "tags", "sshlogs", "approvals"] },
+];
+window.SIDEBAR_NAV_GROUPS = SIDEBAR_NAV_GROUPS;
+
 // "documentation" and "settings" have their own sidebar icon buttons (not part
 // of NAV_ROUTES); "module-builder" (Board Builder) is deliberately not in the
 // sidebar either — reachable only via the button on the Módulos page — so all
@@ -64,6 +85,10 @@ const ICONS = {
   modules:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   tags:      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   settings:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09A1.65 1.65 0 0015 4.6a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09A1.65 1.65 0 0019.4 15z"/></svg>,
+  sliders:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1.5 14h5M9.5 8h5M17.5 16h5"/></svg>,
+  builder:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 8.5L4 17.5V21h3.5l9-9"/><path d="M14.5 2.5l7 7-3 3-7-7z"/></svg>,
+  cube:      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>,
+  boards:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>,
   apps:      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   passwords: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
   repos:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>,
@@ -127,6 +152,8 @@ const CORE_NAV_ORDER = {
   hosts: 50, devices: 60, passwords: 75, connectors: 80, modules: 85, dashboards: 86,
   "repos-gitlab": 90, "repos-github": 91, "repos-bitbucket": 92, tags: 100, sshlogs: 120, approvals: 125, calls: 130, correo: 135,
 };
+// settings.jsx lo lee al renderizar para ordenar su lista igual que el sidebar.
+window.CORE_NAV_ORDER = CORE_NAV_ORDER;
 
 const iconBtn = {
   width: 36, height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -342,11 +369,17 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
   const matches = (row) =>
     (connectorFilter === "all" || row.connectorId === connectorFilter) &&
     (typeFilter === "all" || row.typeKey === typeFilter) &&
-    (estadoFilter === "all" || row.statusKey === estadoFilter) &&
+    (estadoFilter === "all"
+      ? row.statusKey !== "disconnected"
+      : row.statusKey === estadoFilter) &&
     (tagFilter === "all" || (row.tags || []).includes(tagFilter)) &&
     (!term || row.title.toLowerCase().includes(term) || row.connectorLabel.toLowerCase().includes(term));
   const tagOptions = window.tagFilterOptions ? window.tagFilterOptions(boardRows) : [];
   const rows = allRows.filter(matches);
+  const filtersActive = !!term
+    || connectorFilter !== "all" || typeFilter !== "all"
+    || estadoFilter !== "all" || tagFilter !== "all";
+  const showEmptyPanel = rows.length === 0 && !filtersActive;
   const pagination = usePagination(rows, { key: "boards" });
 
   const connectorOptions = [...new Set(moduleRows.map(r => r.connectorId).filter(Boolean))].sort()
@@ -366,6 +399,17 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
         </button>
       </div>
 
+      {showEmptyPanel ? (
+        <window.LintayaEmptyState
+          icon="🗂️"
+          title={totalCount === 0 ? t("boards.emptyTitle", "No boards yet") : t("boards.allDisconnectedTitle", "Nothing connected yet")}
+          body={totalCount === 0 ? t("boards.empty") : t("boards.allDisconnected", "", { count: totalCount })}
+          action={totalCount === 0 ? t("boards.new") : t("boards.disconnected")}
+          onAction={totalCount === 0
+            ? () => { window.__moduleBuilderIntent = "new"; onNavigate("module-builder"); }
+            : () => setEstadoFilter("disconnected")}
+        />
+      ) : (<>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "nowrap", overflowX: "auto" }}>
         <div style={{ position: "relative", flex: "0 0 220px" }}>
           <span style={{ position: "absolute", left: 9, top: 8, color: "var(--muted-fg)", fontSize: 13 }}>⌕</span>
@@ -399,12 +443,7 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
             </tr>
           </thead>
           <tbody>
-            {totalCount === 0 && (
-              <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>
-                {t("boards.empty")}
-              </td></tr>
-            )}
-            {totalCount > 0 && rows.length === 0 && (
+            {rows.length === 0 && (
               <tr><td colSpan={6} style={{ padding: "28px 14px", textAlign: "center", color: "var(--muted-fg)", fontSize: 12.5 }}>
                 {t("boards.noResults")}
               </td></tr>
@@ -453,6 +492,7 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
         </table>
       </div>
       {rows.length > 0 && <PaginationBar {...pagination} />}
+      </>)}
 
       {confirmBoard && (
         <window.ConfirmModal
@@ -510,6 +550,7 @@ function AuthGate() {
   const [firstRun, setFirstRun] = useState(false);
   const [token, setTokenValue] = useState("");
   const [showToken, setShowToken] = useState(false);
+  const dark = document.documentElement.dataset.theme === "dark";
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -524,14 +565,14 @@ function AuthGate() {
   if (!open) return null;
 
   const title = firstRun
-    ? t("authGate.setupTitle", "Connect to Lintaya")
+    ? t("authGate.setupTitle", "Welcome to Lintaya")
     : t("authGate.title", "Session expired");
   const description = firstRun
-    ? t("authGate.setupDesc", "Enter the HQ_TOKEN you set in server/start-dev.js. It is stored in this browser only — the server never sends it back.")
+    ? t("authGate.setupDesc", "This is a fresh install. Enter your access token to unlock Lintaya — you will find it in server/start-dev.js. It stays in this browser, and the server never sends it back.")
     : t("authGate.desc", "Your Lintaya access token is missing or no longer valid. Enter it again to keep working -- nothing you had open was lost.");
   const submitLabel = busy
-    ? (firstRun ? t("authGate.connecting", "Connecting…") : t("authGate.reconnecting", "Reconnecting…"))
-    : (firstRun ? t("authGate.connect", "Connect") : t("authGate.reconnect", "Reconnect"));
+    ? (firstRun ? t("authGate.connecting", "Unlocking…") : t("authGate.reconnecting", "Reconnecting…"))
+    : (firstRun ? t("authGate.connect", "Unlock") : t("authGate.reconnect", "Reconnect"));
 
   const reconnect = (e) => {
     e.preventDefault();
@@ -550,15 +591,28 @@ function AuthGate() {
   return (
     <div role="alertdialog" aria-modal="true" aria-label={title} style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(15,23,42,.7)", backdropFilter: "blur(2px)",
+      // Una instalación nueva no tiene nada detrás que valga la pena mirar: el
+      // fondo opaco la convierte en su propia pantalla de bienvenida. Una sesión
+      // expirada sí lo tiene, y el velo translúcido es lo que dice "tu trabajo
+      // sigue ahí detrás" — por eso solo el primer arranque va en claro.
+      background: firstRun ? "var(--bg)" : "rgba(15,23,42,.7)",
+      backdropFilter: firstRun ? "none" : "blur(2px)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
       <form onSubmit={reconnect} style={{
         width: 380, maxWidth: "100%", background: "var(--surface)", borderRadius: 12,
-        padding: 28, boxShadow: "0 24px 64px rgba(0,0,0,.4)",
+        padding: 28,
+        // La sombra dura se diseñó contra el velo oscuro; sobre el fondo claro
+        // del primer arranque solo ensucia, así que ahí va apenas insinuada.
+        boxShadow: firstRun ? "0 8px 28px rgba(15,23,42,.10)" : "0 24px 64px rgba(0,0,0,.4)",
         display: "flex", flexDirection: "column", gap: 14,
       }}>
         <div>
+          <img
+            src={dark ? "assets/brand/lintaya-logo-dark.png" : "assets/brand/lintaya-logo-light.png"}
+            alt="" aria-hidden="true"
+            style={{ height: 52, width: "auto", maxWidth: "100%", objectFit: "contain", display: "block", marginBottom: 16 }}
+          />
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, color: "var(--fg)" }}>
             {title}
           </div>
@@ -630,16 +684,13 @@ function App() {
     });
   }
 
-  function moveRoute(id, direction) {
-    setNavOrderIds(prev => {
-      const base = prev && prev.length ? prev.slice() : NAV_ROUTES.map(r => r.id);
-      const from = base.indexOf(id);
-      const to = from + direction;
-      if (from === -1 || to < 0 || to >= base.length) return prev;
-      [base[from], base[to]] = [base[to], base[from]];
-      localStorage.setItem("hq.navOrder", JSON.stringify(base));
-      return base;
-    });
+  // Settings -> Navegacion arma la lista completa: mover un grupo desplaza su
+  // bloque entero, que no es un intercambio entre vecinos adyacentes. Por eso
+  // persiste el orden ya resuelto en vez de aplicar aqui un swap.
+  function reorderNav(nextIds) {
+    if (!Array.isArray(nextIds) || !nextIds.length) return;
+    localStorage.setItem("hq.navOrder", JSON.stringify(nextIds));
+    setNavOrderIds(nextIds);
   }
   useEffect(() => {
     const loadConnectorModules = () => {
@@ -1217,7 +1268,7 @@ function App() {
           {route === "containers" && <ContainersView onNavigate={setRoute} onOpenConsole={handleOpenContainerConsole} />}
           {route === "sshlogs"    && <SshLogsView />}
           {route === "approvals"  && <window.ApprovalCenterView />}
-          {route === "settings"   && <SettingsView hiddenRoutes={hiddenRoutes} onToggleRoute={toggleRoute} navOrderIds={navOrderIds} onMoveRoute={moveRoute} tweaks={tweaks} onSetTweak={setTweak} />}
+          {route === "settings"   && <SettingsView hiddenRoutes={hiddenRoutes} onToggleRoute={toggleRoute} navOrderIds={navOrderIds} onReorderNav={reorderNav} tweaks={tweaks} onSetTweak={setTweak} />}
           {!isKnownRoute(route, availableModules, activeModulePages, activeDashboards) && <NotFoundView onHome={() => setRoute("home")} />}
         </RouteErrorBoundary>
         </div>
@@ -1317,6 +1368,15 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
   // Ancho arrastrable del modo spacious — mismo patrón que ResizeHandle /
   // useResizableWidth de repos.jsx, guardado aparte de compact/spacious
   // (ese toggle solo elige el PRESET; esto es el ancho fino dentro de él).
+  const [openGroups, setOpenGroups] = useState(
+    () => SIDEBAR_NAV_GROUPS.filter(g => g.children.includes(route)).map(g => g.id)
+  );
+  // Navegar a un hijo desde fuera del menú (buscador, enlace interno) abre su
+  // grupo: si no, la ruta activa quedaría marcada dentro de un grupo cerrado.
+  useEffect(() => {
+    const g = SIDEBAR_NAV_GROUPS.find(x => x.children.includes(route));
+    if (g) setOpenGroups(prev => prev.includes(g.id) ? prev : [...prev, g.id]);
+  }, [route]);
   const SIDEBAR_MIN = 180, SIDEBAR_MAX = 420, SIDEBAR_DEFAULT = 232;
   const [spaciousWidth, setSpaciousWidth] = useState(() => {
     const saved = Number(localStorage.getItem("hq.sidebarWidth"));
@@ -1376,10 +1436,10 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
   const ROUTE_ICONS = {
     home: ICONS.home, vms: ICONS.vms, containers: ICONS.containers, hosts: ICONS.hosts,
     devices: ICONS.devices, passwords: ICONS.passwords,
-    connectors: ICONS.connectors, modules: ICONS.modules, dashboards: ICONS.grid,
+    connectors: ICONS.connectors, modules: ICONS["block-catalog"], dashboards: ICONS.boards,
     "repos-gitlab": ICONS.repos, "repos-github": ICONS.repos, "repos-bitbucket": ICONS.repos,
     tags: ICONS.tags, sshlogs: ICONS.sshlogs, approvals: ICONS.shield,
-    calls: ICONS.calls, correo: ICONS.mail, "block-catalog": ICONS["block-catalog"],
+    calls: ICONS.calls, correo: ICONS.mail, "block-catalog": ICONS.cube,
   };
   const ROUTE_BADGES = {
     vms: dynamicBadges.vms || "",
@@ -1459,6 +1519,34 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
   const items = allItems
     .filter(it => !hiddenRoutes.includes(it.id))
     .filter((item, index, list) => list.findIndex(candidate => candidate.id === item.id) === index);
+  // El rail compacto es solo íconos: ahí no hay dónde anidar ni espacio para el
+  // chevron, así que los hijos se quedan planos como estaban.
+  const groupOf = new Map();
+  if (!compact) SIDEBAR_NAV_GROUPS.forEach(g => g.children.forEach(id => groupOf.set(id, g)));
+  const nodes = [];
+  const placed = new Set();
+  for (const it of items) {
+    const g = groupOf.get(it.id);
+    if (!g) { nodes.push({ kind: "item", item: it, navOrder: it.navOrder }); continue; }
+    if (placed.has(g.id)) continue;
+    placed.add(g.id);
+    const children = items.filter(candidate => groupOf.get(candidate.id) === g);
+    nodes.push({ kind: "group", group: g, children, navOrder: Math.min(...children.map(c => c.navOrder)) });
+  }
+  nodes.sort((left, right) => left.navOrder - right.navOrder);
+  const navList = [];
+  for (const node of nodes) {
+    // Un grupo de un solo hijo cuesta un clic y una fila para no esconder nada:
+    // con pocos conectores conectados, Infra sería un envoltorio de Devices y
+    // Workspace o Repos ni existirían. En ese caso se pinta el hijo suelto.
+    if (node.kind === "item" || node.children.length < 2) {
+      navList.push({ kind: "item", item: node.kind === "item" ? node.item : node.children[0] });
+      continue;
+    }
+    navList.push({ kind: "group", group: node.group });
+    for (const child of node.children) navList.push({ kind: "item", item: child, nested: true });
+  }
+  const firstGroupIndex = navList.findIndex(entry => entry.kind === "group");
   // El handle solo aplica al sidebar de escritorio en modo spacious — el
   // drawer móvil (onClose presente) y el modo compact (rail de íconos fijo)
   // no se redimensionan a mano.
@@ -1591,7 +1679,46 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
 
       {/* Nav */}
         <nav className="app-sidebar-nav" aria-label={t("nav.workspace", "Workspace navigation")} style={{ padding: "4px 8px 10px", display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}>
-        {items.map(it => {
+        {navList.map((entry, index) => {
+          if (entry.kind === "group") {
+            const g = entry.group;
+            const open = openGroups.includes(g.id);
+            // Una linea donde arranca la zona agrupada, separandola de las rutas
+            // sueltas de arriba. Si un grupo quedara primero del todo no se pinta:
+            // una raya pegada al borde superior del menu no separa nada.
+            const opensSection = index === firstGroupIndex && index > 0;
+            // El padre no navega a ninguna parte: no existe una página Builder,
+            // solo agrupa. Por eso abre y cierra en vez de llamar a setRoute, y
+            // se marca en color cuando la ruta activa es uno de sus hijos.
+            const childActive = g.children.includes(route);
+            return (
+              <React.Fragment key={"group:" + g.id}>
+              {opensSection && <div aria-hidden="true" style={{ height: 1, background: "var(--border)", margin: "8px 2px" }} />}
+              <button
+                onClick={() => setOpenGroups(prev => prev.includes(g.id) ? prev.filter(x => x !== g.id) : [...prev, g.id])}
+                aria-expanded={open}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", background: "transparent",
+                  border: 0, borderRadius: 6, cursor: "pointer",
+                  color: childActive ? "var(--accent)" : "var(--fg)",
+                  fontSize: 13, fontFamily: "inherit", fontWeight: childActive ? 600 : 500,
+                  position: "relative", textAlign: "left",
+                }}>
+                <span style={{ flexShrink: 0 }}>{ICONS[g.icon]}</span>
+                <span style={{ flex: 1 }}>{t("nav." + g.id + ".label", g.id)}</span>
+                <span style={{
+                  flexShrink: 0, display: "inline-flex", color: "var(--muted-fg)",
+                  transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease",
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                </span>
+              </button>
+              </React.Fragment>
+            );
+          }
+          const it = entry.item;
+          if (entry.nested && !openGroups.includes(groupOf.get(it.id).id)) return null;
           const active = route === it.id;
           return (
             <React.Fragment key={it.id}>
@@ -1600,6 +1727,7 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
                 title={compact ? it.label : ""}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
+                  marginLeft: entry.nested ? 14 : 0,
                   padding: compact ? "8px 6px" : "8px 10px",
                   background: active ? "color-mix(in srgb, var(--accent) 10%, var(--surface))" : "transparent",
                   border: 0, borderRadius: 6, cursor: "pointer",

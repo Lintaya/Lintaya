@@ -232,7 +232,7 @@ function CompletedWeekModal({ issues, weekStart, onClose, onSelectIssue }) {
             );
           })}
           {issues.length === 0 && (
-            <div style={{ padding: 24, textAlign: "center", color: "var(--muted-fg)", fontSize: 13 }}>{t("home.completedWeek.empty")}</div>
+            <window.LintayaEmptyState compact icon="✅" body={t("home.completedWeek.empty")} />
           )}
         </div>
         <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
@@ -342,7 +342,7 @@ function DocumentDetailModal({ doc, baseUrl, onClose }) {
                 )}
               </div>
             ) : (
-              <div style={{ fontSize: 12.5, color: "var(--muted-fg)", fontStyle: "italic" }}>{t("home.doc.empty")}</div>
+              <window.LintayaEmptyState compact icon="📄" body={t("home.doc.empty")} />
             )
           )}
         </div>
@@ -778,6 +778,48 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   // Antes era un booleano y addBlock caia siempre en la izquierda, asi que
   // llenar la segunda columna obligaba a añadir y luego arrastrar.
   const [showAddBlock, setShowAddBlock] = useState(null);
+  // Cuanto ocupa la zona 1 frente a la zona 2. Se guarda por navegador, como
+  // el ancho del sidebar: es una preferencia de esta pantalla, no del layout
+  // de bloques que sí viaja al servidor.
+  const ZONE_RATIO_MIN = 0.4, ZONE_RATIO_MAX = 2.6, ZONE_RATIO_DEFAULT = 1.4;
+  const [zoneRatio, setZoneRatio] = useState(() => {
+    const saved = parseFloat(localStorage.getItem("hq.homeZoneRatio"));
+    return Number.isFinite(saved) && saved >= ZONE_RATIO_MIN && saved <= ZONE_RATIO_MAX ? saved : ZONE_RATIO_DEFAULT;
+  });
+  const zoneGridRef = useRef(null);
+  useEffect(() => {
+    try { localStorage.setItem("hq.homeZoneRatio", String(zoneRatio)); } catch {}
+  }, [zoneRatio]);
+  const nudgeZone = (e) => {
+    const step = e.key === "ArrowLeft" ? -0.08 : e.key === "ArrowRight" ? 0.08 : 0;
+    if (!step) return;
+    e.preventDefault();
+    setZoneRatio(prev => Math.round(Math.min(Math.max(prev + step, ZONE_RATIO_MIN), ZONE_RATIO_MAX) * 100) / 100);
+  };
+  const startZoneResize = (e) => {
+    e.preventDefault();
+    const grid = zoneGridRef.current;
+    if (!grid) return;
+    const rect = grid.getBoundingClientRect();
+    const onMove = (ev) => {
+      // La barra parte el ancho de la rejilla: la razon es lo que queda a la
+      // izquierda contra lo que queda a la derecha. Se acota para que ninguna
+      // zona pueda quedar tan estrecha que sus bloques no se lean.
+      const x = Math.min(Math.max(ev.clientX - rect.left, rect.width * 0.28), rect.width * 0.72);
+      const next = x / (rect.width - x);
+      setZoneRatio(Math.round(Math.min(Math.max(next, ZONE_RATIO_MIN), ZONE_RATIO_MAX) * 100) / 100);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
   // Encola los guardados de layout uno tras otro — sin esto, dos cambios
   // seguidos (p. ej. quitar un block justo después de agregar una nota)
   // podían viajar en paralelo y llegar al servidor fuera de orden, dejando
@@ -1289,7 +1331,11 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
           panelContent[block.id] = <ConnectorBlockPanel key={block.id} block={block} panelProps={panelProps} />;
         });
 
-        const renderCol = (colId) => (
+        const panelsOf = (colId) => layout[colId].map(id => panelContent[id]).filter(Boolean);
+        const anyPanels = panelsOf("left").length > 0 || panelsOf("right").length > 0;
+        const renderCol = (colId) => {
+          const panels = panelsOf(colId);
+          return (
           <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}
             onDragOver={e => { e.preventDefault(); if (!layout[colId].length) setDragOver({ col: colId, idx: 0 }); }}
             onDrop={e => {
@@ -1299,16 +1345,37 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
               if (!layout[colId].length) { movePanel(fromCol, fromIdx, colId, 0); }
               dragging.current = null; setDragOver(null);
             }}>
-            {layout[colId].map(id => panelContent[id] || null)}
+            {panels.length === 0 ? (
+              <window.LintayaEmptyState
+                icon="🧱"
+                title={t("home.zoneEmptyTitle", "Zone {n} is empty", { n: colId === "left" ? 1 : 2 })}
+                body={t("home.zoneEmptyBody", "Add a block to start filling this zone.")}
+                action={colId === "left" ? t("home.addBlock.zone1", "+ Block · Zone 1") : t("home.addBlock.zone2", "+ Block · Zone 2")}
+                onAction={() => setShowAddBlock(colId)}
+              />
+            ) : panels}
           </div>
-        );
+          );
+        };
 
         return (
-          <div className="home-dashboard-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+          <div className="home-dashboard-grid" ref={zoneGridRef} style={{
+            display: "grid",
+            // Sin un solo bloque las dos zonas dicen lo mismo, asi que reparten
+            // el ancho a partes iguales; el desequilibrio 1.4/1 solo tiene
+            // sentido cuando hay contenido que lo justifique.
+            gridTemplateColumns: anyPanels ? `${zoneRatio}fr 14px 1fr` : "1fr 1fr",
+            gap: 16,
+          }}>
             {renderCol("left")}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-              {renderCol("right")}
-            </div>
+            {anyPanels && (
+              <HomeZoneGrip
+                percent={Math.round((zoneRatio / (1 + zoneRatio)) * 100)}
+                onDown={startZoneResize}
+                onKeyDown={nudgeZone}
+              />
+            )}
+            {renderCol("right")}
           </div>
         );
       })()}
@@ -1316,6 +1383,47 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   );
 }
 
+// Separador entre las dos zonas de Home. Copia el aspecto y el trato de teclado
+// del ZoneGrip de module-builder.jsx (la barra que separa zonas dentro de un
+// Board) en vez del ResizeHandle de repos.jsx: aquel se dibuja casi invisible
+// porque vive sobre un divisor propio, y aqui — como en los Boards — queda
+// pegado a paneles con borde del mismo color y no se distinguiria de uno.
+// No se reusa el componente tal cual porque su geometria va en porcentajes
+// atados al modelo de zonas del editor, que aqui no existe.
+function HomeZoneGrip({ percent, onDown, onKeyDown }) {
+  const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
+  return (
+    <div
+      className="home-zone-resizer"
+      role="separator"
+      tabIndex={0}
+      aria-orientation="vertical"
+      aria-label={window.I18N.t("home.zoneResize", "Resize zones. Use left and right arrow keys.")}
+      aria-valuemin={28}
+      aria-valuemax={72}
+      aria-valuenow={percent}
+      onPointerDown={onDown}
+      onKeyDown={onKeyDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      title={window.I18N.t("ui.boards.resize", "Drag to resize")}
+      style={{
+        cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center",
+        touchAction: "none", borderRadius: 4, outlineOffset: -2,
+        outline: focused ? "2px solid var(--brand-glass-active)" : "none",
+      }}>
+      <div style={{
+        width: 4, height: "100%", borderRadius: 2,
+        background: hover || focused ? "var(--accent)" : "var(--muted-fg)",
+        opacity: hover || focused ? 1 : 0.4,
+        transition: "background .1s, opacity .1s",
+      }} />
+    </div>
+  );
+}
 function Panel({ title, titleExtra, action, children, draggable: isDraggable, dragId, col, layout, dragging, dragOver, setDragOver, movePanel, onRemove, removeLabel, removeTitle, removeButtonRef, contentScroll, contentScrollLabel, fillHeight, hideHeader = false }) {
   const locale = window.I18N.useLocale();
   const t = window.I18N.t;

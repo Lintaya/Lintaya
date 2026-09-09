@@ -1053,7 +1053,6 @@ function DevicesView({ onOpenSSH, onCountChange }) {
   const [q, setQ] = useState("");
   const [siteFilter, setSiteFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
-  const [vendorFilter, setVendorFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [favOverrides, setFavOverrides] = useState({});
@@ -1113,13 +1112,11 @@ function DevicesView({ onOpenSSH, onCountChange }) {
   const toggleFav = (id) => setFavOverrides(p => ({ ...p, [id]: !(p[id] ?? (allStatic.find(d => d.id === id)?.favorite ?? false)) }));
 
   const all = useMemo(() => allStatic.map(d => ({ ...d, favorite: favOverrides[d.id] ?? d.favorite })), [allStatic, favOverrides]);
-  const vendors = useMemo(() => Array.from(new Set(allStatic.map(d => d.vendor).filter(Boolean))).sort(), [allStatic]);
 
   const devices = useMemo(() => {
     const filtered = all.filter(d => {
       if (siteFilter !== "all" && d.site !== siteFilter) return false;
       if (kindFilter !== "all" && d.kind !== kindFilter) return false;
-      if (vendorFilter !== "all" && d.vendor !== vendorFilter) return false;
       if (favoritesOnly && !d.favorite) return false;
       if (tagFilter.length && !tagFilter.every(t => d.tags?.includes(t))) return false;
       if (q) {
@@ -1140,7 +1137,7 @@ function DevicesView({ onOpenSSH, onCountChange }) {
       const vb = (b[sortBy] || "").toString().toLowerCase();
       return va < vb ? -dir : va > vb ? dir : 0;
     });
-  }, [all, q, siteFilter, kindFilter, vendorFilter, favoritesOnly, tagFilter, sortBy, sortDir]);
+  }, [all, q, siteFilter, kindFilter, favoritesOnly, tagFilter, sortBy, sortDir]);
 
   const pagination = usePagination(devices, { key: "devices" });
 
@@ -1206,7 +1203,7 @@ function DevicesView({ onOpenSSH, onCountChange }) {
 
   return (
     <div style={{ padding: 20, maxWidth: 1480, margin: "0 auto" }}>
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom: 16, gap:12 }}>
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", marginBottom: 18, gap:12 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, letterSpacing: -0.2 }}>{dt("devices.title", "Devices")}</h1>
           <p style={{ margin: "4px 0 0", color: "var(--muted-fg)", fontSize: 13 }}>
@@ -1217,14 +1214,15 @@ function DevicesView({ onOpenSSH, onCountChange }) {
           </p>
         </div>
         <button onClick={() => setShowNewDevice(true)} style={{
-          display:"inline-flex", alignItems:"center", gap:6, height:34, padding:"0 14px",
+          display:"inline-flex", alignItems:"center", gap:6, height:32, padding:"0 14px",
           background:"var(--accent)", color:"white", border:"none", borderRadius:7,
-          fontSize:13, fontWeight:600, fontFamily:"inherit", cursor:"pointer", flexShrink:0,
+          fontSize:12.5, fontWeight:600, fontFamily:"inherit", cursor:"pointer", flexShrink:0,
         }}>
           + {dt("devices.new", "New device")}
         </button>
       </div>
 
+      {counts.total > 0 && (<>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ position: "relative", flex: "0 1 280px" }}>
           <span style={{ position: "absolute", left: 9, top: 8, color: "var(--muted-fg)" }}>⌕</span>
@@ -1239,7 +1237,6 @@ function DevicesView({ onOpenSSH, onCountChange }) {
         <FilterSelect label={dt("devices.site", "Site")} value={siteFilter}
           options={[["all", dt("devices.all", "All")], ...siteOptions]} onChange={setSiteFilter} />
         <FilterSelect label={dt("devices.type", "Type")} value={kindFilter} options={[["all",dt("devices.all", "All")], ...deviceTypeValues().map(v => [v.id, v.label])]} onChange={setKindFilter} />
-        <FilterSelect label={dt("devices.vendor", "Vendor")} value={vendorFilter} options={[["all",dt("devices.all", "All")], ...vendors.map(v => [v, v])]} onChange={setVendorFilter} />
         <button onClick={() => setFavoritesOnly(f => !f)} style={{
           height: 32, padding: "0 10px", border: "1px solid var(--border)",
           background: favoritesOnly ? "color-mix(in srgb, #f59e0b 14%, white)" : "white",
@@ -1294,6 +1291,7 @@ function DevicesView({ onOpenSSH, onCountChange }) {
       <div style={{ marginBottom: 14 }}>
         <TagFilter value={tagFilter} onChange={setTagFilter} items={window.APP_DATA.DEVICES} />
       </div>
+      </>)}
 
       {viewMode === "table" && (
         <DeviceTable

@@ -17,7 +17,7 @@ function generateAIContext({ connectors = [] }) {
       auth: {
         type: "Bearer token",
         header: "Authorization",
-        example: "Authorization: Bearer <HQ_TOKEN>",
+        example: "Authorization: Bearer <LINTAYA_TOKEN>",
         note: "Authentication is required for operational routes. Never transmit or log a token in agent prompts.",
       },
 

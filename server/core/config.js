@@ -55,10 +55,10 @@ function loadConfig(env = process.env, options = {}) {
   const serverDir = options.serverDir || path.join(__dirname, "..");
   const rootDir = path.resolve(serverDir, "..");
   const nodeEnv = env.NODE_ENV || "development";
-  const token = (env.HQ_TOKEN || "").trim();
+  const token = (env.LINTAYA_TOKEN || "").trim();
 
   if (options.requireToken && !token) {
-    throw new ConfigError("HQ_TOKEN is required", "HQ_TOKEN");
+    throw new ConfigError("LINTAYA_TOKEN is required", "LINTAYA_TOKEN");
   }
 
   const vaultMode = oneOf(

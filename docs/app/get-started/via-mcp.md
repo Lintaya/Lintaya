@@ -21,13 +21,13 @@ Add an entry to `.mcp.json` at the repository root:
     "lintaya": {
       "command": "node",
       "args": ["server/mcp-server.js"],
-      "env": { "HQ_TOKEN": "dev-token" }
+      "env": { "LINTAYA_TOKEN": "dev-token" }
     }
   }
 }
 ```
 
-`HQ_TOKEN` must match the token the running server was started with. By
+`LINTAYA_TOKEN` must match the token the running server was started with. By
 default the MCP server calls `http://127.0.0.1:<PORT>` (port 3000 unless
 overridden) — set `LINTAYA_API_URL` in the same `env` block to point it at a
 different host or port. If a connector uses a self-signed certificate (e.g. an

@@ -35,7 +35,7 @@
 //   "lintaya": {
 //     "command": "node",
 //     "args": ["server/mcp-server.js"],
-//     "env": { "HQ_TOKEN": "dev-token" }
+//     "env": { "LINTAYA_TOKEN": "dev-token" }
 //   }
 
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
@@ -46,7 +46,7 @@ const {
 } = require("@modelcontextprotocol/sdk/types.js");
 
 const BASE_URL = (process.env.LINTAYA_API_URL || `http://127.0.0.1:${process.env.PORT || 3000}`).replace(/\/$/, "");
-const TOKEN = process.env.HQ_TOKEN || "";
+const TOKEN = process.env.LINTAYA_TOKEN || "";
 
 // ── HTTP client ──────────────────────────────────────────────────────────────
 async function apiRequest(method, urlPath, body) {
