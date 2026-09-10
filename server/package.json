@@ -21,7 +21,7 @@
     "check": "npm run check:syntax && npm test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.97.1",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@bitwarden/cli": "^2026.4.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@xterm/addon-fit": "^0.10.0",
