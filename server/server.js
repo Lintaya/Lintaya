@@ -1349,7 +1349,7 @@ app.get("/Lintaya.html", (req, res) => sendShell(res));
 app.get("/Personal HQ.html", (req, res) => res.redirect(301, "/Lintaya.html"));
 app.get("/Personal%20HQ.html", (req, res) => res.redirect(301, "/Lintaya.html"));
 
-app.get("*", (req, res) => {
+app.get("/{*splat}", (req, res) => {
   if (req.path.startsWith("/api/")) {
     return sendAppError(res, AppError.notFound("not-found"), req);
   }
