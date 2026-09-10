@@ -1219,7 +1219,7 @@ function App() {
             />
           )}
           {route === "home"      && <HomeView      onNavigate={setRoute} liveVMs={liveVMs} liveHosts={liveHosts} liveMeta={liveMeta} />}
-          {route === "block-catalog" && <BlockCatalogView isMobile={isMobile} />}
+          {route === "block-catalog" && <window.BlockCatalogView isMobile={isMobile} />}
           {route === "module-builder" && <window.ModuleBuilderView onNavigate={setRoute} />}
           {route === "vms"       && <VMsView       tweaks={tweaks} sshSessions={sshSessions} onOpenSSH={(vm, vaultItem) => handleOpenSSH(vm, vaultItem, "vms")} onNavigateToSSH={() => setRoute("ssh")} />}
           {route === "hosts"     && <HostsView onNavigate={setRoute} />}
