@@ -1,5 +1,7 @@
 # Architecture
 
+English | [Español](architecture.es.md)
+
 English | [Español](introduccion.es.md)
 
 Lintaya is a local-first workspace. The browser is the user interface, while

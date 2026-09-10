@@ -38,11 +38,11 @@ Lintaya. No es un servicio alojado multi-tenant.
         ┌────────────────────┼────────────────────┐
         │                    │                    │
      DEVICES              BUILDER              SYSTEM
-  inventario + SSH    Blocks · Boards      Connectors · Tags
+  inventory + SSH     Blocks · Boards      Connectors · Tags
    hosts + VMs         Dashboards           Logs · Approvals
                              │
-                  Proveedores y servicios
-          GitHub · GitLab · Bitbucket · Plane · más
+                  Git providers and services
+          GitHub · GitLab · Bitbucket · Plane · more
 ```
 
 Lintaya mantiene el espacio de trabajo en un solo navegador, mientras el

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/get-started/architecture.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/get-started/architecture.md
+
+docs/app/get-started/architecture.md: 36fb9424d0008da9ab65c6937a4cae8711f999d3
+docs/app/get-started/architecture.es.md: 295c4f3b5dee5132f685b8446fec0c24fc3c6fa2

@@ -11,29 +11,29 @@ directamente.
 ## Empieza aquí
 
 ```text
-1. Instala Node.js 22/24
+1. Install Node.js 22/24
           │
           ▼
-2. Ejecuta el servidor local ───► 3. Abre el navegador
+2. Run the local server ───────► 3. Open the browser
           │                              │
           │                              ▼
-          │                       4. Añade el token API
+          │                       4. Add an API token
           │                              │
-          └──────────────► 5. Configura y prueba un conector
+          └──────────────► 5. Configure and test a connector
                                          │
                                          ▼
-                              6. Usa la app, CLI o MCP
+                              6. Use the workspace, CLI, or MCP
 ```
 
 Usa este índice para ir directamente a la tarea que necesitas:
 
 | Quiero… | Ir a |
 |---|---|
-| Entender el espacio web | [Formas de conectarte](#formas-de-conectarte) y [Primera sesión de navegador](#primera-sesión-de-navegador) |
-| Instalar y ejecutar Lintaya | [Ejecutar localmente](#ejecutar-localmente) y [SETUP.es.md](../../../SETUP.es.md) |
+| Entender el espacio web | [Formas de conectarte](#ways-to-connect) y [Primera sesión de navegador](#first-browser-session) |
+| Instalar y ejecutar Lintaya | [Ejecutar localmente](#run-locally) y [SETUP.es.md](../../../SETUP.es.md) |
 | Usar la terminal o scripts | [Conectar por CLI](via-cli.es.md) |
 | Dar acceso controlado a un agente IA | [Conectar por MCP](via-mcp.es.md) |
-| Conectar un proveedor | [Primer conector](#primer-conector) y [Conectores Community](../connectors/community/introduccion.es.md) |
+| Conectar un proveedor | [Primer conector](#first-connector) y [Conectores Community](../connectors/community/introduccion.es.md) |
 | Crear un dashboard | [Blocks](../block/introduccion.es.md), [Boards](../module/introduccion.es.md) y [Dashboards](../dashboard/introduccion.es.md) |
 | Administrar inventario y SSH | [Devices](../devices/introduccion.es.md) y [SSH](../ssh/introduccion.es.md) |
 | Configurar la aplicación | [System](../system/introduccion.es.md) y [Ajustes](../system/ajustes.es.md) |

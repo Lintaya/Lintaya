@@ -1,5 +1,7 @@
 # Settings
 
+English | [Español](ajustes.es.md)
+
 Open **Settings** from the gear button at the bottom of the sidebar. The page
 groups local account preferences, application behavior, server synchronization,
 backups, and instance information.

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/system/ajustes.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/system/ajustes.md
+
+docs/app/system/ajustes.md: 8ab2992413907a6451f400b4bdb3f856ca807d39
+docs/app/system/ajustes.es.md: 50e03acba5e7812a0f74b3161030975cda01de35

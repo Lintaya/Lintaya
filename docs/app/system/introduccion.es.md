@@ -1,5 +1,7 @@
 # System
 
+[English](introduccion.md) | Español
+
 La sección **System** contiene las herramientas de configuración operativa y
 auditoría que apoyan al resto de Lintaya. Está separada de áreas de producto
 como Devices, Blocks, Boards y Dashboards.

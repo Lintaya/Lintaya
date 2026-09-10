@@ -1,5 +1,7 @@
 # Ajustes
 
+[English](ajustes.md) | Español
+
 Abre **Ajustes** con el botón de engranaje al pie de la barra lateral. La página
 agrupa preferencias de cuenta, comportamiento de la aplicación,
 sincronización del servidor, respaldos e información de la instancia.

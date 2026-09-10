@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write docs/app/get-started/introduccion.md
 
-docs/app/get-started/introduccion.md: 341ff7923205e0b8d7f8189a5fbcc8f37aa54918
-docs/app/get-started/introduccion.es.md: e3f153378cf83664715a4943c2cdcc89e1abf0f1
+docs/app/get-started/introduccion.md: 1f34653ae2cd9360b8c8956a5acb3707ff1b5511
+docs/app/get-started/introduccion.es.md: a5067c0ae43ba1c9b08484e3346669ce346552ab

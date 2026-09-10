@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write docs/release/SUPPLY_CHAIN.md
 
-docs/release/SUPPLY_CHAIN.md: 188a6f35cd06738749b76472d7ec5e2818eaf058
-docs/release/SUPPLY_CHAIN.es.md: b52edf4c88bce9051c0550ec80035666b181413c
+docs/release/SUPPLY_CHAIN.md: 829f61529e3bd58b9c6d985f2a6706c2afe22dec
+docs/release/SUPPLY_CHAIN.es.md: 460ead3a348b3efd6c63655cfe5da04d82c41e81

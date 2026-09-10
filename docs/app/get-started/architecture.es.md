@@ -1,5 +1,7 @@
 # Arquitectura
 
+[English](architecture.md) | Español
+
 [English](introduccion.md) | Español
 
 Lintaya es un espacio de trabajo local-first. El navegador es la interfaz de
@@ -9,18 +11,18 @@ local, configuración de conectores, sincronización y la API HTTP.
 ## Flujo del runtime
 
 ```text
-Navegador PWA (React + JSX)
-          │ HTTP + token Bearer
+Browser PWA (React + JSX)
+          │ HTTP + Bearer token
           ▼
 Node.js / Express (auth, API, jobs)
           │
    ┌──────┼────────┬─────────────┐
    ▼      ▼        ▼             ▼
- SQLite  Secret   Conectores   CLI / MCP
- estado  Store    sync/actions  llamadores HTTP
- cache   secretos      │
-                        ▼
-                Proveedores externos
+ SQLite  Secret   Connectors   CLI / MCP
+ state   Store    sync/actions  HTTP callers
+ cache   secrets      │
+                      ▼
+              External providers
 ```
 
 La CLI y MCP son llamadores HTTP adicionales del mismo servidor. No abren
