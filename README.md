@@ -6,7 +6,17 @@ English | [Español](README.es.md)
   <img src="assets/brand/lintaya-logo-light.png" alt="Lintaya — open source Git project intelligence" width="420">
 </p>
 
-**Every project tells a story. Lintaya reveals it.**
+<p align="center">
+  <strong>Every project tells a story. Lintaya reveals it.</strong><br>
+  A local-first operations workspace for your code, infrastructure, and connected tools.
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-you-can-do">Features</a> ·
+  <a href="docs/INDEX.md">Documentation</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
 
 Lintaya is an open-source, local-first workspace for bringing Git providers and
 operational systems into one browser workspace. It combines dashboards, reusable
@@ -19,6 +29,24 @@ not a hosted multi-tenant service.
 > **Status: pre-release (`0.1.0-beta.1`).** Public APIs, connector contracts,
 > actions, and analyzers are still stabilizing. Do not use this beta with
 > unreviewed production credentials.
+
+## A visual map of Lintaya
+
+```text
+                          LINTAYA
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+     DEVICES              BUILDER              SYSTEM
+  inventory + SSH     Blocks · Boards      Connectors · Tags
+   hosts + VMs         Dashboards           Logs · Approvals
+                             │
+                  Git providers and services
+          GitHub · GitLab · Bitbucket · Plane · more
+```
+
+Lintaya keeps the workspace in one browser while leaving provider credentials,
+state, and synchronization under the control of the local server.
 
 ## What you can do
 
@@ -92,6 +120,8 @@ JSON output, and the current read/write boundary.
 | [`docs/connectors/DEVELOPMENT_GUIDE.md`](docs/connectors/DEVELOPMENT_GUIDE.md) | Connector structure, SDK, lifecycle, and testing. |
 | [`docs/connectors/REVIEW_CHECKLIST.md`](docs/connectors/REVIEW_CHECKLIST.md) | Connector security and review criteria. |
 | [`docs/app/ssh/introduccion.md`](docs/app/ssh/introduccion.md) | SSH sessions, credentials, jump hosts, transcripts, and broadcast. |
+| [`docs/app/system/introduccion.md`](docs/app/system/introduccion.md) | Connectors, Tags, Logs, and Approvals. |
+| [`docs/app/system/ajustes.md`](docs/app/system/ajustes.md) | Profile, Assistant, appearance, navigation, synchronization, and backups. |
 | [`docs/i18n/README.md`](docs/i18n/README.md) | English/Spanish documentation policy and verifier. |
 
 ## Security and current limitations

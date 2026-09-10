@@ -130,6 +130,39 @@ function resolveInternalDocPath(href, activeFile, files) {
   }
 }
 
+function DocsResizeHandle({ label, onPointerDown, onKeyDown }) {
+  const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const active = hover || focused;
+  return (
+    <div
+      role="separator"
+      tabIndex={0}
+      aria-orientation="vertical"
+      aria-label={label}
+      onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        width: 1, flexShrink: 0, cursor: "col-resize", display: "flex",
+        alignItems: "center", justifyContent: "center", touchAction: "none",
+        outline: focused ? "2px solid var(--brand-glass-active)" : "none",
+        outlineOffset: -2, borderRadius: 4,
+      }}
+    >
+      <div style={{
+        width: active ? 3 : 1, height: "100%", borderRadius: 2,
+        background: active ? "var(--accent)" : "var(--muted-fg)",
+        opacity: active ? 1 : 0.4,
+        transition: "background .1s, opacity .1s",
+      }} />
+    </div>
+  );
+}
+
 function DocumentationView() {
   window.I18N?.useLocale();
   const [sections, setSections] = useState(null);
@@ -138,7 +171,31 @@ function DocumentationView() {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [treeWidth, setTreeWidth] = useState(220);
+  const [tocWidth, setTocWidth] = useState(200);
+  const [tocVisible, setTocVisible] = useState(true);
   const contentRef = useRef(null);
+
+  const resizeColumn = (setter, min, max, event) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startValue = setter === setTreeWidth ? treeWidth : tocWidth;
+    const direction = setter === setTreeWidth ? 1 : -1;
+    const move = e => setter(Math.max(min, Math.min(max, startValue + (e.clientX - startX) * direction)));
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  };
+
+  const resizeKey = (setter, min, max, direction, event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const sign = direction * (event.key === "ArrowRight" ? 1 : -1);
+    setter(value => Math.max(min, Math.min(max, value + sign * 16)));
+  };
 
   useEffect(() => {
     window.HQ_API.request("/api/documentation/tree")
@@ -253,7 +310,7 @@ function DocumentationView() {
 
         {/* ── Árbol de archivos de la sección activa ── */}
         {!isAPISection && (
-          <div style={{ width: 220, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto", padding: "8px 0", background: "var(--surface)" }}>
+          <div style={{ width: treeWidth, flexShrink: 0, borderRight: "1px solid var(--border)", overflowY: "auto", padding: "8px 0", background: "var(--surface)" }}>
             {section?.children.length ? (
               section.children.map(node => (
                 <DocsTreeNode key={node.path} node={node} depth={0} activeFile={activeFile} onSelectFile={n => setActiveFile(n.path)} />
@@ -263,9 +320,10 @@ function DocumentationView() {
             )}
           </div>
         )}
+        {!isAPISection && <DocsResizeHandle label={dct("docs.resizeTree", "Resize document navigation")} onPointerDown={e => resizeColumn(setTreeWidth, 160, 360, e)} onKeyDown={e => resizeKey(setTreeWidth, 160, 360, 1, e)} />}
 
         {/* ── Contenido ── */}
-        <div ref={contentRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: isAPISection ? 0 : "24px 32px" }}>
+        <div ref={contentRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: isAPISection ? 0 : "24px 32px", position: "relative" }}>
           {isAPISection ? (
             /* API Tab - Show Swagger UI */
             <div style={{ height: "100%", border: 0, width: "100%" }}>
@@ -301,12 +359,31 @@ function DocumentationView() {
               )}
             </>
           )}
+          {!isAPISection && !tocVisible && headings.length > 0 && (
+            <button type="button" onClick={() => setTocVisible(true)} title={dct("docs.showToc", "Show table of contents")} aria-label={dct("docs.showToc", "Show table of contents")} style={{
+              position: "absolute", right: 8, top: 16, width: 32, height: 44,
+              border: 0, borderRadius: 7, background: "transparent",
+              color: "var(--accent)", cursor: "pointer", fontSize: 16, fontFamily: "inherit", zIndex: 2,
+            }}>
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <path d="M15 8l4 4-4 4M19 12H9" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* ── Tabla de contenidos ── */}
-        {!isAPISection && headings.length > 0 && (
-          <div style={{ width: 200, flexShrink: 0, borderLeft: "1px solid var(--border)", overflowY: "auto", padding: "16px 14px" }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>{dct("docs.toc", "On this page")}</div>
+        {!isAPISection && headings.length > 0 && tocVisible && (
+          <>
+          <DocsResizeHandle label={dct("docs.resizeToc", "Resize table of contents")} onPointerDown={e => resizeColumn(setTocWidth, 160, 340, e)} onKeyDown={e => resizeKey(setTocWidth, 160, 340, -1, e)} />
+          <div style={{ width: tocWidth, flexShrink: 0, borderLeft: "1px solid var(--border)", overflowY: "auto", padding: "16px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted-fg)", textTransform: "uppercase", letterSpacing: ".03em" }}>{dct("docs.toc", "On this page")}</div>
+              <button type="button" onClick={() => setTocVisible(false)} title={dct("docs.hideToc", "Hide table of contents")} aria-label={dct("docs.hideToc", "Hide table of contents")} style={{
+                border: 0, background: "transparent", color: "var(--muted-fg)", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", fontFamily: "inherit",
+              }}>×</button>
+            </div>
             {headings.map(h => (
               <button key={h.slug} onClick={() => scrollToHeading(h.slug)} style={{
                 display: "block", width: "100%", textAlign: "left", border: 0, background: "transparent",
@@ -315,6 +392,7 @@ function DocumentationView() {
               }}>{h.text}</button>
             ))}
           </div>
+          </>
         )}
       </div>
 
@@ -324,7 +402,7 @@ function DocumentationView() {
         .docs-app-markdown h2 { font-size: 1.3em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
         .docs-app-markdown p, .docs-app-markdown li { color: var(--fg); }
         .docs-app-markdown code { font-family: var(--font-mono); background: var(--muted); padding: .15em .4em; border-radius: 4px; font-size: .9em; }
-        .docs-app-markdown pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 8px; overflow: auto; }
+        .docs-app-markdown pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 8px; overflow: auto; max-width: 100%; box-sizing: border-box; }
         .docs-app-markdown pre code { background: none; padding: 0; color: inherit; }
         .docs-app-markdown a { color: var(--accent); }
         .docs-app-markdown blockquote { margin: 0; padding: 0 1em; color: var(--muted-fg); border-left: 3px solid var(--border); }

@@ -7,6 +7,37 @@ The server owns local state and connector configuration; every other caller —
 the browser, the CLI, and MCP — talks to it only through its HTTP API and
 never opens the local database directly.
 
+## Start here
+
+```text
+1. Install Node.js 22/24
+          │
+          ▼
+2. Run the local server ───────► 3. Open the browser
+          │                              │
+          │                              ▼
+          │                       4. Add an API token
+          │                              │
+          └──────────────► 5. Configure and test a connector
+                                         │
+                                         ▼
+                              6. Use the workspace, CLI, or MCP
+```
+
+Use this index to jump directly to the task you need:
+
+| I want to… | Go to |
+|---|---|
+| Understand the web workspace | [Ways to connect](#ways-to-connect) and [First browser session](#first-browser-session) |
+| Install and run Lintaya | [Run locally](#run-locally) and [SETUP.md](../../../SETUP.md) |
+| Use the terminal or scripts | [Connect via CLI](via-cli.md) |
+| Give an AI agent controlled access | [Connect via MCP](via-mcp.md) |
+| Connect a provider | [First connector](#first-connector) and [Community connectors](../connectors/community/introduccion.md) |
+| Build a dashboard | [Blocks](../block/introduccion.md), [Boards](../module/introduccion.md), and [Dashboards](../dashboard/introduccion.md) |
+| Manage inventory and SSH | [Devices](../devices/introduccion.md) and [SSH](../ssh/introduccion.md) |
+| Configure the application | [System](../system/introduccion.md) and [Settings](../system/ajustes.md) |
+| Understand the complete structure | [Architecture](architecture.md) |
+
 ## Ways to connect
 
 | | What it's for | Setup |
@@ -33,6 +64,10 @@ node .\start-dev.js
 Open the Local URL printed by the server, normally http://localhost:3000. Set a
 strong LINTAYA_TOKEN in the gitignored start-dev.js before using a real connector.
 
+After the server starts, the browser is the recommended first path: it lets you
+configure the token, inspect the workspace, and set up the first connector
+without learning the API first.
+
 ## First browser session
 
 Lintaya asks for the server API token in Settings. Browser storage is per
@@ -49,3 +84,7 @@ its provider, credentials, and network access are available.
 Do not place tokens, database files, backups, vault exports, or internal
 hostnames in an issue, screenshot, or commit. Read
 [SETUP.md](../../../SETUP.md) for secret-store and backup guidance.
+
+After the first connector works, continue with [Blocks](../block/introduccion.md),
+[Boards](../module/introduccion.md), and [Dashboards](../dashboard/introduccion.md)
+to build a workspace page.

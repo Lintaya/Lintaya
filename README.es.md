@@ -6,7 +6,17 @@
   <img src="assets/brand/lintaya-logo-light.png" alt="Lintaya — inteligencia open source para proyectos Git" width="420">
 </p>
 
-**Cada proyecto cuenta una historia. Lintaya la revela.**
+<p align="center">
+  <strong>Cada proyecto cuenta una historia. Lintaya la revela.</strong><br>
+  Un espacio de trabajo local-first para tu código, infraestructura y herramientas conectadas.
+</p>
+
+<p align="center">
+  <a href="#inicio-rápido">Inicio rápido</a> ·
+  <a href="#qué-puedes-hacer">Funciones</a> ·
+  <a href="docs/INDEX.es.md">Documentación</a> ·
+  <a href="SECURITY.es.md">Seguridad</a>
+</p>
 
 Lintaya es un espacio de trabajo open source y local-first que reúne proveedores
 Git y sistemas operativos en un solo espacio de trabajo web. Combina dashboards,
@@ -19,6 +29,24 @@ Lintaya. No es un servicio alojado multi-tenant.
 > **Estado: pre-release (`0.1.0-beta.1`).** Las APIs públicas, contratos de
 > conectores, acciones y analizadores todavía están estabilizándose. No uses
 > esta beta con credenciales de producción que no hayas revisado.
+
+## Mapa visual de Lintaya
+
+```text
+                          LINTAYA
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+     DEVICES              BUILDER              SYSTEM
+  inventario + SSH    Blocks · Boards      Connectors · Tags
+   hosts + VMs         Dashboards           Logs · Approvals
+                             │
+                  Proveedores y servicios
+          GitHub · GitLab · Bitbucket · Plane · más
+```
+
+Lintaya mantiene el espacio de trabajo en un solo navegador, mientras el
+servidor local conserva el control sobre credenciales, estado y sincronización.
 
 ## Qué puedes hacer
 
@@ -92,6 +120,8 @@ Blocks, salida JSON y el límite actual entre lecturas y escrituras.
 | [`docs/connectors/DEVELOPMENT_GUIDE.es.md`](docs/connectors/DEVELOPMENT_GUIDE.es.md) | Estructura, SDK, ciclo de vida y pruebas de conectores. |
 | [`docs/connectors/REVIEW_CHECKLIST.es.md`](docs/connectors/REVIEW_CHECKLIST.es.md) | Criterios de seguridad y revisión de conectores. |
 | [`docs/app/ssh/introduccion.es.md`](docs/app/ssh/introduccion.es.md) | Sesiones SSH, credenciales, hosts de salto, transcripciones y broadcast. |
+| [`docs/app/system/introduccion.es.md`](docs/app/system/introduccion.es.md) | Connectors, Tags, Logs y Approvals. |
+| [`docs/app/system/ajustes.es.md`](docs/app/system/ajustes.es.md) | Perfil, Assistant, apariencia, navegación, sincronización y respaldos. |
 | [`docs/i18n/README.es.md`](docs/i18n/README.es.md) | Política y verificador de documentación inglés/español. |
 
 ## Seguridad y limitaciones actuales

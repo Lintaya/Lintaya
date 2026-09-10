@@ -10,6 +10,7 @@ These guides explain how to use Lintaya from the PWA. Begin with [Getting starte
 - [Devices](devices/introduccion.md)
 - [Connectors](connectors/introduccion.md)
 - [SSH console](ssh/introduccion.md)
+- [System](system/introduccion.md)
 - [Lintaya basics](lintaya/introduccion.md)
 
 The `introduccion.md` files remain the source pages used by the in-app documentation viewer. These README files provide GitHub-friendly entry points.

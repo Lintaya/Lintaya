@@ -148,9 +148,10 @@ const FONT_PAIRS = {
 };
 
 const CORE_NAV_ORDER = {
-  home: 10, "block-catalog": 30, vms: 40, containers: 45,
-  hosts: 50, devices: 60, passwords: 75, connectors: 80, modules: 85, dashboards: 86,
-  "repos-gitlab": 90, "repos-github": 91, "repos-bitbucket": 92, tags: 100, sshlogs: 120, approvals: 125, calls: 130, correo: 135,
+  home: 10, vms: 40, containers: 45,
+  hosts: 50, devices: 60, passwords: 75, connectors: 213, "block-catalog": 200,
+  modules: 201, dashboards: 202,
+  "repos-gitlab": 90, "repos-github": 91, "repos-bitbucket": 92, tags: 210, sshlogs: 211, approvals: 212, calls: 130, correo: 135,
 };
 // settings.jsx lo lee al renderizar para ordenar su lista igual que el sidebar.
 window.CORE_NAV_ORDER = CORE_NAV_ORDER;
@@ -1546,7 +1547,12 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
     navList.push({ kind: "group", group: node.group });
     for (const child of node.children) navList.push({ kind: "item", item: child, nested: true });
   }
-  const firstGroupIndex = navList.findIndex(entry => entry.kind === "group");
+  const bottomNavIds = new Set(["system", "builder"]);
+  const isBottomNavEntry = (entry) => {
+    const groupId = entry.kind === "group" ? entry.group.id : groupOf.get(entry.item.id)?.id;
+    return bottomNavIds.has(groupId);
+  };
+  const firstBottomNavIndex = navList.findIndex(isBottomNavEntry);
   // El handle solo aplica al sidebar de escritorio en modo spacious — el
   // drawer móvil (onClose presente) y el modo compact (rail de íconos fijo)
   // no se redimensionan a mano.
@@ -1680,20 +1686,18 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
       {/* Nav */}
         <nav className="app-sidebar-nav" aria-label={t("nav.workspace", "Workspace navigation")} style={{ padding: "4px 8px 10px", display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}>
         {navList.map((entry, index) => {
+          const startsBottomNav = !compact && index === firstBottomNavIndex;
           if (entry.kind === "group") {
             const g = entry.group;
             const open = openGroups.includes(g.id);
-            // Una linea donde arranca la zona agrupada, separandola de las rutas
-            // sueltas de arriba. Si un grupo quedara primero del todo no se pinta:
-            // una raya pegada al borde superior del menu no separa nada.
-            const opensSection = index === firstGroupIndex && index > 0;
             // El padre no navega a ninguna parte: no existe una página Builder,
             // solo agrupa. Por eso abre y cierra en vez de llamar a setRoute, y
             // se marca en color cuando la ruta activa es uno de sus hijos.
             const childActive = g.children.includes(route);
             return (
               <React.Fragment key={"group:" + g.id}>
-              {opensSection && <div aria-hidden="true" style={{ height: 1, background: "var(--border)", margin: "8px 2px" }} />}
+              {startsBottomNav && <div aria-hidden="true" style={{ flex: 1, minHeight: 12 }} />}
+              {startsBottomNav && <div aria-hidden="true" style={{ height: 1, background: "var(--border)", margin: "8px 2px" }} />}
               <button
                 onClick={() => setOpenGroups(prev => prev.includes(g.id) ? prev.filter(x => x !== g.id) : [...prev, g.id])}
                 aria-expanded={open}

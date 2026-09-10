@@ -8,6 +8,37 @@ conectores; cualquier otro llamador — el navegador, la CLI y MCP — habla con
 él solo a través de su API HTTP y nunca abre la base de datos local
 directamente.
 
+## Empieza aquí
+
+```text
+1. Instala Node.js 22/24
+          │
+          ▼
+2. Ejecuta el servidor local ───► 3. Abre el navegador
+          │                              │
+          │                              ▼
+          │                       4. Añade el token API
+          │                              │
+          └──────────────► 5. Configura y prueba un conector
+                                         │
+                                         ▼
+                              6. Usa la app, CLI o MCP
+```
+
+Usa este índice para ir directamente a la tarea que necesitas:
+
+| Quiero… | Ir a |
+|---|---|
+| Entender el espacio web | [Formas de conectarte](#formas-de-conectarte) y [Primera sesión de navegador](#primera-sesión-de-navegador) |
+| Instalar y ejecutar Lintaya | [Ejecutar localmente](#ejecutar-localmente) y [SETUP.es.md](../../../SETUP.es.md) |
+| Usar la terminal o scripts | [Conectar por CLI](via-cli.es.md) |
+| Dar acceso controlado a un agente IA | [Conectar por MCP](via-mcp.es.md) |
+| Conectar un proveedor | [Primer conector](#primer-conector) y [Conectores Community](../connectors/community/introduccion.es.md) |
+| Crear un dashboard | [Blocks](../block/introduccion.es.md), [Boards](../module/introduccion.es.md) y [Dashboards](../dashboard/introduccion.es.md) |
+| Administrar inventario y SSH | [Devices](../devices/introduccion.es.md) y [SSH](../ssh/introduccion.es.md) |
+| Configurar la aplicación | [System](../system/introduccion.es.md) y [Ajustes](../system/ajustes.es.md) |
+| Entender toda la estructura | [Arquitectura](architecture.es.md) |
+
 ## Formas de conectarte
 
 | | Para qué sirve | Configuración |
@@ -36,6 +67,10 @@ Abre la URL Local que imprime el servidor, normalmente http://localhost:3000.
 Define un LINTAYA_TOKEN robusto en start-dev.js, que está ignorado por Git, antes de
 usar un conector real.
 
+Después de iniciar el servidor, el navegador es el camino recomendado para
+comenzar: permite configurar el token, revisar el espacio y preparar el primer
+conector sin aprender primero la API.
+
 ## Primera sesión de navegador
 
 Lintaya solicita el token API de servidor en Settings. El almacenamiento del
@@ -52,3 +87,7 @@ están disponibles cuando existen proveedor, credenciales y acceso de red.
 No pongas tokens, archivos de base de datos, respaldos, exportaciones de vault o
 hostnames internos en un issue, screenshot o commit. Lee
 [SETUP.es.md](../../../SETUP.es.md) para guía de Secret Store y respaldos.
+
+Cuando el primer conector funcione, continúa con [Blocks](../block/introduccion.es.md),
+[Boards](../module/introduccion.es.md) y [Dashboards](../dashboard/introduccion.es.md)
+para construir una página de trabajo.

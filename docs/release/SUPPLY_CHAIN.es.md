@@ -2,9 +2,9 @@
 
 [English](SUPPLY_CHAIN.md) | Español
 
-Estado: preparación requerida para el primer repositorio público de Lintaya.
-Esta política inventaría riesgos; no trata un reporte de auditoría como una
-remediación.
+Estado: preparación de release para el primer repositorio público de Lintaya.
+La auditoría runtime local más reciente está limpia; aún faltan las revisiones
+de historial, licencias, assets y snapshot.
 
 ## Controles
 
@@ -25,17 +25,19 @@ habilitar el escaneo de historial.
 
 ## Baseline actual
 
-El baseline se midió el 2026-08-25 mediante auditorías runtime solo de lockfile:
+El baseline más reciente se midió el 2026-09-10 mediante auditorías runtime
+solo de lockfile (`npm audit --omit=dev --audit-level=high`):
 
 | Componente | Resultado | Estado de release |
 |---|---|---|
 | CLI | 0 vulnerabilidades | Limpio en este baseline. |
-| Servidor | 14 vulnerabilidades: 10 altas, 1 moderada, 3 bajas | Bloqueado. Varios hallazgos altos son transitivos a la dependencia directa `@bitwarden/cli`. |
+| Servidor | 0 vulnerabilidades | Limpio. |
 
-No suprimir estos hallazgos con excepciones amplias de audit ni un umbral menor.
-Crear un issue de remediación que registre ruta de dependencia, versión corregida,
-prueba de compatibilidad y cualquier excepción humana aprobada con vigencia
-limitada. Reejecutar audit tras cada cambio de lockfile.
+El CLI y el servidor están limpios en este baseline. Mantener el umbral de
+auditoría en severidad alta o más estricto y reejecutar audit tras cada cambio
+de lockfile. Este resultado no sustituye el escaneo completo de secretos,
+la generación del SBOM ni la revisión manual de licencias y assets requerida
+para el snapshot público.
 
 ## Procedimiento de snapshot público
 
@@ -46,11 +48,14 @@ limitada. Reejecutar audit tras cada cambio de lockfile.
 3. Confirmar que el escaneo de historial pasa contra el repositorio público nuevo.
 4. Descargar los artefactos de audit de servidor y CLI y el SBOM SPDX de la misma
    ejecución; conservarlos con la decisión de release.
-5. Resolver todo hallazgo runtime alto o crítico antes de taggear una beta pública.
-6. Configurar branch protection para que el workflow Supply chain sea requerido
+5. Completar la revisión manual de licencias, `NOTICE`, assets y documentación.
+6. Crear el snapshot limpio sin `.git/` ni historial privado y verificarlo de
+   forma independiente antes de publicarlo.
+7. Crear el tag `v0.1.0-beta.1` en el repositorio público verificado.
+8. Configurar branch protection para que el workflow Supply chain sea requerido
    cuando el repositorio sea público.
 
-El job `npm-audit` publica intencionalmente un reporte baseline aunque haya
-hallazgos conocidos. Dependency Review evita nuevos cambios riesgosos de
-dependencias runtime en pull requests públicos; la puerta de release impide
-publicar con los hallazgos actuales del servidor sin resolver.
+El job `npm-audit` publica el baseline limpio actual. Dependency Review evita
+nuevos cambios riesgosos de dependencias runtime en pull requests públicos; la
+puerta de release todavía exige que pasen el snapshot independiente, el escaneo
+de historial, el SBOM y la revisión manual antes de publicar.

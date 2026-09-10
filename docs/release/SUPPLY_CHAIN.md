@@ -2,8 +2,9 @@
 
 English | [Español](SUPPLY_CHAIN.es.md)
 
-Status: required preparation for the first public Lintaya repository. This
-policy inventories risk; it does not treat an audit report as a remediation.
+Status: release preparation for the first public Lintaya repository. The latest
+local runtime audit is clean; the remaining release controls are history,
+licensing, asset, and snapshot reviews.
 
 ## Controls
 
@@ -24,17 +25,18 @@ history scan.
 
 ## Current baseline
 
-The baseline was measured on 2026-08-25 using lockfile-only runtime audits:
+The latest baseline was measured on 2026-09-10 using lockfile-only runtime
+audits (`npm audit --omit=dev --audit-level=high`):
 
 | Component | Result | Release status |
 |---|---|---|
 | CLI | 0 vulnerabilities | Clear at this baseline. |
-| Server | 14 vulnerabilities: 10 high, 1 moderate, 3 low | Blocked. Several high findings are transitive to the direct `@bitwarden/cli` dependency. |
+| Server | 0 vulnerabilities | Clear. |
 
-Do not suppress these findings with broad audit exceptions or a lower threshold.
-Create a remediation issue that records the dependency path, fixed version,
-compatibility test, and any time-limited human-approved exception. Re-run the
-audit after every lockfile change.
+The CLI and server are both clear at this baseline. Keep the audit threshold at
+high severity or stricter, and re-run the audit after every lockfile change.
+This result does not replace the full-history secret scan, SBOM generation, or
+manual license and asset review required for the public snapshot.
 
 ## Public snapshot procedure
 
@@ -45,11 +47,14 @@ audit after every lockfile change.
 3. Confirm the history scan passes against the new public repository.
 4. Download the server and CLI audit artifacts and the SPDX SBOM from the same
    workflow run; retain them with the release decision.
-5. Resolve every high or critical runtime finding before tagging a public beta.
-6. Configure branch protection so the Supply chain workflow is required after
+5. Complete the manual review of licenses, `NOTICE`, assets, and documentation.
+6. Create the clean snapshot without `.git/` or private history, then verify it
+   independently before publication.
+7. Tag the verified public repository as `v0.1.0-beta.1`.
+8. Configure branch protection so the Supply chain workflow is required after
    the repository is public.
 
-The `npm-audit` job intentionally publishes a baseline report even while known
-findings remain. Dependency Review prevents new risky runtime dependency changes
-in public pull requests; the release gate prevents publishing with the existing
-server findings unresolved.
+The `npm-audit` job publishes the current clean baseline. Dependency Review
+prevents new risky runtime dependency changes in public pull requests; the
+release gate still requires the independent snapshot, history scan, SBOM, and
+manual review to pass before publication.
