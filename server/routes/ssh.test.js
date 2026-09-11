@@ -130,3 +130,52 @@ test("a VM vault mapping supplies credential, user, port and jump host", async (
   assert.equal(harness.clients[0].options.username, "operator");
   assert.equal(harness.clients[0].options.sock instanceof EventEmitter, true);
 });
+
+// Reattach used to be keyed on (ip, username) alone and ran before any
+// credential was resolved, so a request carrying neither a password nor a
+// vaultItemId — with the vault locked — was handed a shell somebody else had
+// authenticated.
+test("an uncredentialed request is never handed somebody else's live session", async (t) => {
+  const harness = setup();
+  t.after(() => fs.rmSync(harness.serverDir, { recursive: true, force: true }));
+  const opened = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root", vaultItemId: "vault-1" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(opened.body.reattach, false);
+
+  const stolen = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(stolen.body.reattach, false, "discovery must not reattach without a credential");
+  assert.notEqual(stolen.body.sessionId, opened.body.sessionId);
+});
+
+test("a wrong credential does not reattach to a live session", async (t) => {
+  const harness = setup({ lookupVaultPassword: async (id) => `${id}-secret` });
+  t.after(() => fs.rmSync(harness.serverDir, { recursive: true, force: true }));
+  const opened = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root", vaultItemId: "vault-1" });
+  await new Promise(resolve => setImmediate(resolve));
+
+  const wrong = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root", vaultItemId: "vault-2" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(wrong.body.reattach, false);
+  assert.notEqual(wrong.body.sessionId, opened.body.sessionId);
+});
+
+test("the same credential, or the session id itself, still reattaches", async (t) => {
+  const harness = setup({ lookupVaultPassword: async (id) => `${id}-secret` });
+  t.after(() => fs.rmSync(harness.serverDir, { recursive: true, force: true }));
+  const opened = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root", vaultItemId: "vault-1" });
+  await new Promise(resolve => setImmediate(resolve));
+
+  const byCredential = await harness.invoke("POST", "/api/ssh/session", { ip: "10.0.0.4", username: "root", vaultItemId: "vault-1" });
+  assert.equal(byCredential.body.reattach, true);
+  assert.equal(byCredential.body.sessionId, opened.body.sessionId);
+
+  // Holding the id is the capability, so this path works with the vault locked.
+  const locked = setup({ lookupVaultPassword: async () => { throw Object.assign(new Error("locked"), { code: "vault-locked" }); } });
+  t.after(() => fs.rmSync(locked.serverDir, { recursive: true, force: true }));
+  const direct = await locked.invoke("POST", "/api/ssh/session", { ip: "10.0.0.9", username: "root", password: "typed" });
+  await new Promise(resolve => setImmediate(resolve));
+  const byId = await locked.invoke("POST", "/api/ssh/session", { ip: "10.0.0.9", username: "root", sessionId: direct.body.sessionId });
+  assert.equal(byId.body.reattach, true);
+  assert.equal(byId.body.sessionId, direct.body.sessionId);
+});

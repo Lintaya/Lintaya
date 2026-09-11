@@ -165,6 +165,12 @@ function VMSSHTab({ session, active, wsRegistryRef, termRegistryRef, onStatusCha
       const body = {
         ip, username, port: vm.sshPort || 22,
         cols, rows,
+        // The server only reattaches to a live session for a caller that either
+        // presents the id it already holds or re-proves the same credential —
+        // discovery by ip+username alone used to hand over an authenticated
+        // shell. Send the id back so reconnecting a tab keeps working even when
+        // the session was opened without a server-side credential.
+        ...(serverSessionIdRef.current ? { sessionId: serverSessionIdRef.current } : {}),
         ...(vaultItem?.id && !passwordOverride ? { vaultItemId: vaultItem.id } : {}),
         ...(passwordOverride ? { password: passwordOverride } : {}),
         ...(vm.execCommand ? { execCommand: vm.execCommand, vmId: vm.vmId || vm.id } : {}),

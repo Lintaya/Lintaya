@@ -33,6 +33,12 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     steps:
+      # config-file is read from the workspace, not from the API, so the
+      # repository has to be on disk before the review runs. Without this the
+      # job died on ENOENT looking for the config and never reviewed anything.
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
       - name: Review newly introduced dependency risk
         uses: actions/dependency-review-action@v5
         with:
