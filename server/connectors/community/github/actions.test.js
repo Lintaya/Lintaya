@@ -92,11 +92,11 @@ test("github.status rejects unexpected input per its inputSchema", async () => {
   );
 });
 
-test("registerGithubActions registers exactly its six actions, all under connectorTypeId github", () => {
+test("registerGithubActions registers exactly its seven actions, all under connectorTypeId github", () => {
   const registry = createActionRegistry();
   registerGithubActions({ registry, request: async () => ({}), sync: async () => ({ projects: [], deployments: [], commits: [] }) });
   const actions = registry.listActionsForType("github");
-  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-pull-request", "create-repository", "status", "sync", "update-pull-request"]);
+  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-pull-request", "create-repository", "merge-pull-request", "status", "sync", "update-pull-request"]);
   assert.equal(registry.getAction("github", "status").effect, "read");
   assert.equal(registry.getAction("github", "sync").effect, "write");
   assert.equal(registry.getAction("github", "create-repository").effect, "write");
@@ -105,6 +105,43 @@ test("registerGithubActions registers exactly its six actions, all under connect
   assert.equal(registry.getAction("github", "approve-pull-request").effect, "write");
   assert.equal(registry.getAction("github", "update-pull-request").effect, "write");
   assert.equal(registry.getAction("github", "create-pull-request").effect, "write");
+  // Fusionar reescribe la rama destino y no se deshace con un clic: es la unica
+  // destructiva del conector, y eso es lo que la manda al Approval Center.
+  assert.equal(registry.getAction("github", "merge-pull-request").effect, "destructive");
+});
+
+test("github.merge-pull-request is destructive: the first call stays pending and never reaches GitHub", async () => {
+  let llamado = false;
+  const { executeAction, logs } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return { merged: true }; },
+  });
+
+  const resultado = await executeAction({
+    connectionId: "github", actionId: "merge-pull-request",
+    input: { project: "octo/lintaya", number: 11 },
+  });
+
+  assert.equal(llamado, false, "sin aprobacion no se toca el proveedor");
+  assert.equal(resultado.ok, false);
+  assert.equal(resultado.pending, true);
+  assert.equal(resultado.error, "pending-approval");
+  assert.equal(logs[0].meta.effect, "destructive");
+});
+
+test("github.merge-pull-request rejects a merge method the repository did not ask for", async () => {
+  let llamado = false;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return {}; },
+  });
+
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "merge-pull-request",
+      input: { project: "octo/lintaya", number: 11, method: "fast-forward" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(llamado, false);
 });
 
 test("github.create-pull-request needs both branches stated and sends them as given", async () => {

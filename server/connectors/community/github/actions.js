@@ -147,6 +147,37 @@ const CREATE_PULL_REQUEST_OUTPUT_SCHEMA = {
   },
 };
 
+const MERGE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    // GitHub llama a esto merge_method. Se deja explicito y con "merge" por
+    // defecto porque squash y rebase reescriben la historia de otra forma, y
+    // cual use un repositorio es una convencion suya, no algo que adivinar.
+    method: { type: "string", enum: ["merge", "squash", "rebase"] },
+    title: { type: "string", minLength: 1 },
+    message: { type: "string" },
+    // El sha que el llamante creia estar fusionando. GitHub rechaza con 409 si
+    // la rama avanzo entre que se miro y se aprobo — que es justo la ventana
+    // que abre el Approval Center.
+    sha: { type: "string", minLength: 1 },
+  },
+};
+
+const MERGE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["merged"],
+  properties: {
+    merged: { type: "boolean" },
+    sha: { type: ["string", "null"] },
+    message: { type: ["string", "null"] },
+  },
+};
+
 function registerGithubActions({
   registry,
   request = githubRequest,
@@ -229,6 +260,43 @@ function registerGithubActions({
         reviewer: review?.user?.login || null,
         submittedAt: review?.submitted_at || null,
         webUrl: review?.html_url || null,
+      };
+    },
+  });
+
+  // Fusionar. Es la unica accion destructiva del conector: reescribe la rama
+  // destino y no se deshace con un clic, asi que pasa por el Approval Center —
+  // la primera llamada solo deja la peticion pendiente y no toca GitHub, y solo
+  // una aprobacion explicita la ejecuta.
+  //
+  // sha es opcional pero vale la pena pasarlo: entre que alguien mira el pull
+  // request y aprueba la fusion, la rama puede haber avanzado. Con sha, GitHub
+  // rechaza con 409 en vez de fusionar algo que nadie reviso.
+  registry.registerAction({
+    id: "merge-pull-request",
+    connectorTypeId: "github",
+    title: "Merge a pull request",
+    effect: "destructive",
+    inputSchema: MERGE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: MERGE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const resultado = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}/merge`,
+        "PUT",
+        {
+          merge_method: input.method || "merge",
+          ...(input.title !== undefined ? { commit_title: input.title } : {}),
+          ...(input.message !== undefined ? { commit_message: input.message } : {}),
+          ...(input.sha !== undefined ? { sha: input.sha } : {}),
+        },
+      );
+      return {
+        merged: !!resultado?.merged,
+        sha: resultado?.sha || null,
+        message: resultado?.message || null,
       };
     },
   });

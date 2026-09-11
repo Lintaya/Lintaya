@@ -47,7 +47,10 @@ test("the inventory of remote destructive provider actions is explicit and gated
     .filter((action) => action.effect === "destructive")
     .map((action) => `${action.connectorTypeId}.${action.id}`)
     .sort();
-  assert.deepEqual(destructive, ["outline.delete-document", "plane.delete-issue"]);
+  // Esta lista se amplía a mano a propósito: que una acción nueva rompa este
+  // test es la señal de que alguien tiene que mirar si merece ser destructiva.
+  // github.merge-pull-request lo es porque reescribe la rama destino.
+  assert.deepEqual(destructive, ["github.merge-pull-request", "outline.delete-document", "plane.delete-issue"]);
 });
 
 test("throws when registerAllActions is called without bitwarden's required runBw/readVaultItems", () => {

@@ -87,6 +87,24 @@ GitHub answers `422` when the token's own account authored the pull request:
 nobody approves their own. The connector does not try to predict that (it would
 cost an extra call on every open) and lets the provider's message through.
 
+### Merging a pull request
+
+`merge-pull-request` is the connector's only **destructive** action. Merging
+rewrites the target branch and no click undoes it, so it goes through the
+Approval Center: the first call only records a pending request and **does not
+touch GitHub**, and an explicit approval is what runs it. Two tests pin that —
+one proving the pending call reaches no provider, one proving an unknown merge
+method is refused before any request leaves.
+
+`method` defaults to `merge`; `squash` and `rebase` rewrite history
+differently and which one a repository uses is its own convention, not
+something to guess.
+
+Pass `sha` when you have it. Between somebody reading a pull request and
+approving its merge, the branch can move — that window is exactly what the
+Approval Center opens — and with `sha` GitHub answers `409` instead of
+merging something nobody reviewed.
+
 ### Opening a pull request
 
 `create-pull-request` (`write`) opens one: `project`, `title`, `head` and

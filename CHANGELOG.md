@@ -63,6 +63,12 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   detail in a modal instead of leaving for GitHub. It works on Boards and
   Dashboards too. Clicking a commit in the existing "recent commits" block now
   opens its own detail — full message, signature, changed files — the same way.
+- A pull request can be merged through the `merge-pull-request` action. It is
+  the connector's only destructive action: merging rewrites the target branch
+  and no click undoes it, so the first call only records a pending request and
+  reaches no provider until the Approval Center approves it. Passing the sha
+  you believed you were merging makes GitHub refuse with a conflict if the
+  branch moved while the request waited — which is the window approval opens.
 - A pull request can be opened through the `create-pull-request` action. Both
   branches must be stated: guessing the target — "it will be main" — is how a
   pull request ends up opened against the wrong branch, and that is found out
