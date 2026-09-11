@@ -258,6 +258,7 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
   const [tagFilter, setTagFilter] = useState("all");
   const [confirmDashboard, setConfirmDashboard] = useState(null);
   const [cascadeCode, setCascadeCode] = useState("");
+  const [cascadeMode, setCascadeMode] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importPackage, setImportPackage] = useState(null);
   const [importName, setImportName] = useState("");
@@ -311,12 +312,12 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
   };
   // Sin window.confirm(): Chrome lo suprime en display-mode:standalone, así
   // que instalada como PWA este borrado se cancelaba solo, en silencio.
-  const remove = async dashboard => {
-    await window.HQ_API.request(`/api/dashboards/${dashboard.id}`, { method: "DELETE", body: { cascade: true, confirmationCode: "DELETE ALL" } });
+  const remove = async (dashboard, cascade = false) => {
+    await window.HQ_API.request(`/api/dashboards/${dashboard.id}`, { method: "DELETE", ...(cascade ? { body: { cascade: true, confirmationCode: "DELETE ALL" } } : {}) });
     window.dispatchEvent(new CustomEvent("hq:dashboards-changed"));
     window.dispatchEvent(new CustomEvent("hq:module-pages-changed"));
     window.dispatchEvent(new CustomEvent("hq:custom-blocks-changed"));
-    setConfirmDashboard(null); setCascadeCode("");
+    setConfirmDashboard(null); setCascadeCode(""); setCascadeMode(false);
   };
 
   const term = q.trim().toLowerCase();
@@ -455,7 +456,7 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
                         onClick={() => onNavigate(`dashboard:${dashboard.id}`)} />
                     )}
                     <DashboardActionButton label={window.I18N.t("ui.deleteNamed", "Delete {0}", { 0: dashboard.title })} icon={window.ICONS?.trash} danger
-                      onClick={() => setConfirmDashboard(dashboard)} />
+                      onClick={() => { setConfirmDashboard(dashboard); setCascadeMode(false); setCascadeCode(""); }} />
                   </td>
                 </tr>
               ))}
@@ -468,9 +469,12 @@ function DashboardCatalogView({ dashboards, boards, onNavigate }) {
       {confirmDashboard && (
         <window.ConfirmModal
           title={window.I18N.t("ui.confirm.deleteTitle", "Confirm deletion")}
-          message={<div><p>Eliminar “{confirmDashboard.title}” y todos sus Boards y Blocks?</p><p style={{ color: "var(--danger, #b42318)", fontWeight: 650 }}>Esta acción no se puede deshacer.</p><label>Escribe <code>DELETE ALL</code> para confirmar</label><input autoFocus value={cascadeCode} onChange={e => setCascadeCode(e.target.value)} style={{ width: "100%", marginTop: 6, padding: 8 }} /></div>}
-          onConfirm={() => { if (cascadeCode === "DELETE ALL") remove(confirmDashboard); }}
-          onClose={() => { setConfirmDashboard(null); setCascadeCode(""); }} />
+          message={<div><p>{cascadeMode ? `Eliminar “${confirmDashboard.title}” y todos sus Boards y Blocks?` : `Eliminar solo el Dashboard “${confirmDashboard.title}”? Sus Boards y Blocks se conservarán.`}</p><p style={{ color: "var(--danger, #b42318)", fontWeight: 650 }}>Esta acción no se puede deshacer.</p>{cascadeMode && <><label>Escribe <code>DELETE ALL</code> para confirmar</label><input autoFocus value={cascadeCode} onChange={e => setCascadeCode(e.target.value)} style={{ width: "100%", marginTop: 6, padding: 8 }} /></>}</div>}
+          confirmLabel={cascadeMode ? "Borrar todo" : "Eliminar Dashboard"}
+          secondaryLabel={cascadeMode ? null : "Borrado en cadena"}
+          onSecondary={() => setCascadeMode(true)}
+          onConfirm={() => { if (!cascadeMode || cascadeCode === "DELETE ALL") return remove(confirmDashboard, cascadeMode); }}
+          onClose={() => { setConfirmDashboard(null); setCascadeCode(""); setCascadeMode(false); }} />
       )}
     </section>
   );
@@ -678,4 +682,3 @@ function DashboardWorkspaceView({ dashboard, boards, blockCatalog, onNavigate })
 
 window.DashboardCatalogView = DashboardCatalogView;
 window.DashboardWorkspaceView = DashboardWorkspaceView;
-

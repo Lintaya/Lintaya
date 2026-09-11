@@ -9,7 +9,7 @@
 // siempre en silencio.
 const { useState: useConfirmState, useEffect: useConfirmEffect, useRef: useConfirmRef } = React;
 
-function ConfirmModal({ title, message, confirmLabel, onConfirm, onClose }) {
+function ConfirmModal({ title, message, confirmLabel, secondaryLabel, onSecondary, onConfirm, onClose }) {
   const [busy, setBusy] = useConfirmState(false);
   const cancelRef = useConfirmRef(null);
   // El foco arranca en Cancelar: es la acción segura, así que un Enter de más
@@ -51,6 +51,7 @@ function ConfirmModal({ title, message, confirmLabel, onConfirm, onClose }) {
           <button ref={cancelRef} onClick={close} disabled={busy} style={btn}>
             {window.I18N.t("connectors.cancel", "Cancel")}
           </button>
+          {secondaryLabel && <button onClick={onSecondary} disabled={busy} style={{ ...btn, color: "var(--err)", borderColor: "var(--err)" }}>{secondaryLabel}</button>}
           <button onClick={confirm} disabled={busy}
             style={{ ...btn, background: "var(--err)", color: "white", borderColor: "var(--err)", opacity: busy ? 0.6 : 1 }}>
             {busy
