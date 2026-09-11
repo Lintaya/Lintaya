@@ -44,6 +44,10 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   detail in a modal instead of leaving for GitHub. It works on Boards and
   Dashboards too. Clicking a commit in the existing "recent commits" block now
   opens its own detail — full message, signature, changed files — the same way.
+- A pull request can be opened through the `create-pull-request` action. Both
+  branches must be stated: guessing the target — "it will be main" — is how a
+  pull request ends up opened against the wrong branch, and that is found out
+  after somebody has already reviewed it.
 - A pull request's title and description can be edited through the
   `update-pull-request` action. At least one of the two is required, and a call
   naming only the title sends only the title — filling in an empty body for

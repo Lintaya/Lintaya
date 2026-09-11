@@ -83,6 +83,20 @@ GitHub answers `422` when the token's own account authored the pull request:
 nobody approves their own. The connector does not try to predict that (it would
 cost an extra call on every open) and lets the provider's message through.
 
+### Opening a pull request
+
+`create-pull-request` (`write`) opens one: `project`, `title`, `head` and
+`base` are all required, plus an optional `body` and `draft`.
+
+`base` has no default on purpose. Guessing the target branch — "it will be
+main" — is how a pull request ends up opened against the wrong one, and that is
+discovered after somebody has already reviewed it. The caller states both
+branches or gets a `400`.
+
+With `update-pull-request` and `approve-pull-request` this closes the loop:
+open, correct and approve without leaving for the provider's own tooling, and
+all three land in the connector log with the `X-Actor` that asked.
+
 ### Editing a pull request
 
 `update-pull-request` (`write`) patches a pull request's title, its body, or

@@ -92,11 +92,11 @@ test("github.status rejects unexpected input per its inputSchema", async () => {
   );
 });
 
-test("registerGithubActions registers exactly its five actions, all under connectorTypeId github", () => {
+test("registerGithubActions registers exactly its six actions, all under connectorTypeId github", () => {
   const registry = createActionRegistry();
   registerGithubActions({ registry, request: async () => ({}), sync: async () => ({ projects: [], deployments: [], commits: [] }) });
   const actions = registry.listActionsForType("github");
-  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-repository", "status", "sync", "update-pull-request"]);
+  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-pull-request", "create-repository", "status", "sync", "update-pull-request"]);
   assert.equal(registry.getAction("github", "status").effect, "read");
   assert.equal(registry.getAction("github", "sync").effect, "write");
   assert.equal(registry.getAction("github", "create-repository").effect, "write");
@@ -104,6 +104,42 @@ test("registerGithubActions registers exactly its five actions, all under connec
   // desde GitHub: "write", no "destructive", que exigiria Approval Center.
   assert.equal(registry.getAction("github", "approve-pull-request").effect, "write");
   assert.equal(registry.getAction("github", "update-pull-request").effect, "write");
+  assert.equal(registry.getAction("github", "create-pull-request").effect, "write");
+});
+
+test("github.create-pull-request needs both branches stated and sends them as given", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { number: 11, title: "arreglo", state: "open", draft: false,
+        head: { ref: "fix" }, base: { ref: "main" },
+        html_url: "https://github.com/octo/lintaya/pull/11", created_at: "2026-09-11T12:00:00Z" };
+    },
+  });
+
+  const creado = await executeAction({
+    connectionId: "github", actionId: "create-pull-request",
+    input: { project: "octo/lintaya", title: "arreglo", head: "fix", base: "main", body: "por que" },
+  });
+
+  assert.equal(creado.ok, true);
+  assert.equal(calledWith.path, "/repos/octo/lintaya/pulls");
+  assert.equal(calledWith.method, "POST");
+  assert.deepEqual(calledWith.body, { title: "arreglo", head: "fix", base: "main", body: "por que" });
+  assert.equal(creado.result.number, 11);
+  assert.equal(creado.result.webUrl, "https://github.com/octo/lintaya/pull/11");
+
+  // Sin base no se adivina "main": abrir contra la rama equivocada se descubre
+  // cuando alguien ya lo reviso.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "create-pull-request",
+      input: { project: "octo/lintaya", title: "arreglo", head: "fix" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "sin rama destino no sale ninguna peticion");
 });
 
 test("github.update-pull-request patches only the fields it was given", async () => {

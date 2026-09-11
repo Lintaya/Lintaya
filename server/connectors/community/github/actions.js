@@ -114,6 +114,39 @@ const UPDATE_PULL_REQUEST_OUTPUT_SCHEMA = {
   },
 };
 
+const CREATE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "title", "head", "base"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    title: { type: "string", minLength: 1 },
+    // head y base van explicitos y sin valor por defecto. Adivinar la rama
+    // destino ("seguro que es main") es como se abre un pull request contra la
+    // rama equivocada, y eso se descubre cuando alguien ya lo reviso.
+    head: { type: "string", minLength: 1, description: "Branch the changes are on." },
+    base: { type: "string", minLength: 1, description: "Branch they should be merged into." },
+    body: { type: "string" },
+    draft: { type: "boolean" },
+  },
+};
+
+const CREATE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["number", "title"],
+  properties: {
+    number: { type: "integer" },
+    title: { type: "string" },
+    state: { type: ["string", "null"] },
+    draft: { type: "boolean" },
+    head: { type: ["string", "null"] },
+    base: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+    createdAt: { type: ["string", "null"] },
+  },
+};
+
 function registerGithubActions({
   registry,
   request = githubRequest,
@@ -196,6 +229,45 @@ function registerGithubActions({
         reviewer: review?.user?.login || null,
         submittedAt: review?.submitted_at || null,
         webUrl: review?.html_url || null,
+      };
+    },
+  });
+
+  // Abrir un pull request. Con update-pull-request y approve-pull-request ya
+  // registradas, esto cierra el ciclo: Lintaya puede abrir, corregir y aprobar
+  // sin salir a la herramienta del proveedor, y las tres quedan en el log con
+  // el X-Actor de quien las pidio.
+  registry.registerAction({
+    id: "create-pull-request",
+    connectorTypeId: "github",
+    title: "Open a pull request",
+    effect: "write",
+    inputSchema: CREATE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: CREATE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const created = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls`,
+        "POST",
+        {
+          title: input.title,
+          head: input.head,
+          base: input.base,
+          ...(input.body !== undefined ? { body: input.body } : {}),
+          ...(input.draft !== undefined ? { draft: input.draft } : {}),
+        },
+      );
+      return {
+        number: created?.number ?? 0,
+        title: created?.title ?? input.title,
+        state: created?.state || null,
+        draft: !!created?.draft,
+        head: created?.head?.ref || input.head,
+        base: created?.base?.ref || input.base,
+        webUrl: created?.html_url || null,
+        createdAt: created?.created_at || null,
       };
     },
   });
