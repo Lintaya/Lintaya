@@ -1341,3 +1341,7 @@ window.BlockBuilderView = BlockBuilder;
 // DetailView's unrelated plain-text preview.
 window.renderMarkdown = renderMarkdown;
 window.ContentBlockBody = ContentBlockBody;
+// Exported so other views stop hand-rolling their own (or, as the Mail viewer
+// did, skipping sanitization entirely) — read it off window at call time, never
+// captured at module eval, since several views load before this file.
+window.sanitizeContentHtml = sanitizeContentHtml;

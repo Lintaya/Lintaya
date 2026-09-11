@@ -117,6 +117,66 @@ test("local Git routes validate required input and reject paths outside the clon
   assert.equal(traversal.body.detail, "path-outside-repo");
 });
 
+// Refs reach git's argv before the `--` separator, so a value starting with "-"
+// is parsed as an option — and `log`/`show`/`diff` accept `--output=<file>`,
+// which writes anywhere the caller names. Every ref-taking route must refuse it
+// before spawning git.
+test("local Git routes refuse refs that git would parse as options", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  const clonePath = path.join(harness.root, "clone");
+  fs.mkdirSync(clonePath);
+  fs.writeFileSync(path.join(clonePath, "README.md"), "# readme\n");
+  harness.store.set("gitlab-clone-state", { "project-1": { path: clonePath } });
+  const params = { provider: "gitlab", id: "project-1" };
+  const escape = path.join(harness.root, "escaped.txt");
+
+  const log = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/git/log", {
+    params, query: { branch: `--output=${escape}` },
+  });
+  assert.equal(log.status, 400);
+  assert.equal(log.body.detail, "ref-invalid");
+
+  const show = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/git/commit/:sha", {
+    params: { ...params, sha: `--output=${escape}` },
+  });
+  assert.equal(show.status, 400);
+  assert.equal(show.body.detail, "sha-invalid");
+
+  const diffSince = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/git/file-diff-since", {
+    params, query: { path: "README.md", sha: "abcdef0", ref: `--output=${escape}` },
+  });
+  assert.equal(diffSince.status, 400);
+  assert.equal(diffSince.body.detail, "ref-invalid");
+
+  const checkout = await harness.invoke("POST", "/api/connectors/:provider/projects/:id/git/checkout", {
+    params, body: { branch: `--output=${escape}` },
+  });
+  assert.equal(checkout.status, 400);
+  assert.equal(checkout.body.detail, "ref-invalid");
+
+  assert.equal(fs.existsSync(escape), false, "no route may write outside the clone");
+});
+
+// The guard must not be so tight that it rejects refs git accepts — branch
+// names legitimately carry @, +, # and non-ASCII characters.
+test("local Git ref validation still accepts ordinary branch names", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  const clonePath = path.join(harness.root, "clone");
+  fs.mkdirSync(clonePath);
+  harness.store.set("gitlab-clone-state", { "project-1": { path: clonePath } });
+
+  for (const branch of ["main", "origin/main", "feature/PROJ-12_fix", "release@v2", "fix+hotfix", "rama-ñ"]) {
+    const result = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/git/log", {
+      params: { provider: "gitlab", id: "project-1" }, query: { branch },
+    });
+    // The clone is not a real repository, so git fails — the point is that it
+    // got as far as running, rather than being rejected as a bad ref.
+    assert.notEqual(result.body.detail, "ref-invalid", branch);
+  }
+});
+
 test("local Git execution failures use a safe RFC 9457 bad-gateway response", async (t) => {
   const harness = setup();
   t.after(() => harness.cleanup());
