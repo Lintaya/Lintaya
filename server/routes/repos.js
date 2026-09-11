@@ -2254,6 +2254,12 @@ function registerReposRoutes({
           authorAvatar: pr.user?.avatar_url || null,
           sourceBranch: pr.head?.ref || null,
           targetBranch: pr.base?.ref || null,
+          // El sha completo del head, que es lo que pide merge-pull-request
+          // para asegurarse de fusionar lo que se reviso. Los de la lista de
+          // commits van abreviados para leerse, y GitHub rechaza un abreviado
+          // aqui con 422, asi que este campo existe precisamente para no
+          // tentar a nadie a reusar aquellos.
+          headSha: pr.head?.sha || null,
           labels: (pr.labels || []).map(label => label?.name).filter(Boolean),
           assignees: (pr.assignees || []).map(person => person?.login).filter(Boolean),
           // GitHub separa a quien se le pidio revision de quien ya reviso; la

@@ -129,6 +129,31 @@ test("github.merge-pull-request is destructive: the first call stays pending and
   assert.equal(logs[0].meta.effect, "destructive");
 });
 
+test("github.merge-pull-request refuses an abbreviated sha before spending an approval", async () => {
+  let llamado = false;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return {}; },
+  });
+
+  // GitHub contesta 422 a un sha abreviado, pero solo despues de aprobar: para
+  // entonces la aprobacion ya se gasto en una peticion que no podia funcionar.
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "merge-pull-request",
+      input: { project: "octo/lintaya", number: 11, sha: "f5508ce8" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(llamado, false);
+
+  // El completo de 40 sí pasa la validación y queda pendiente de aprobación.
+  const pendiente = await executeAction({
+    connectionId: "github", actionId: "merge-pull-request",
+    input: { project: "octo/lintaya", number: 11, sha: "f5508ce89d56bb1e4ceec2f09850a85dc8539b61" },
+  });
+  assert.equal(pendiente.pending, true);
+  assert.equal(llamado, false, "ni siquiera el valido toca el proveedor sin aprobacion");
+});
+
 test("github.merge-pull-request rejects a merge method the repository did not ask for", async () => {
   let llamado = false;
   const { executeAction } = setup({

@@ -163,7 +163,11 @@ const MERGE_PULL_REQUEST_INPUT_SCHEMA = {
     // El sha que el llamante creia estar fusionando. GitHub rechaza con 409 si
     // la rama avanzo entre que se miro y se aprobo — que es justo la ventana
     // que abre el Approval Center.
-    sha: { type: "string", minLength: 1 },
+    //
+    // Tiene que ser el completo de 40. GitHub contesta 422 a un sha abreviado,
+    // y ese 422 solo aparece DESPUES de aprobar: el pattern lo convierte en un
+    // 400 inmediato, para no gastar una aprobacion en una peticion invalida.
+    sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
   },
 };
 
