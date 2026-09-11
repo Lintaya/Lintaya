@@ -85,6 +85,35 @@ const APPROVE_PULL_REQUEST_OUTPUT_SCHEMA = {
   },
 };
 
+const UPDATE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  // Se exige al menos uno de los dos campos editables: una llamada que no trae
+  // ninguno no es "no cambiar nada", es una peticion mal armada, y aceptarla
+  // dejaria una escritura en el log de actividad que no escribio nada.
+  anyOf: [{ required: ["title"] }, { required: ["body"] }],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    title: { type: "string", minLength: 1 },
+    body: { type: "string", description: "Full replacement description, not an append." },
+  },
+};
+
+const UPDATE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["number", "title"],
+  properties: {
+    number: { type: "integer" },
+    title: { type: "string" },
+    state: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+    updatedAt: { type: ["string", "null"] },
+  },
+};
+
 function registerGithubActions({
   registry,
   request = githubRequest,
@@ -167,6 +196,42 @@ function registerGithubActions({
         reviewer: review?.user?.login || null,
         submittedAt: review?.submitted_at || null,
         webUrl: review?.html_url || null,
+      };
+    },
+  });
+
+  // Editar titulo y descripcion de un pull request. Es escritura y va por el
+  // registro como todas: asi queda en Logs -> Connectors/Activity con el
+  // X-Actor de quien la pidio, que es como el proyecto distingue lo que hizo un
+  // agente de lo que hizo el usuario.
+  //
+  // body reemplaza la descripcion entera, no la amplia: GitHub no tiene "anadir
+  // al final" y fingir que si lo tiene invitaria a perder texto sin avisar.
+  registry.registerAction({
+    id: "update-pull-request",
+    connectorTypeId: "github",
+    title: "Edit a pull request's title or description",
+    effect: "write",
+    inputSchema: UPDATE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: UPDATE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const updated = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}`,
+        "PATCH",
+        {
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.body !== undefined ? { body: input.body } : {}),
+        },
+      );
+      return {
+        number: updated?.number ?? input.number,
+        title: updated?.title ?? input.title ?? "",
+        state: updated?.state || null,
+        webUrl: updated?.html_url || null,
+        updatedAt: updated?.updated_at || null,
       };
     },
   });

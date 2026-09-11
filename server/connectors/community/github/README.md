@@ -83,6 +83,24 @@ GitHub answers `422` when the token's own account authored the pull request:
 nobody approves their own. The connector does not try to predict that (it would
 cost an extra call on every open) and lets the provider's message through.
 
+### Editing a pull request
+
+`update-pull-request` (`write`) patches a pull request's title, its body, or
+both. At least one of the two is required: a call carrying neither is not "change
+nothing", it is a malformed request, and accepting it would leave a write in the
+activity log that wrote nothing.
+
+`body` **replaces** the description rather than appending to it. GitHub has no
+append, and pretending otherwise would invite losing text without warning. A
+call that names only `title` sends only `title`, so the description is left
+alone — there is a test pinning exactly that.
+
+Like every remote mutation it goes through the Action Registry, which is also
+how an agent's edit ends up in Logs → Connectors/Activity carrying the
+`X-Actor` that asked for it. That is how the project tells apart what an agent
+did from what the user did, so an agent should prefer this over editing through
+the provider's own tooling.
+
 ### Creating a repository
 
 `POST /api/connectors/github/repositories` creates a repository under the

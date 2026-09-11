@@ -44,6 +44,12 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   detail in a modal instead of leaving for GitHub. It works on Boards and
   Dashboards too. Clicking a commit in the existing "recent commits" block now
   opens its own detail — full message, signature, changed files — the same way.
+- A pull request's title and description can be edited through the
+  `update-pull-request` action. At least one of the two is required, and a call
+  naming only the title sends only the title — filling in an empty body for
+  convenience would wipe the description nobody asked to change. The body
+  replaces rather than appends, because GitHub has no append and pretending
+  otherwise invites losing text silently.
 - A pull request can be approved from its modal. Approving is an Action
   Registry action with input and output schemas and a `write` effect, like
   every other remote mutation. The button is offered only while the pull

@@ -92,17 +92,52 @@ test("github.status rejects unexpected input per its inputSchema", async () => {
   );
 });
 
-test("registerGithubActions registers exactly its four actions, all under connectorTypeId github", () => {
+test("registerGithubActions registers exactly its five actions, all under connectorTypeId github", () => {
   const registry = createActionRegistry();
   registerGithubActions({ registry, request: async () => ({}), sync: async () => ({ projects: [], deployments: [], commits: [] }) });
   const actions = registry.listActionsForType("github");
-  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-repository", "status", "sync"]);
+  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-repository", "status", "sync", "update-pull-request"]);
   assert.equal(registry.getAction("github", "status").effect, "read");
   assert.equal(registry.getAction("github", "sync").effect, "write");
   assert.equal(registry.getAction("github", "create-repository").effect, "write");
   // Aprobar escribe en el proveedor, pero no destruye nada y se puede retirar
   // desde GitHub: "write", no "destructive", que exigiria Approval Center.
   assert.equal(registry.getAction("github", "approve-pull-request").effect, "write");
+  assert.equal(registry.getAction("github", "update-pull-request").effect, "write");
+});
+
+test("github.update-pull-request patches only the fields it was given", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { number: 10, title: "nuevo titulo", state: "open",
+        html_url: "https://github.com/octo/lintaya/pull/10", updated_at: "2026-09-11T12:00:00Z" };
+    },
+  });
+
+  const soloTitulo = await executeAction({
+    connectionId: "github", actionId: "update-pull-request",
+    input: { project: "octo/lintaya", number: 10, title: "nuevo titulo" },
+  });
+
+  assert.equal(soloTitulo.ok, true);
+  assert.equal(calledWith.path, "/repos/octo/lintaya/pulls/10");
+  assert.equal(calledWith.method, "PATCH");
+  // Pedir solo el titulo no debe mandar un body vacio: eso borraria la
+  // descripcion del pull request sin que nadie lo haya pedido.
+  assert.deepEqual(calledWith.body, { title: "nuevo titulo" });
+  assert.equal(soloTitulo.result.title, "nuevo titulo");
+
+  // Sin titulo ni descripcion no hay nada que escribir, y el esquema lo frena
+  // antes de que salga la peticion.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "update-pull-request", input: { project: "octo/lintaya", number: 10 } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "una entrada sin cambios no llega al proveedor");
 });
 
 test("github.approve-pull-request submits an APPROVE review and validates its input", async () => {
