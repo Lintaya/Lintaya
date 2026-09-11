@@ -2280,6 +2280,798 @@ function HistoryPanel({ repo, branch, onBranchChanged }) {
   );
 }
 
+// ── Pull Requests / Issues — lista de solo lectura de lo que el proveedor
+// tiene abierto. Un mismo panel sirve a las dos pestañas: comparten el filtro
+// de estado, la carga, el vacío y casi toda la fila, y solo difieren en el
+// endpoint y en un par de campos propios. Partirlo en dos componentes
+// duplicaría todo eso para quedarse con dos diferencias.
+function RepoItemsPanel({ repo, kind }) {
+  const esPR = kind === "pulls";
+  const [items, setItems] = useState(null);
+  const [estado, setEstado] = useState("open");
+  const [fallo, setFallo] = useState(null);
+  // Detalle desplegado. Se cachea por número: volver a abrir un PR ya visto no
+  // debería pagar otra vez las cinco llamadas que cuesta armarlo.
+  const [abierto, setAbierto] = useState(null);
+  const [detalles, setDetalles] = useState({});
+
+  const alternarDetalle = (numero) => {
+    if (abierto === numero) { setAbierto(null); return; }
+    setAbierto(numero);
+    if (detalles[numero]) return;
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/${esPR ? "pull-requests" : "issues"}/${numero}`)
+      .then(data => setDetalles(previo => ({ ...previo, [numero]: data })))
+      .catch(error => setDetalles(previo => ({ ...previo, [numero]: { error: error?.detail || error?.message || String(error) } })));
+  };
+
+  useEffect(() => {
+    // Cambiar de pestaña o de filtro mientras vuela la petición anterior podía
+    // pintar la respuesta vieja encima de la nueva; el testigo la descarta.
+    let cancelado = false;
+    setItems(null); setFallo(null); setAbierto(null);
+    const recurso = esPR ? "pull-requests" : "issues";
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/${recurso}?state=${estado}`)
+      .then(data => { if (!cancelado) setItems((esPR ? data?.pullRequests : data?.issues) || []); })
+      .catch(error => { if (!cancelado) { setFallo(error?.detail || error?.message || String(error)); setItems([]); } });
+    return () => { cancelado = true; };
+  }, [repo.provider, repo.id, estado, esPR]);
+
+  const COLOR_ESTADO = { open: "#16a34a", merged: "#8250df", closed: "#6b7280" };
+  const cuando = iso => {
+    if (!iso) return "—";
+    const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (dias <= 0) return rt("ui.repos.today", "today");
+    if (dias === 1) return rt("ui.repos.yesterday", "yesterday");
+    if (dias < 30) return rt("ui.repos.daysAgo", "{0}d ago", { 0: dias });
+    return new Date(iso).toLocaleDateString();
+  };
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+          {[["open", rt("ui.repos.stateOpen", "Open")], ["closed", rt("ui.repos.stateClosed", "Closed")], ["all", rt("ui.repos.stateAll", "All")]].map(([clave, etiqueta]) => (
+            <button key={clave} onClick={() => setEstado(clave)} style={{
+              padding: "4px 12px", border: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 11.5, fontWeight: 600,
+              background: estado === clave ? "var(--accent)" : "transparent",
+              color: estado === clave ? "white" : "var(--muted-fg)",
+            }}>{etiqueta}</button>
+          ))}
+        </div>
+        {items && !fallo && (
+          <span style={{ fontSize: 11.5, color: "var(--muted-fg)" }}>
+            {rt("ui.repos.itemCount", "{0} shown", { 0: items.length })}
+          </span>
+        )}
+      </div>
+
+      {items === null && <div style={{ fontSize: 13, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+
+      {fallo && (
+        <div style={{ fontSize: 12.5, color: "var(--err)", background: "color-mix(in srgb, var(--err) 8%, white)", border: "1px solid color-mix(in srgb, var(--err) 25%, var(--border))", borderRadius: 6, padding: "10px 12px" }}>
+          {fallo}
+        </div>
+      )}
+
+      {items && !fallo && items.length === 0 && (
+        <div style={{ background: "white", border: "1px dashed var(--border)", borderRadius: 9, padding: "50px 20px", textAlign: "center", color: "var(--muted-fg)", fontSize: 13 }}>
+          {esPR ? rt("ui.repos.noPullRequests", "No pull requests here.") : rt("ui.repos.noIssues", "No issues here.")}
+        </div>
+      )}
+
+      {items && !fallo && items.map(item => (
+        <div key={item.number} style={{ background: "white", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
+        <div
+          onClick={() => alternarDetalle(item.number)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={abierto === item.number}
+          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); alternarDetalle(item.number); } }}
+          style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", cursor: "pointer" }}>
+          <span style={{ flexShrink: 0, marginTop: 2, width: 9, height: 9, borderRadius: 999, background: COLOR_ESTADO[item.state] || "var(--muted-fg)" }}
+            title={item.state} aria-hidden="true" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--muted-fg)" }}>#{item.number}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{item.title}</span>
+              {item.draft && <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 999, background: "var(--muted)", color: "var(--muted-fg)" }}>{rt("ui.repos.draft", "Draft")}</span>}
+              {(item.labels || []).map(label => (
+                <span key={label} style={{ fontSize: 10, padding: "1px 6px", borderRadius: 999, background: "var(--muted)", color: "var(--muted-fg)" }}>{label}</span>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 3, fontFamily: "var(--font-mono)" }}>
+              {item.author || "—"}
+              {esPR && item.sourceBranch && <> · {item.sourceBranch} → {item.targetBranch}</>}
+              {!esPR && (item.assignees || []).length > 0 && <> · {item.assignees.join(", ")}</>}
+              {!esPR && item.comments > 0 && <> · {rt("ui.repos.comments", "{0} comments", { 0: item.comments })}</>}
+              {" · "}{cuando(item.updatedAt)}
+            </div>
+          </div>
+          {item.webUrl && (
+            <a href={item.webUrl} target="_blank" rel="noreferrer" title={item.webUrl}
+              onClick={event => event.stopPropagation()}
+              style={{ flexShrink: 0, fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+        </div>
+        {abierto === item.number && (esPR
+          ? <DetallePR detalle={detalles[item.number]} />
+          : <DetalleIssue detalle={detalles[item.number]} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Detalle de un issue. Aparte del de pull request porque lo que importa de un
+// issue es otra cosa: no hay ramas ni checks que mirar, y en cambio la
+// conversación es donde el issue se decide.
+function DetalleIssue({ detalle }) {
+  const marco = { padding: "10px 12px 12px 31px", fontSize: 12, borderTop: "1px solid var(--border)" };
+  if (!detalle) return <div style={{ ...marco, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>;
+  if (detalle.error) return <div style={{ ...marco, color: "var(--err)" }}>{detalle.error}</div>;
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+  const cuando = iso => iso ? new Date(iso).toLocaleDateString() : "—";
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", padding: "10px 14px 14px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+        <span style={{ fontWeight: 600, color: detalle.state === "open" ? "var(--ok)" : "#8250df" }}>
+          ● {detalle.state}{detalle.stateReason ? ` · ${detalle.stateReason}` : ""}
+        </span>
+        <span>{rt("ui.repos.opened", "opened {0}", { 0: cuando(detalle.createdAt) })}</span>
+        {detalle.closedAt && <span>{rt("ui.repos.closed", "closed {0}", { 0: cuando(detalle.closedAt) })}</span>}
+        {detalle.milestone && <span>🎯 {detalle.milestone}</span>}
+        {(detalle.assignees || []).length > 0 && <span>{rt("ui.repos.assignedTo", "assigned to {0}", { 0: detalle.assignees.join(", ") })}</span>}
+        {detalle.commentCount > 0 && <span>{rt("ui.repos.comments", "{0} comments", { 0: detalle.commentCount })}</span>}
+      </div>
+
+      {detalle.body ? (
+        <>
+          <div style={seccion}>{rt("ui.repos.description", "Description")}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>{detalle.body}</div>
+        </>
+      ) : (
+        <div style={{ ...seccion, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 11.5, fontStyle: "italic" }}>
+          {rt("ui.repos.noIssueBody", "Opened with no description.")}
+        </div>
+      )}
+
+      {(detalle.comments || []).length > 0 && (
+        <>
+          <div style={seccion}>{rt("ui.repos.conversation", "Conversation")}</div>
+          {detalle.comments.map(comentario => (
+            <div key={comentario.id} style={{ background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", marginBottom: 6 }}>
+              <div style={{ ...mono, color: "var(--muted-fg)", marginBottom: 3 }}>{comentario.author || "—"} · {cuando(comentario.createdAt)}</div>
+              <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto" }}>{comentario.body}</div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Modal de un issue, para el block de Home y de los Boards. Reusa DetalleIssue
+// por lo mismo que el de pull request reusa DetallePR: si divergen es un bug.
+function IssueDetailModal({ issue, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    const corte = String(issue?.id || "").lastIndexOf("#");
+    if (corte < 0) { setDetalle({ error: rt("ui.repos.issueIdUnreadable", "Unreadable issue reference.") }); return; }
+    const proyecto = issue.id.slice(0, corte);
+    const numero = issue.id.slice(corte + 1);
+    let cancelado = false;
+    window.HQ_API.request(`/api/connectors/${issue.connectorId || "github"}/projects/${encodeURIComponent(proyecto)}/issues/${numero}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [issue]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={issue?.title || "Issue"}
+        style={{ width: "min(760px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{detalle?.title || issue?.title}</div>
+            {issue?.subtitle && <div style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", marginTop: 2 }}>{issue.subtitle}</div>}
+          </div>
+          {(detalle?.webUrl || issue?.url) && (
+            <a href={detalle?.webUrl || issue.url} target="_blank" rel="noreferrer"
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+        <DetalleIssue detalle={detalle} />
+      </div>
+    </div>
+  );
+}
+window.IssueDetailModal = IssueDetailModal;
+
+// Detalle de un pull request: lo que la fila no cabe a decir. Vive fuera de
+// RepoItemsPanel porque solo se monta cuando hay algo desplegado.
+// ── Advisories ───────────────────────────────────────────────────────────────
+// Reúne las tres fuentes de seguridad que GitHub expone por separado, porque
+// mirar solo una da una falsa tranquilidad: un repositorio puede tener cero
+// alertas de Dependabot y a la vez un aviso crítico escrito a mano.
+//
+// Las tres se piden a la vez y cada una falla por su cuenta: un token sin
+// permiso para una no debe vaciar las otras dos, y "no tengo acceso" no es lo
+// mismo que "no hay nada", así que se dicen distinto.
+function AdvisoriesPanel({ repo }) {
+  const [datos, setDatos] = useState({ advisories: null, scanning: null, dependabot: null });
+  // { ruta, titulo }: la ruta ya trae la fuente, así que el modal no necesita
+  // saber de qué sección salió.
+  const [abierto, setAbierto] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    const base = `/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}`;
+    const pedir = (ruta, clave) => window.HQ_API.request(`${base}/${ruta}`)
+      .then(respuesta => ({ ok: true, lista: respuesta?.[clave] || [] }))
+      .catch(error => ({ ok: false, error: error?.detail || error?.message || String(error) }));
+
+    setDatos({ advisories: null, scanning: null, dependabot: null });
+    Promise.all([
+      pedir("security-advisories", "advisories"),
+      pedir("code-scanning-alerts", "alerts"),
+      // state=open explícito: la ruta de Dependabot sin estado devuelve también
+      // las ya arregladas, y pintarlas junto a los hallazgos abiertos con su
+      // insignia de gravedad hace parecer que hay vulnerabilidades vivas que no
+      // las hay. Code scanning arriba ya filtra por abiertas.
+      pedir("dependabot-alerts?state=open", "alerts"),
+    ]).then(([advisories, scanning, dependabot]) => {
+      if (!cancelado) setDatos({ advisories, scanning, dependabot });
+    });
+    return () => { cancelado = true; };
+  }, [repo.provider, repo.id]);
+
+  // El orden es el de urgencia, no el alfabético: lo que hay que mirar primero
+  // va primero, y es también el orden en que se cuentan los totales.
+  const ESCALA = ["critical", "high", "medium", "moderate", "low", "warning", "note", "error"];
+  const COLOR = {
+    critical: "#b91c1c", high: "#dc2626", medium: "#ca8a04", moderate: "#ca8a04",
+    low: "#0891b2", warning: "#ca8a04", note: "#64748b", error: "#dc2626",
+  };
+  const porGravedad = lista => lista.slice().sort((izquierda, derecha) => {
+    const a = ESCALA.indexOf(String(izquierda.severity || "").toLowerCase());
+    const b = ESCALA.indexOf(String(derecha.severity || "").toLowerCase());
+    return (a < 0 ? 99 : a) - (b < 0 ? 99 : b);
+  });
+
+  const insignia = severidad => (
+    <span style={{
+      fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3,
+      padding: "1px 6px", borderRadius: 3, flexShrink: 0,
+      color: COLOR[String(severidad || "").toLowerCase()] || "var(--muted-fg)",
+      background: `color-mix(in srgb, ${COLOR[String(severidad || "").toLowerCase()] || "var(--muted-fg)"} 12%, white)`,
+    }}>{severidad || "—"}</span>
+  );
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted-fg)" };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "0 0 8px" };
+
+  const bloque = (titulo, fuente, pintar, vacio) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={seccion}>
+        {titulo}
+        {fuente?.ok && <span style={{ marginLeft: 6, color: "var(--fg)" }}>{fuente.lista.length}</span>}
+      </div>
+      {!fuente && <div style={{ fontSize: 12, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+      {fuente && !fuente.ok && (
+        <div style={{ fontSize: 11.5, color: "var(--muted-fg)", fontStyle: "italic" }}>
+          {rt("ui.repos.advisorySourceUnavailable", "Not available: {0}", { 0: fuente.error })}
+        </div>
+      )}
+      {fuente?.ok && fuente.lista.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--ok)" }}>✓ {vacio}</div>
+      )}
+      {fuente?.ok && porGravedad(fuente.lista).map(pintar)}
+    </div>
+  );
+
+  const fila = (clave, contenido, ruta, titulo) => (
+    <div key={clave}
+      onClick={() => setAbierto({ ruta, titulo })}
+      role="button" tabIndex={0}
+      onKeyDown={evento => { if (evento.key === "Enter" || evento.key === " ") { evento.preventDefault(); setAbierto({ ruta, titulo }); } }}
+      style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "white", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 11px", marginBottom: 6, cursor: "pointer" }}>
+      {contenido}
+    </div>
+  );
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      {bloque(
+        rt("ui.repos.repoAdvisories", "Repository security advisories"),
+        datos.advisories,
+        item => fila(item.id, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.summary || item.id}</div>
+              <div style={mono}>{item.id}{item.cve ? ` · ${item.cve}` : ""} · {item.state}</div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `security-advisories/${item.id}`, item.summary || item.id),
+        rt("ui.repos.noRepoAdvisories", "This repository has published no advisories."),
+      )}
+
+      {bloque(
+        rt("ui.repos.codeScanning", "Code scanning"),
+        datos.scanning,
+        item => fila(item.number, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.description || item.rule}</div>
+              <div style={mono}>
+                {item.tool || "—"} · {item.rule}
+                {item.path ? ` · ${item.path}:${item.line}` : ""}
+              </div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `code-scanning-alerts/${item.number}`, item.description || item.rule),
+        rt("ui.repos.noCodeScanning", "No open code scanning alerts."),
+      )}
+
+      {bloque(
+        rt("ui.repos.dependabot", "Dependabot"),
+        datos.dependabot,
+        item => fila(item.number, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.summary || item.ghsaId}</div>
+              <div style={mono}>
+                {item.package}{item.ecosystem ? ` (${item.ecosystem})` : ""}
+                {item.vulnerableRange ? ` · ${item.vulnerableRange}` : ""}
+                {item.firstPatchedVersion ? ` → ${item.firstPatchedVersion}` : ""}
+              </div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `dependabot-alerts/${item.number}`, item.summary || item.package),
+        rt("ui.repos.noDependabot", "No open Dependabot alerts."),
+      )}
+      {abierto && <AdvisoryDetailModal repo={repo} ruta={abierto.ruta} titulo={abierto.titulo} onClose={() => setAbierto(null)} />}
+    </div>
+  );
+}
+
+// Detalle de un aviso, sea cual sea su fuente: las tres rutas contestan la
+// misma forma, así que aquí no hay ramas por origen — solo campos que están o
+// no están. Lo que la fila no cabía a decir es justamente lo accionable: el
+// cómo se arregla, la puntuación CVSS y el hallazgo concreto.
+function AdvisoryDetailModal({ repo, ruta, titulo, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/${ruta}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [repo.provider, repo.id, ruta]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+  const caja = { fontSize: 12, lineHeight: 1.55, whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "9px 11px", wordBreak: "break-word" };
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={titulo || "Advisory"}
+        style={{ width: "min(800px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600 }}>{detalle?.title || titulo}</div>
+          {(detalle?.webUrl) && (
+            <a href={detalle.webUrl} target="_blank" rel="noreferrer"
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+
+        {!detalle && <div style={{ padding: 16, fontSize: 12, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+        {detalle?.error && <div style={{ padding: 16, fontSize: 12, color: "var(--err)" }}>{detalle.error}</div>}
+
+        {detalle && !detalle.error && (
+          <div style={{ padding: "10px 16px 16px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+              {detalle.severity && <span style={{ fontWeight: 700, textTransform: "uppercase" }}>{detalle.severity}</span>}
+              {detalle.state && <span>{detalle.state}</span>}
+              {detalle.cvssScore != null && <span style={mono}>CVSS {detalle.cvssScore}</span>}
+              {detalle.cve && <span style={mono}>{detalle.cve}</span>}
+              {(detalle.cwes || []).length > 0 && <span style={mono}>{detalle.cwes.join(" · ")}</span>}
+              {detalle.tool && <span>{detalle.tool}{detalle.rule ? ` · ${detalle.rule}` : ""}</span>}
+              {detalle.path && <span style={mono}>{detalle.path}{detalle.line ? `:${detalle.line}` : ""}</span>}
+              {detalle.fixedIn && <span style={{ color: "var(--ok)", fontWeight: 600 }}>{rt("ui.repos.fixedIn", "Fixed in {0}", { 0: detalle.fixedIn })}</span>}
+            </div>
+
+            {detalle.cvssVector && <div style={{ ...mono, color: "var(--muted-fg)", marginTop: 4 }}>{detalle.cvssVector}</div>}
+
+            {detalle.finding && (
+              <>
+                <div style={seccion}>{rt("ui.repos.finding", "Finding")}</div>
+                <div style={caja}>{detalle.finding}</div>
+              </>
+            )}
+
+            {(detalle.affected || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.affected", "Affected")}</div>
+                {detalle.affected.map(item => <div key={item} style={{ ...mono, padding: "1px 0" }}>{item}</div>)}
+                {detalle.manifestPath && <div style={{ ...mono, color: "var(--muted-fg)", paddingTop: 2 }}>{detalle.manifestPath}</div>}
+              </>
+            )}
+
+            {detalle.description && (
+              <>
+                <div style={seccion}>{rt("ui.repos.description", "Description")}</div>
+                <div style={caja}>{detalle.description}</div>
+              </>
+            )}
+
+            {(detalle.tags || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.tags", "Tags")}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {detalle.tags.map(tag => (
+                    <span key={tag} style={{ ...mono, padding: "2px 7px", borderRadius: 999, background: "white", border: "1px solid var(--border)", color: "var(--muted-fg)" }}>{tag}</span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {(detalle.credits || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.credits", "Reported by")}</div>
+                <div style={mono}>{detalle.credits.join(", ")}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetallePR({ detalle, acciones = null }) {
+  const marco = { padding: "10px 12px 12px 31px", fontSize: 12, borderTop: "1px solid var(--border)" };
+  if (!detalle) return <div style={{ ...marco, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>;
+  if (detalle.error) return <div style={{ ...marco, color: "var(--err)" }}>{detalle.error}</div>;
+
+  const checks = detalle.checks || { total: 0 };
+  // mergeableState distingue lo que "se puede fusionar" esconde: dirty es
+  // conflicto con la rama destino, unstable es fusionable pero con algún check
+  // sin éxito, y blocked es que faltan revisiones o lo frena una regla de rama.
+  const FUSION = {
+    clean:    [rt("ui.repos.mergeClean", "Able to merge"), "var(--ok)"],
+    unstable: [rt("ui.repos.mergeUnstable", "Able to merge · a check is not green"), "#ca8a04"],
+    blocked:  [rt("ui.repos.mergeBlocked", "Blocked: reviews or branch rules pending"), "#ca8a04"],
+    dirty:    [rt("ui.repos.mergeDirty", "Conflicts with the target branch"), "var(--err)"],
+    behind:   [rt("ui.repos.mergeBehind", "Behind the target branch"), "#ca8a04"],
+  };
+  const fusion = FUSION[detalle.mergeableState] || null;
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const COLOR_CHECK = { success: "var(--ok)", pending: "#ca8a04" };
+  const marcaRevision = estado => estado === "APPROVED" ? "✓" : estado === "CHANGES_REQUESTED" ? "✕" : "○";
+  const colorRevision = estado => estado === "APPROVED" ? "var(--ok)" : estado === "CHANGES_REQUESTED" ? "var(--err)" : "var(--muted-fg)";
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", padding: "10px 14px 14px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+        {fusion && <span style={{ fontWeight: 600, color: fusion[1] }}>● {fusion[0]}</span>}
+        {detalle.commitCount != null && <span>{rt("ui.repos.commitCount", "{0} commits", { 0: detalle.commitCount })}</span>}
+        {detalle.changedFiles != null && <span>{rt("ui.repos.fileCount", "{0} files", { 0: detalle.changedFiles })}</span>}
+        {detalle.additions != null && (
+          <span style={mono}>
+            <span style={{ color: "var(--ok)" }}>+{detalle.additions}</span>{" "}
+            <span style={{ color: "var(--err)" }}>−{detalle.deletions}</span>
+          </span>
+        )}
+        {checks.total > 0 && (
+          <span>
+            {rt("ui.repos.checkSummary", "{0}/{1} checks passed", { 0: checks.success, 1: checks.total })}
+            {checks.failed > 0 && <span style={{ color: "var(--err)", fontWeight: 600 }}> · {rt("ui.repos.checksFailed", "{0} failed", { 0: checks.failed })}</span>}
+            {checks.pending > 0 && <span style={{ color: "#ca8a04" }}> · {rt("ui.repos.checksPending", "{0} running", { 0: checks.pending })}</span>}
+          </span>
+        )}
+        {detalle.comments > 0 && <span>{rt("ui.repos.comments", "{0} comments", { 0: detalle.comments })}</span>}
+      </div>
+
+      {((detalle.reviews || []).length > 0 || (detalle.requestedReviewers || []).length > 0) && (
+        <div style={{ marginTop: 7, fontSize: 11.5, color: "var(--muted-fg)" }}>
+          {(detalle.reviews || []).map((revision, indice) => (
+            <span key={indice} style={{ marginRight: 10 }}>
+              <span style={{ fontWeight: 600, color: colorRevision(revision.state) }}>{marcaRevision(revision.state)}</span>{" "}{revision.author}
+            </span>
+          ))}
+          {(detalle.requestedReviewers || []).map(persona => (
+            <span key={persona} style={{ marginRight: 10 }}>○ {persona} <em>({rt("ui.repos.reviewPending", "pending")})</em></span>
+          ))}
+        </div>
+      )}
+
+      {detalle.body && (
+        <>
+          <div style={seccion}>{rt("ui.repos.description", "Description")}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>{detalle.body}</div>
+        </>
+      )}
+
+      {(checks.runs || []).length > 0 && (
+        <>
+          <div style={seccion}>{rt("ui.repos.checks", "Checks")}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {checks.runs.map((ejecucion, indice) => (
+              <span key={indice} title={ejecucion.conclusion} style={{ ...mono, padding: "2px 7px", borderRadius: 999, background: "white", border: "1px solid var(--border)", color: COLOR_CHECK[ejecucion.conclusion] || "var(--err)" }}>
+                {ejecucion.conclusion === "success" ? "✓" : ejecucion.conclusion === "pending" ? "◌" : "✕"} {ejecucion.name}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {(detalle.commits || []).length > 0 && (
+        <>
+          <div style={seccion}>{rt("ui.repos.commits", "Commits")}</div>
+          {detalle.commits.map(commit => (
+            <div key={commit.sha} style={{ ...mono, padding: "2px 0" }}>
+              <span style={{ color: "var(--muted-fg)" }}>{commit.sha}</span> {commit.message}
+            </div>
+          ))}
+        </>
+      )}
+
+      {(detalle.files || []).length > 0 && (
+        <>
+          <div style={seccion}>{rt("ui.repos.filesChanged", "Files changed")}</div>
+          {detalle.files.map(archivo => (
+            <div key={archivo.path} style={{ ...mono, padding: "2px 0", display: "flex", gap: 8 }}>
+              <span style={{ color: "var(--ok)", minWidth: 36, textAlign: "right" }}>+{archivo.additions}</span>
+              <span style={{ color: "var(--err)", minWidth: 36 }}>−{archivo.deletions}</span>
+              <span style={{ wordBreak: "break-all" }}>{archivo.path}</span>
+            </div>
+          ))}
+        </>
+      )}
+      {acciones}
+    </div>
+  );
+}
+
+// Botón de aprobar. Vive aparte porque su estado (enviando, resultado, error
+// del proveedor) no es del detalle: el detalle se puede volver a pedir sin
+// perder lo que el botón tenga que decir.
+function BotonAprobarPR({ detalle, connectorId, onAprobado }) {
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [fallo, setFallo] = useState(null);
+
+  // Ya aprobado por quien sea: repetirlo no aporta y GitHub lo aceptaría igual,
+  // creando una segunda revisión idéntica.
+  const yaAprobado = (detalle.reviews || []).some(revision => revision.state === "APPROVED");
+  if (yaAprobado && !resultado) {
+    return (
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 11.5, color: "var(--ok)", fontWeight: 600 }}>
+        ✓ {rt("ui.repos.alreadyApproved", "Already approved")}
+      </div>
+    );
+  }
+
+  const aprobar = async () => {
+    if (enviando) return;
+    setEnviando(true); setFallo(null);
+    try {
+      const respuesta = await window.HQ_API.request(
+        `/api/connectors/${connectorId || "github"}/actions/approve-pull-request`,
+        { method: "POST", body: { project: detalle.projectId, number: detalle.number } },
+      );
+      setResultado(respuesta?.result || { state: "APPROVED" });
+      window.dispatchEvent(new CustomEvent("toast", { detail: { msg: rt("ui.repos.approved", "Pull request approved"), kind: "ok" } }));
+      onAprobado?.();
+    } catch (error) {
+      // El proveedor tiene la última palabra y su mensaje se muestra tal cual:
+      // GitHub rechaza con 422 que alguien apruebe su propio pull request, y
+      // decir solo "no se pudo" dejaría al usuario sin saber por qué.
+      setFallo(error?.detail || error?.message || String(error));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+      {resultado ? (
+        <div style={{ fontSize: 11.5, color: "var(--ok)", fontWeight: 600 }}>
+          ✓ {rt("ui.repos.approved", "Pull request approved")}
+          {resultado.reviewer ? ` · ${resultado.reviewer}` : ""}
+        </div>
+      ) : (
+        <button onClick={aprobar} disabled={enviando}
+          style={{
+            height: 30, padding: "0 14px", borderRadius: 6, cursor: enviando ? "progress" : "pointer",
+            border: "1px solid var(--ok)", background: enviando ? "var(--muted)" : "var(--ok)",
+            color: enviando ? "var(--muted-fg)" : "white", fontFamily: "inherit", fontSize: 12, fontWeight: 600,
+          }}>
+          {enviando ? rt("ui.repos.approving", "Approving…") : rt("ui.repos.approve", "✓ Approve")}
+        </button>
+      )}
+      {fallo && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--err)", background: "color-mix(in srgb, var(--err) 8%, white)", border: "1px solid color-mix(in srgb, var(--err) 25%, var(--border))", borderRadius: 6, padding: "8px 10px" }}>
+          {fallo}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Modal de un pull request, para el block de Home y de los Boards. Reusa
+// DetallePR en vez de repintar lo mismo: la pestaña del repositorio y el block
+// deben contar lo mismo del mismo PR, y si divergen es un bug.
+function CommitDetailModal({ commit, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    // El item del block solo lleva el sha corto; el conector sabe de qué repo
+    // es porque el sync lo guardó junto al commit.
+    window.HQ_API.request(`/api/connectors/${commit.connectorId || "github"}/commits/${encodeURIComponent(commit.id)}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [commit]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={commit?.title || "Commit"}
+        style={{ width: "min(760px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{detalle?.title || commit?.title}</div>
+            {commit?.subtitle && <div style={{ ...mono, color: "var(--muted-fg)", marginTop: 2 }}>{commit.subtitle}</div>}
+          </div>
+          {(detalle?.webUrl || commit?.url) && (
+            <a href={detalle?.webUrl || commit.url} target="_blank" rel="noreferrer"
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+
+        {!detalle && <div style={{ padding: 16, fontSize: 12, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+        {detalle?.error && <div style={{ padding: 16, fontSize: 12, color: "var(--err)" }}>{detalle.error}</div>}
+
+        {detalle && !detalle.error && (
+          <div style={{ padding: "10px 16px 16px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+              <span style={mono}>{detalle.sha}</span>
+              <span>{detalle.author || "—"}{detalle.authorLogin && detalle.authorLogin !== detalle.author ? ` (${detalle.authorLogin})` : ""}</span>
+              {detalle.stats?.additions != null && (
+                <span style={mono}>
+                  <span style={{ color: "var(--ok)" }}>+{detalle.stats.additions}</span>{" "}
+                  <span style={{ color: "var(--err)" }}>−{detalle.stats.deletions}</span>
+                </span>
+              )}
+              <span>{rt("ui.repos.fileCount", "{0} files", { 0: (detalle.files || []).length })}</span>
+              {detalle.verified && <span style={{ color: "var(--ok)", fontWeight: 600 }}>✓ {rt("ui.repos.signed", "Signed")}</span>}
+              {/* Dos padres significa que el commit es una fusión: sin decirlo,
+                  un diff enorme y sin autor claro parece un commit gigante. */}
+              {(detalle.parents || []).length > 1 && <span>{rt("ui.repos.mergeCommit", "Merge commit")}</span>}
+            </div>
+
+            {detalle.body && (
+              <>
+                <div style={seccion}>{rt("ui.repos.message", "Message")}</div>
+                <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 240, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>{detalle.body}</div>
+              </>
+            )}
+
+            {(detalle.files || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.filesChanged", "Files changed")}</div>
+                {detalle.files.map(archivo => (
+                  <div key={archivo.path} style={{ ...mono, padding: "2px 0", display: "flex", gap: 8 }}>
+                    <span style={{ color: "var(--ok)", minWidth: 36, textAlign: "right" }}>+{archivo.additions}</span>
+                    <span style={{ color: "var(--err)", minWidth: 36 }}>−{archivo.deletions}</span>
+                    <span style={{ wordBreak: "break-all" }}>{archivo.path}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+window.CommitDetailModal = CommitDetailModal;
+
+function PullRequestDetailModal({ pr, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    // El block trae el id como "owner/repo#numero": el proyecto y el número
+    // viajan juntos porque un block puede mezclar PRs de varios repositorios.
+    const corte = String(pr?.id || "").lastIndexOf("#");
+    if (corte < 0) { setDetalle({ error: rt("ui.repos.prIdUnreadable", "Unreadable pull request reference.") }); return; }
+    const proyecto = pr.id.slice(0, corte);
+    const numero = pr.id.slice(corte + 1);
+    let cancelado = false;
+    window.HQ_API.request(`/api/connectors/${pr.connectorId || "github"}/projects/${encodeURIComponent(proyecto)}/pull-requests/${numero}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [pr]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={pr?.title || "Pull request"}
+        style={{ width: "min(760px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{pr?.title}</div>
+            {pr?.subtitle && <div style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", marginTop: 2 }}>{pr.subtitle}</div>}
+          </div>
+          {pr?.url && (
+            <a href={pr.url} target="_blank" rel="noreferrer" title={pr.url}
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+        <DetallePR
+          detalle={detalle}
+          acciones={detalle && !detalle.error && detalle.state === "open" && (
+            <BotonAprobarPR detalle={detalle} connectorId={pr?.connectorId} />
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+window.PullRequestDetailModal = PullRequestDetailModal;
+
 function AnalysisPanel({ repo }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2430,6 +3222,46 @@ function RepoDetail({ repo, onClose, onClone, onLinkExisting, cloning, onPlayNet
   const isGenericRunning = repoRuntime?.status === "running";
   const genericBusy = playingRepoId === repo.id;
   const [tab, setTab]         = useState("code"); // code | build
+  // Orden de las pestañas, por navegador — es una preferencia de esta pantalla,
+  // igual que el orden del menú lateral. Guarda solo las claves: qué pestañas
+  // existen depende del repositorio (local o no, GitHub o no), así que el orden
+  // se aplica como ranking sobre las que haya y nunca inventa una que no toca.
+  const [ordenTabs, setOrdenTabs] = useState(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem("hq.repoTabOrder") || "null");
+      return Array.isArray(guardado) ? guardado : [];
+    } catch { return []; }
+  });
+  const [menuTab, setMenuTab] = useState(null);
+
+  const tabsDisponibles = [
+    ["code", "Code"],
+    ...(/^(gitlab|github)/.test(repo.provider) ? [["build", "Build / Pipeline"]] : []),
+    ...(/^github/.test(repo.provider) ? [["pulls", rt("ui.repos.pullRequests", "Pull Requests")], ["issues", rt("ui.repos.issues", "Issues")], ["advisories", rt("ui.repos.advisories", "Advisories")]] : []),
+    ...(isLocal ? [["history", "History"], ["analysis", rt("ui.repos.analysis", "Analysis")]] : []),
+  ];
+  // Las que el usuario ya ordenó van primero, en ese orden; una pestaña nueva
+  // (añadida en una versión posterior) se queda donde la declara el código, en
+  // vez de desaparecer o saltar al frente.
+  const rangoTab = clave => {
+    const posicion = ordenTabs.indexOf(clave);
+    return posicion < 0 ? ordenTabs.length + tabsDisponibles.findIndex(([otra]) => otra === clave) : posicion;
+  };
+  const tabs = tabsDisponibles.slice().sort((izquierda, derecha) => rangoTab(izquierda[0]) - rangoTab(derecha[0]));
+  const clavesTabs = tabs.map(([clave]) => clave);
+
+  const moverTab = (clave, direccion) => {
+    const desde = clavesTabs.indexOf(clave);
+    const hasta = desde + direccion;
+    if (desde < 0 || hasta < 0 || hasta >= clavesTabs.length) return;
+    const siguiente = clavesTabs.slice();
+    [siguiente[desde], siguiente[hasta]] = [siguiente[hasta], siguiente[desde]];
+    // Se conservan las claves que ahora no se ven — otro repositorio puede
+    // tenerlas — para que su posición relativa sobreviva al cambio.
+    const total = [...siguiente, ...ordenTabs.filter(candidata => !siguiente.includes(candidata))];
+    setOrdenTabs(total);
+    try { localStorage.setItem("hq.repoTabOrder", JSON.stringify(total)); } catch {}
+  };
   const [branch, setBranch]   = useState(repo.defaultBranch);
   const [branches, setBranches] = useState([repo.defaultBranch]);
   const [files, setFiles]     = useState([]);
@@ -2665,15 +3497,35 @@ function RepoDetail({ repo, onClose, onClone, onLinkExisting, cloning, onPlayNet
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", gap: 2, padding: "8px 16px 0", borderBottom: "1px solid var(--border)" }}>
-        {[["code","Code"], ...(/^(gitlab|github)/.test(repo.provider) ? [["build","Build / Pipeline"]] : []), ...(isLocal ? [["history","History"], ["analysis",window.I18N.t("ui.repos.analysis", "Analysis")]] : [])].map(([k, l]) => (
+        {tabs.map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding: "8px 14px", border: 0, background: "transparent",
             borderBottom: tab === k ? "2px solid var(--accent)" : "2px solid transparent",
             color: tab === k ? "var(--fg)" : "var(--muted-fg)",
             fontWeight: 500, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginBottom: -1,
-          }}>{l}</button>
+          }}
+            onContextMenu={evento => {
+              evento.preventDefault();
+              setMenuTab({ clave: k, etiqueta: l, x: evento.clientX, y: evento.clientY });
+            }}>{l}</button>
         ))}
       </div>
+      {menuTab && window.LintayaContextMenu && (
+        <window.LintayaContextMenu
+          x={menuTab.x} y={menuTab.y} label={menuTab.etiqueta}
+          onClose={() => setMenuTab(null)}
+          options={[
+            { clave: "left", etiqueta: rt("ui.repos.tabMoveLeft", "← Move left"),
+              activa: clavesTabs.indexOf(menuTab.clave) > 0,
+              motivo: rt("ui.repos.tabAtEdge", "Already at the edge."),
+              hacer: () => moverTab(menuTab.clave, -1) },
+            { clave: "right", etiqueta: rt("ui.repos.tabMoveRight", "Move right →"),
+              activa: clavesTabs.indexOf(menuTab.clave) >= 0 && clavesTabs.indexOf(menuTab.clave) < clavesTabs.length - 1,
+              motivo: rt("ui.repos.tabAtEdge", "Already at the edge."),
+              hacer: () => moverTab(menuTab.clave, 1) },
+          ]}
+        />
+      )}
 
       {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -2715,6 +3567,8 @@ function RepoDetail({ repo, onClose, onClone, onLinkExisting, cloning, onPlayNet
           </>
         )}
         {tab === "build" && <BuildPanel repo={repo} branch={branch} />}
+        {(tab === "pulls" || tab === "issues") && <RepoItemsPanel repo={repo} kind={tab} />}
+        {tab === "advisories" && <AdvisoriesPanel repo={repo} />}
         {tab === "history" && isLocal && <HistoryPanel repo={repo} branch={branch} onBranchChanged={setBranch} />}
         {tab === "analysis" && isLocal && <AnalysisPanel repo={repo} />}
       </div>

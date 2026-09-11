@@ -61,6 +61,127 @@ const CREATE_REPOSITORY_OUTPUT_SCHEMA = {
   },
 };
 
+const APPROVE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    body: { type: "string", description: "Optional comment to submit with the approval." },
+  },
+};
+
+const APPROVE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["state"],
+  properties: {
+    id: { type: ["integer", "null"] },
+    state: { type: "string" },
+    reviewer: { type: ["string", "null"] },
+    submittedAt: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+  },
+};
+
+const UPDATE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  // Se exige al menos uno de los dos campos editables: una llamada que no trae
+  // ninguno no es "no cambiar nada", es una peticion mal armada, y aceptarla
+  // dejaria una escritura en el log de actividad que no escribio nada.
+  anyOf: [{ required: ["title"] }, { required: ["body"] }],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    title: { type: "string", minLength: 1 },
+    body: { type: "string", description: "Full replacement description, not an append." },
+  },
+};
+
+const UPDATE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["number", "title"],
+  properties: {
+    number: { type: "integer" },
+    title: { type: "string" },
+    state: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+    updatedAt: { type: ["string", "null"] },
+  },
+};
+
+const CREATE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "title", "head", "base"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    title: { type: "string", minLength: 1 },
+    // head y base van explicitos y sin valor por defecto. Adivinar la rama
+    // destino ("seguro que es main") es como se abre un pull request contra la
+    // rama equivocada, y eso se descubre cuando alguien ya lo reviso.
+    head: { type: "string", minLength: 1, description: "Branch the changes are on." },
+    base: { type: "string", minLength: 1, description: "Branch they should be merged into." },
+    body: { type: "string" },
+    draft: { type: "boolean" },
+  },
+};
+
+const CREATE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["number", "title"],
+  properties: {
+    number: { type: "integer" },
+    title: { type: "string" },
+    state: { type: ["string", "null"] },
+    draft: { type: "boolean" },
+    head: { type: ["string", "null"] },
+    base: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+    createdAt: { type: ["string", "null"] },
+  },
+};
+
+const MERGE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    // GitHub llama a esto merge_method. Se deja explicito y con "merge" por
+    // defecto porque squash y rebase reescriben la historia de otra forma, y
+    // cual use un repositorio es una convencion suya, no algo que adivinar.
+    method: { type: "string", enum: ["merge", "squash", "rebase"] },
+    title: { type: "string", minLength: 1 },
+    message: { type: "string" },
+    // El sha que el llamante creia estar fusionando. GitHub rechaza con 409 si
+    // la rama avanzo entre que se miro y se aprobo — que es justo la ventana
+    // que abre el Approval Center.
+    //
+    // Tiene que ser el completo de 40. GitHub contesta 422 a un sha abreviado,
+    // y ese 422 solo aparece DESPUES de aprobar: el pattern lo convierte en un
+    // 400 inmediato, para no gastar una aprobacion en una peticion invalida.
+    sha: { type: "string", pattern: "^[0-9a-f]{40}$" },
+  },
+};
+
+const MERGE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["merged"],
+  properties: {
+    merged: { type: "boolean" },
+    sha: { type: ["string", "null"] },
+    message: { type: ["string", "null"] },
+  },
+};
+
 function registerGithubActions({
   registry,
   request = githubRequest,
@@ -94,9 +215,9 @@ function registerGithubActions({
     outputSchema: SYNC_OUTPUT_SCHEMA,
     handler: async ({ services }) => {
       const cfg = services.store.getConfig();
-      const { projects, deployments, commits } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests, issues } = await sync(cfg, { request });
       const syncedAt = isoNow();
-      services.store.setData({ projects, deployments, commits, syncedAt });
+      services.store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], syncedAt });
       services.store.setStatus({
         status: "ok",
         lastSync: syncedAt,
@@ -108,6 +229,153 @@ function registerGithubActions({
         deploymentCount: deployments.length,
         commitCount: commits.length,
         syncedAt,
+      };
+    },
+  });
+
+  // Aprobar es una escritura al proveedor y queda en el registro como tal, con
+  // sus esquemas — no una llamada suelta desde una ruta. No es "destructive":
+  // no borra nada y una aprobación se puede retirar desde GitHub, asi que no
+  // pasa por el Approval Center.
+  //
+  // GitHub rechaza con 422 que alguien apruebe su propio pull request. No se
+  // adivina aqui quien es el autor — haria falta una llamada extra por cada
+  // apertura del detalle —; se deja hablar al proveedor y su mensaje llega tal
+  // cual a quien pulso el boton.
+  registry.registerAction({
+    id: "approve-pull-request",
+    connectorTypeId: "github",
+    title: "Approve a pull request",
+    effect: "write",
+    inputSchema: APPROVE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: APPROVE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const review = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}/reviews`,
+        "POST",
+        { event: "APPROVE", ...(input.body ? { body: input.body } : {}) },
+      );
+      return {
+        id: review?.id ?? null,
+        state: review?.state || "APPROVED",
+        reviewer: review?.user?.login || null,
+        submittedAt: review?.submitted_at || null,
+        webUrl: review?.html_url || null,
+      };
+    },
+  });
+
+  // Fusionar. Es la unica accion destructiva del conector: reescribe la rama
+  // destino y no se deshace con un clic, asi que pasa por el Approval Center —
+  // la primera llamada solo deja la peticion pendiente y no toca GitHub, y solo
+  // una aprobacion explicita la ejecuta.
+  //
+  // sha es opcional pero vale la pena pasarlo: entre que alguien mira el pull
+  // request y aprueba la fusion, la rama puede haber avanzado. Con sha, GitHub
+  // rechaza con 409 en vez de fusionar algo que nadie reviso.
+  registry.registerAction({
+    id: "merge-pull-request",
+    connectorTypeId: "github",
+    title: "Merge a pull request",
+    effect: "destructive",
+    inputSchema: MERGE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: MERGE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const resultado = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}/merge`,
+        "PUT",
+        {
+          merge_method: input.method || "merge",
+          ...(input.title !== undefined ? { commit_title: input.title } : {}),
+          ...(input.message !== undefined ? { commit_message: input.message } : {}),
+          ...(input.sha !== undefined ? { sha: input.sha } : {}),
+        },
+      );
+      return {
+        merged: !!resultado?.merged,
+        sha: resultado?.sha || null,
+        message: resultado?.message || null,
+      };
+    },
+  });
+
+  // Abrir un pull request. Con update-pull-request y approve-pull-request ya
+  // registradas, esto cierra el ciclo: Lintaya puede abrir, corregir y aprobar
+  // sin salir a la herramienta del proveedor, y las tres quedan en el log con
+  // el X-Actor de quien las pidio.
+  registry.registerAction({
+    id: "create-pull-request",
+    connectorTypeId: "github",
+    title: "Open a pull request",
+    effect: "write",
+    inputSchema: CREATE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: CREATE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const created = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls`,
+        "POST",
+        {
+          title: input.title,
+          head: input.head,
+          base: input.base,
+          ...(input.body !== undefined ? { body: input.body } : {}),
+          ...(input.draft !== undefined ? { draft: input.draft } : {}),
+        },
+      );
+      return {
+        number: created?.number ?? 0,
+        title: created?.title ?? input.title,
+        state: created?.state || null,
+        draft: !!created?.draft,
+        head: created?.head?.ref || input.head,
+        base: created?.base?.ref || input.base,
+        webUrl: created?.html_url || null,
+        createdAt: created?.created_at || null,
+      };
+    },
+  });
+
+  // Editar titulo y descripcion de un pull request. Es escritura y va por el
+  // registro como todas: asi queda en Logs -> Connectors/Activity con el
+  // X-Actor de quien la pidio, que es como el proyecto distingue lo que hizo un
+  // agente de lo que hizo el usuario.
+  //
+  // body reemplaza la descripcion entera, no la amplia: GitHub no tiene "anadir
+  // al final" y fingir que si lo tiene invitaria a perder texto sin avisar.
+  registry.registerAction({
+    id: "update-pull-request",
+    connectorTypeId: "github",
+    title: "Edit a pull request's title or description",
+    effect: "write",
+    inputSchema: UPDATE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: UPDATE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const updated = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}`,
+        "PATCH",
+        {
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.body !== undefined ? { body: input.body } : {}),
+        },
+      );
+      return {
+        number: updated?.number ?? input.number,
+        title: updated?.title ?? input.title ?? "",
+        state: updated?.state || null,
+        webUrl: updated?.html_url || null,
+        updatedAt: updated?.updated_at || null,
       };
     },
   });

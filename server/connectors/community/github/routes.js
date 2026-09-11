@@ -123,14 +123,14 @@ function registerGithubRoutes(options) {
     if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
     const startedAt = now();
     try {
-      const { projects, deployments, commits } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests, issues } = await sync(cfg, { request });
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const syncedAt = isoNow();
       const deploymentCount = deployments.length;
       const commitCount = commits.length;
       const total = projects.length + deploymentCount + commitCount;
 
-      store.setData({ projects, deployments, commits, syncedAt });
+      store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], syncedAt });
       store.setStatus({
         status: "ok",
         latency,
@@ -217,6 +217,55 @@ function registerGithubRoutes(options) {
     }
   }));
 
+  // Detalle de un commit, para el modal del block "recent-commits". El item de
+  // un block solo lleva { id, title, subtitle, timestamp, url, badge }: no hay
+  // donde meter el repositorio, y meterlo en el id cambiaria un shape que ya
+  // esta publicado y fijado por tests. Asi que el sha se resuelve aqui, contra
+  // los commits que el propio sync guardo, que ya saben de que repo son.
+  app.get(`/api/connectors/${id}/commits/:sha`, requireAuth, guardAsyncRoute(async (req, res) => {
+    const cfg = store.getConfig();
+    if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
+    const sha = String(req.params.sha || "");
+    // El block guarda el sha corto y GitHub acepta tanto corto como completo,
+    // asi que se comparan por prefijo en ambos sentidos.
+    const known = (store.getData()?.commits || []).find(commit => {
+      const stored = String(commit.id || "");
+      return stored === sha || stored.startsWith(sha) || sha.startsWith(stored);
+    });
+    if (!known) return res.status(404).json({ error: "commit-not-synced" });
+
+    const commit = await request(cfg.baseUrl, cfg.token, `/repos/${known.projectId}/commits/${sha}`);
+    const message = commit.commit?.message || "";
+    const corte = message.indexOf("\n");
+    return res.json({
+      sha: (commit.sha || sha).slice(0, 8),
+      fullSha: commit.sha || null,
+      title: corte < 0 ? message : message.slice(0, corte),
+      // El cuerpo del mensaje es donde vive el "por que" de un commit, que es
+      // justo lo que la fila del block no cabe a mostrar.
+      body: corte < 0 ? "" : message.slice(corte + 1).trim(),
+      author: commit.commit?.author?.name || null,
+      authorLogin: commit.author?.login || null,
+      authorAvatar: commit.author?.avatar_url || null,
+      date: commit.commit?.author?.date || null,
+      projectId: known.projectId,
+      projectName: known.projectName,
+      webUrl: commit.html_url || known.webUrl || null,
+      verified: !!commit.commit?.verification?.verified,
+      parents: (commit.parents || []).map(parent => String(parent.sha || "").slice(0, 8)).filter(Boolean),
+      stats: {
+        additions: commit.stats?.additions ?? null,
+        deletions: commit.stats?.deletions ?? null,
+      },
+      files: (commit.files || []).map(file => ({
+        path: file.filename,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+      })),
+    });
+  }));
+
   // Home block "recent-commits" (declared in manifest.json) — mismo shape
   // que el equivalente de GitLab (routes.js), leyendo los commits que ya
   // guarda /sync más arriba en vez de pegarle a la API de nuevo.
@@ -268,6 +317,68 @@ function registerGithubRoutes(options) {
           timestamp: d.finishedAt || d.createdAt,
           url: d.webUrl,
           badge: { text: d.status, color: DEPLOYMENT_STATUS_COLOR[d.status] || "#64748b" },
+        })),
+        updatedAt: data?.syncedAt || null,
+      };
+    },
+  });
+
+  // Home block "open-pull-requests" (declared in manifest.json) — lo que está
+  // esperando revisión. Al hacer click, Home abre su modal de detalle en vez
+  // del enlace externo (ver blockItemHandlers en app/home.jsx), igual que hace
+  // el block de documentos de Outline.
+  registerBlockRoute({
+    app,
+    requireAuth,
+    id,
+    blockId: "open-pull-requests",
+    getBlock: (req) => {
+      if (!store.getConfig()) return null;
+      const data = store.getData();
+      const { scope, limit } = req?.query || {};
+      let pullRequests = [...(data?.pullRequests || [])]
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      if (scope) pullRequests = pullRequests.filter(pr => String(pr.projectId) === String(scope));
+      pullRequests = pullRequests.slice(0, Number(limit) || 30);
+      return {
+        items: pullRequests.map(pr => ({
+          id: pr.id,
+          title: pr.title,
+          subtitle: `#${pr.number} · ${pr.author || "—"} · ${pr.projectName} · ${pr.sourceBranch} → ${pr.targetBranch}`,
+          timestamp: pr.updatedAt,
+          url: pr.webUrl,
+          badge: pr.draft
+            ? { text: "draft", color: "#64748b" }
+            : { text: "open", color: "#16a34a" },
+        })),
+        updatedAt: data?.syncedAt || null,
+      };
+    },
+  });
+
+  // Home block "open-issues" — lo que esta pedido y sin hacer. Al hacer click,
+  // Home abre su modal de detalle igual que con los pull requests.
+  registerBlockRoute({
+    app,
+    requireAuth,
+    id,
+    blockId: "open-issues",
+    getBlock: (req) => {
+      if (!store.getConfig()) return null;
+      const data = store.getData();
+      const { scope, limit } = req?.query || {};
+      let issues = [...(data?.issues || [])]
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      if (scope) issues = issues.filter(issue => String(issue.projectId) === String(scope));
+      issues = issues.slice(0, Number(limit) || 30);
+      return {
+        items: issues.map(issue => ({
+          id: issue.id,
+          title: issue.title,
+          subtitle: `#${issue.number} · ${issue.author || "—"} · ${issue.projectName}${issue.labels?.length ? " · " + issue.labels.join(", ") : ""}`,
+          timestamp: issue.updatedAt,
+          url: issue.webUrl,
+          ...(issue.comments > 0 ? { badge: { text: `${issue.comments} 💬`, color: "#64748b" } } : {}),
         })),
         updatedAt: data?.syncedAt || null,
       };

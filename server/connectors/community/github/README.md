@@ -23,6 +23,17 @@ public configuration filtering, and credential redaction in logs.
 
 ## Runtime contract
 
+A sync stores `projects`, `deployments`, `commits`, `pullRequests` and
+`issues`. Issues cost one extra request per repository — nothing was fetching
+them before — and GitHub's `/issues` returns pull requests too (it models them
+as issues with a `pull_request` key), so they are filtered out or the issues
+block would repeat the pull-requests block in full. The
+open pull requests were already being fetched to count `openMRs` per
+repository; keeping the list costs no extra request and is what feeds the
+`open-pull-requests` block. Both writers — the `POST /sync` route and the
+`sync` action — must persist all four, or a block silently empties depending on
+which one ran.
+
 ```js
 const { registerGithubRoutes } = require("./connectors/community/github");
 
@@ -42,6 +53,89 @@ The module owns these unchanged routes:
 - `POST /api/connectors/github/test`
 - `POST /api/connectors/github/sync`
 - `POST /api/connectors/github/repositories`
+- `GET /api/connectors/github/commits/:sha`
+- `GET /api/connectors/github/blocks/<blockId>` for `recent-commits`,
+  `recent-deployments`, `open-pull-requests` and `repos-overview`
+
+### Commit detail
+
+`GET /api/connectors/github/commits/:sha` answers the full message, author,
+`+/-` totals, signature flag, parents and changed files for one commit.
+
+The repository is **not** in the path. A Home block item carries only
+`{ id, title, subtitle, timestamp, url, badge }`, so there is nowhere to put it,
+and the `recent-commits` item id is the short sha — a shape already published
+and pinned by a test. The route therefore resolves the sha against the commits
+the last sync stored, which know their repository. A sha the sync never saw
+answers `404 commit-not-synced` **without calling GitHub**: with no repository
+there is nobody to ask.
+
+The comparison is by prefix in both directions, because the block stores the
+short sha while GitHub accepts either length.
+
+### Approving a pull request
+
+Approving is the `approve-pull-request` action (`write`), not a REST route:
+every remote mutation goes through the Action Registry with its schemas. It
+submits `POST /repos/{project}/pulls/{number}/reviews` with
+`event: "APPROVE"`, and takes an optional `body` comment.
+
+It is **not** `destructive` — nothing is deleted and an approval can be
+withdrawn from GitHub — so it does not go through the Approval Center.
+
+GitHub answers `422` when the token's own account authored the pull request:
+nobody approves their own. The connector does not try to predict that (it would
+cost an extra call on every open) and lets the provider's message through.
+
+### Merging a pull request
+
+`merge-pull-request` is the connector's only **destructive** action. Merging
+rewrites the target branch and no click undoes it, so it goes through the
+Approval Center: the first call only records a pending request and **does not
+touch GitHub**, and an explicit approval is what runs it. Two tests pin that —
+one proving the pending call reaches no provider, one proving an unknown merge
+method is refused before any request leaves.
+
+`method` defaults to `merge`; `squash` and `rebase` rewrite history
+differently and which one a repository uses is its own convention, not
+something to guess.
+
+Pass `sha` when you have it. Between somebody reading a pull request and
+approving its merge, the branch can move — that window is exactly what the
+Approval Center opens — and with `sha` GitHub answers `409` instead of
+merging something nobody reviewed.
+
+### Opening a pull request
+
+`create-pull-request` (`write`) opens one: `project`, `title`, `head` and
+`base` are all required, plus an optional `body` and `draft`.
+
+`base` has no default on purpose. Guessing the target branch — "it will be
+main" — is how a pull request ends up opened against the wrong one, and that is
+discovered after somebody has already reviewed it. The caller states both
+branches or gets a `400`.
+
+With `update-pull-request` and `approve-pull-request` this closes the loop:
+open, correct and approve without leaving for the provider's own tooling, and
+all three land in the connector log with the `X-Actor` that asked.
+
+### Editing a pull request
+
+`update-pull-request` (`write`) patches a pull request's title, its body, or
+both. At least one of the two is required: a call carrying neither is not "change
+nothing", it is a malformed request, and accepting it would leave a write in the
+activity log that wrote nothing.
+
+`body` **replaces** the description rather than appending to it. GitHub has no
+append, and pretending otherwise would invite losing text without warning. A
+call that names only `title` sends only `title`, so the description is left
+alone — there is a test pinning exactly that.
+
+Like every remote mutation it goes through the Action Registry, which is also
+how an agent's edit ends up in Logs → Connectors/Activity carrying the
+`X-Actor` that asked for it. That is how the project tells apart what an agent
+did from what the user did, so an agent should prefer this over editing through
+the provider's own tooling.
 
 ### Creating a repository
 

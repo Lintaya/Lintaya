@@ -6,8 +6,19 @@
   "tier": "community",
   "lifecycle": "beta",
   "license": "Apache-2.0",
-  "capabilities": ["repositories.read", "repositories.create", "repositories.clone", "pull-requests.read", "deployments.read", "workflows.read", "commits.read"],
-  "implementation": { "mode": "package", "source": "server/connectors/community/github/index.js" },
+  "capabilities": [
+    "repositories.read",
+    "repositories.create",
+    "repositories.clone",
+    "pull-requests.read",
+    "deployments.read",
+    "workflows.read",
+    "commits.read"
+  ],
+  "implementation": {
+    "mode": "package",
+    "source": "server/connectors/community/github/index.js"
+  },
   "instantiable": true,
   "upstreamApi": {
     "name": "GitHub REST API",
@@ -16,11 +27,44 @@
     "docs": "https://docs.github.com/en/rest/about-the-rest-api/api-versions"
   },
   "blocks": [
-    { "id": "recent-commits", "title": "GitHub — últimos commits", "icon": "🔧", "type": "list" },
-    { "id": "recent-deployments", "title": "GitHub — deployments recientes", "icon": "🚀", "type": "list" },
-    { "id": "repos-overview", "title": "GitHub — mis repos", "icon": "📦", "type": "list" }
+    {
+      "id": "recent-commits",
+      "title": "GitHub — últimos commits",
+      "icon": "🔧",
+      "type": "list"
+    },
+    {
+      "id": "recent-deployments",
+      "title": "GitHub — deployments recientes",
+      "icon": "🚀",
+      "type": "list"
+    },
+    {
+      "id": "open-pull-requests",
+      "title": "GitHub — pull requests abiertos",
+      "icon": "🔀",
+      "type": "list"
+    },
+    {
+      "id": "open-issues",
+      "title": "GitHub — issues abiertos",
+      "icon": "🐞",
+      "type": "list"
+    },
+    {
+      "id": "repos-overview",
+      "title": "GitHub — mis repos",
+      "icon": "📦",
+      "type": "list"
+    }
   ],
   "modules": [
-    { "id": "repositories", "label": "Repos {connectorName}", "icon": "repos", "component": "ReposView", "navOrder": 91 }
+    {
+      "id": "repositories",
+      "label": "Repos {connectorName}",
+      "icon": "repos",
+      "component": "ReposView",
+      "navOrder": 91
+    }
   ]
 }

@@ -9,6 +9,16 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Changed
 
+- Home's two zones are separated by the same handle the Dashboard uses, and at
+  the same distance. The zones sat 44 px apart — the grid added its own gap on
+  each side of the 12 px handle — against the Dashboard's 12 px, and blocks
+  stacked 16 px apart against its 10 px. The handle is now the Dashboard's own
+  component rather than a copy of its looks, so the two screens cannot drift
+  apart again; its keyboard step moves by a percentage of the width, which
+  makes an arrow press shift the divider by the same amount in either
+  direction, and dragging accepts touch and pen and not only a mouse.
+- Home is headed by its own title, like every other view.
+
 - The public build ships the community connectors only. The enterprise and
   development tiers — Qportal, UCS Manager, vCenter, Outlook, Outlook local and
   Lintaya remote — moved to their own repository, installed from a directory
@@ -19,6 +29,80 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   machine is still configured once through the UI.
 
 ### Added
+
+- An issue opens the same way a pull request does, showing its description and
+  its conversation — which is where an issue is actually decided — alongside
+  its state, milestone, assignees and dates. Until now only pull requests
+  expanded, and an issue row said no more than its title.
+- A Home block lists open issues, and clicking one opens that detail in a modal
+  rather than leaving for GitHub. Unlike the pull-request block this costs one
+  new request per repository on each sync: nothing was fetching issues before.
+- A repository has an Advisories tab reporting its security standing from the
+  three places GitHub keeps it separately: the advisories the repository
+  publishes about itself, its code scanning alerts, and its Dependabot alerts.
+  Looking at only one is a false reassurance — a repository can have no
+  Dependabot alerts and a hand-written critical advisory at the same time — so
+  the three are shown together, ordered by severity rather than alphabetically.
+  Each source is fetched independently and fails on its own: a token without
+  access to one does not empty the other two, and "no access" is said
+  differently from "nothing found". Clicking any of them opens what the row
+  cannot hold: the CVSS score and vector, the CWEs, the affected versions, who
+  reported it, and for a scanner finding the help text that says how to fix it
+  along with the concrete finding rather than the rule's theory.
+- A repository opened from Repos has Pull Requests and Issues tabs, and a pull
+  request opens to show what the row cannot: whether it can actually be merged,
+  its description, its checks one by one, its commits, and every changed file
+  with its own `+/-`. A merged pull request is told apart from one closed
+  without merging — GitHub marks both as closed and only `merged_at` separates
+  them — and "able to merge" keeps the distinction GitHub's green label hides,
+  between a clean merge, one with a check that is not green, and one blocked by
+  reviews or branch rules. GitHub only for now: GitLab calls the same thing a
+  merge request with a different response shape, and the tabs simply do not
+  appear for a provider that has not been implemented.
+- A Home block lists open pull requests, and clicking one opens that same
+  detail in a modal instead of leaving for GitHub. It works on Boards and
+  Dashboards too. Clicking a commit in the existing "recent commits" block now
+  opens its own detail — full message, signature, changed files — the same way.
+- A pull request can be merged through the `merge-pull-request` action. It is
+  the connector's only destructive action: merging rewrites the target branch
+  and no click undoes it, so the first call only records a pending request and
+  reaches no provider until the Approval Center approves it. Passing the sha
+  you believed you were merging makes GitHub refuse with a conflict if the
+  branch moved while the request waited — which is the window approval opens.
+- A pull request can be opened through the `create-pull-request` action. Both
+  branches must be stated: guessing the target — "it will be main" — is how a
+  pull request ends up opened against the wrong branch, and that is found out
+  after somebody has already reviewed it.
+- A pull request's title and description can be edited through the
+  `update-pull-request` action. At least one of the two is required, and a call
+  naming only the title sends only the title — filling in an empty body for
+  convenience would wipe the description nobody asked to change. The body
+  replaces rather than appends, because GitHub has no append and pretending
+  otherwise invites losing text silently.
+- A pull request can be approved from its modal. Approving is an Action
+  Registry action with input and output schemas and a `write` effect, like
+  every other remote mutation. The button is offered only while the pull
+  request is open, and says so rather than offering a second identical review
+  when one is already approved.
+- Right-clicking a tab in a repository offers to move it left or right, with
+  the order remembered per browser. It is the same menu the sidebar uses,
+  extracted into one component so the two cannot drift apart.
+
+- The sidebar answers a right-click on any entry with a menu to move it up or
+  down and to hide it. It is a second door into what Settings → Navigation and
+  each Board's "show in sidebar" toggle already did, so anything hidden from
+  here can still be brought back from where it always lived: built-in sections
+  from Settings, and a Board or Dashboard from its own editor. Ordering a Board
+  or Dashboard is new — until now its place in the menu came from its place in
+  the list that loaded it and could not be changed — and, like the order of the
+  built-in sections, it is remembered per browser. An entry published by a
+  connector keeps its position and visibility from the connector, and the menu
+  says so rather than offering an action that would leave it unreachable.
+- Home's "+ Block" menu opens on a search box, scrolls instead of growing, and
+  keeps "new note" in view at the bottom. The menu listed every available block
+  at full height, which a catalogue of any size makes unusable. Accents are
+  ignored when matching, because block titles arrive from connectors with them
+  and nobody types them when searching.
 
 - An installed connector can ship its own documentation page. Anything under
   `<connector>/docs/` in the connector directory is indexed beside the
@@ -181,6 +265,11 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   and a sample hostname used as a form placeholder in Devices.
 
 ### Fixed
+
+- Home no longer announces "No connectors configured" while connectors are
+  connected and syncing. The line was chosen by whether vCenter specifically
+  was configured, so every install without that one connector was told it had
+  none at all.
 
 - One page that fails no longer takes the application with it. A view throwing
   during render used to take down the whole React tree — a blank screen,

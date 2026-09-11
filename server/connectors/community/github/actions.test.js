@@ -92,14 +92,185 @@ test("github.status rejects unexpected input per its inputSchema", async () => {
   );
 });
 
-test("registerGithubActions registers exactly its three actions, all under connectorTypeId github", () => {
+test("registerGithubActions registers exactly its seven actions, all under connectorTypeId github", () => {
   const registry = createActionRegistry();
   registerGithubActions({ registry, request: async () => ({}), sync: async () => ({ projects: [], deployments: [], commits: [] }) });
   const actions = registry.listActionsForType("github");
-  assert.deepEqual(actions.map((a) => a.id).sort(), ["create-repository", "status", "sync"]);
+  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-pull-request", "create-repository", "merge-pull-request", "status", "sync", "update-pull-request"]);
   assert.equal(registry.getAction("github", "status").effect, "read");
   assert.equal(registry.getAction("github", "sync").effect, "write");
   assert.equal(registry.getAction("github", "create-repository").effect, "write");
+  // Aprobar escribe en el proveedor, pero no destruye nada y se puede retirar
+  // desde GitHub: "write", no "destructive", que exigiria Approval Center.
+  assert.equal(registry.getAction("github", "approve-pull-request").effect, "write");
+  assert.equal(registry.getAction("github", "update-pull-request").effect, "write");
+  assert.equal(registry.getAction("github", "create-pull-request").effect, "write");
+  // Fusionar reescribe la rama destino y no se deshace con un clic: es la unica
+  // destructiva del conector, y eso es lo que la manda al Approval Center.
+  assert.equal(registry.getAction("github", "merge-pull-request").effect, "destructive");
+});
+
+test("github.merge-pull-request is destructive: the first call stays pending and never reaches GitHub", async () => {
+  let llamado = false;
+  const { executeAction, logs } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return { merged: true }; },
+  });
+
+  const resultado = await executeAction({
+    connectionId: "github", actionId: "merge-pull-request",
+    input: { project: "octo/lintaya", number: 11 },
+  });
+
+  assert.equal(llamado, false, "sin aprobacion no se toca el proveedor");
+  assert.equal(resultado.ok, false);
+  assert.equal(resultado.pending, true);
+  assert.equal(resultado.error, "pending-approval");
+  assert.equal(logs[0].meta.effect, "destructive");
+});
+
+test("github.merge-pull-request refuses an abbreviated sha before spending an approval", async () => {
+  let llamado = false;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return {}; },
+  });
+
+  // GitHub contesta 422 a un sha abreviado, pero solo despues de aprobar: para
+  // entonces la aprobacion ya se gasto en una peticion que no podia funcionar.
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "merge-pull-request",
+      input: { project: "octo/lintaya", number: 11, sha: "f5508ce8" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(llamado, false);
+
+  // El completo de 40 sí pasa la validación y queda pendiente de aprobación.
+  const pendiente = await executeAction({
+    connectionId: "github", actionId: "merge-pull-request",
+    input: { project: "octo/lintaya", number: 11, sha: "f5508ce89d56bb1e4ceec2f09850a85dc8539b61" },
+  });
+  assert.equal(pendiente.pending, true);
+  assert.equal(llamado, false, "ni siquiera el valido toca el proveedor sin aprobacion");
+});
+
+test("github.merge-pull-request rejects a merge method the repository did not ask for", async () => {
+  let llamado = false;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async () => { llamado = true; return {}; },
+  });
+
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "merge-pull-request",
+      input: { project: "octo/lintaya", number: 11, method: "fast-forward" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(llamado, false);
+});
+
+test("github.create-pull-request needs both branches stated and sends them as given", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { number: 11, title: "arreglo", state: "open", draft: false,
+        head: { ref: "fix" }, base: { ref: "main" },
+        html_url: "https://github.com/octo/lintaya/pull/11", created_at: "2026-09-11T12:00:00Z" };
+    },
+  });
+
+  const creado = await executeAction({
+    connectionId: "github", actionId: "create-pull-request",
+    input: { project: "octo/lintaya", title: "arreglo", head: "fix", base: "main", body: "por que" },
+  });
+
+  assert.equal(creado.ok, true);
+  assert.equal(calledWith.path, "/repos/octo/lintaya/pulls");
+  assert.equal(calledWith.method, "POST");
+  assert.deepEqual(calledWith.body, { title: "arreglo", head: "fix", base: "main", body: "por que" });
+  assert.equal(creado.result.number, 11);
+  assert.equal(creado.result.webUrl, "https://github.com/octo/lintaya/pull/11");
+
+  // Sin base no se adivina "main": abrir contra la rama equivocada se descubre
+  // cuando alguien ya lo reviso.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "create-pull-request",
+      input: { project: "octo/lintaya", title: "arreglo", head: "fix" } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "sin rama destino no sale ninguna peticion");
+});
+
+test("github.update-pull-request patches only the fields it was given", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { number: 10, title: "nuevo titulo", state: "open",
+        html_url: "https://github.com/octo/lintaya/pull/10", updated_at: "2026-09-11T12:00:00Z" };
+    },
+  });
+
+  const soloTitulo = await executeAction({
+    connectionId: "github", actionId: "update-pull-request",
+    input: { project: "octo/lintaya", number: 10, title: "nuevo titulo" },
+  });
+
+  assert.equal(soloTitulo.ok, true);
+  assert.equal(calledWith.path, "/repos/octo/lintaya/pulls/10");
+  assert.equal(calledWith.method, "PATCH");
+  // Pedir solo el titulo no debe mandar un body vacio: eso borraria la
+  // descripcion del pull request sin que nadie lo haya pedido.
+  assert.deepEqual(calledWith.body, { title: "nuevo titulo" });
+  assert.equal(soloTitulo.result.title, "nuevo titulo");
+
+  // Sin titulo ni descripcion no hay nada que escribir, y el esquema lo frena
+  // antes de que salga la peticion.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "update-pull-request", input: { project: "octo/lintaya", number: 10 } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "una entrada sin cambios no llega al proveedor");
+});
+
+test("github.approve-pull-request submits an APPROVE review and validates its input", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { id: 99, state: "APPROVED", user: { login: "reviewer" },
+        submitted_at: "2026-09-11T10:00:00Z", html_url: "https://github.com/octo/lintaya/pull/10#pullrequestreview-99" };
+    },
+  });
+
+  const result = await executeAction({
+    connectionId: "github", actionId: "approve-pull-request",
+    input: { project: "octo/lintaya", number: 10, body: "looks good" },
+  });
+
+  assert.deepEqual(calledWith, {
+    path: "/repos/octo/lintaya/pulls/10/reviews",
+    method: "POST",
+    body: { event: "APPROVE", body: "looks good" },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.result.state, "APPROVED");
+  assert.equal(result.result.reviewer, "reviewer");
+
+  // Sin repositorio no hay a quien aprobar: el esquema tiene que frenarlo antes
+  // de que salga una peticion.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "approve-pull-request", input: { number: 10 } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "una entrada invalida no llega al proveedor");
 });
 
 test("github.create-repository posts through the real client function", async () => {

@@ -742,6 +742,9 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   const qportalConfigured = !!connStatus?.qportal?.configured;
 
   const [modalDoc, setModalDoc] = useState(null);
+  const [modalPR, setModalPR] = useState(null);
+  const [modalCommit, setModalCommit] = useState(null);
+  const [modalIssue, setModalIssue] = useState(null);
 
   // Qportal data
   const [qpData, setQpData]       = useState(null);
@@ -778,10 +781,19 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   // Antes era un booleano y addBlock caia siempre en la izquierda, asi que
   // llenar la segunda columna obligaba a añadir y luego arrastrar.
   const [showAddBlock, setShowAddBlock] = useState(null);
+  const [blockQuery, setBlockQuery] = useState("");
+  useEffect(() => { setBlockQuery(""); }, [showAddBlock]);
   // Cuanto ocupa la zona 1 frente a la zona 2. Se guarda por navegador, como
   // el ancho del sidebar: es una preferencia de esta pantalla, no del layout
   // de bloques que sí viaja al servidor.
-  const ZONE_RATIO_MIN = 0.4, ZONE_RATIO_MAX = 2.6, ZONE_RATIO_DEFAULT = 1.4;
+  // Mismos topes que el separador del Dashboard (15%-85%). Alli el modelo es
+  // un ratio 0..1 y aqui una razon fr entre las dos zonas, asi que se convierte
+  // con pct/(1-pct) en vez de duplicar dos numeros que luego se desincronizan.
+  const ZONE_PCT_MIN = 0.15, ZONE_PCT_MAX = 0.85, ZONE_RATIO_DEFAULT = 1.4;
+  const ZONE_RATIO_MIN = ZONE_PCT_MIN / (1 - ZONE_PCT_MIN);
+  const ZONE_RATIO_MAX = ZONE_PCT_MAX / (1 - ZONE_PCT_MAX);
+  const clampZonePct = value => Math.min(ZONE_PCT_MAX, Math.max(ZONE_PCT_MIN, value));
+  const ratioFromPct = pct => Math.round((pct / (1 - pct)) * 100) / 100;
   const [zoneRatio, setZoneRatio] = useState(() => {
     const saved = parseFloat(localStorage.getItem("hq.homeZoneRatio"));
     return Number.isFinite(saved) && saved >= ZONE_RATIO_MIN && saved <= ZONE_RATIO_MAX ? saved : ZONE_RATIO_DEFAULT;
@@ -790,35 +802,40 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   useEffect(() => {
     try { localStorage.setItem("hq.homeZoneRatio", String(zoneRatio)); } catch {}
   }, [zoneRatio]);
+  // El paso se aplica en porcentaje (5 puntos, como en Dashboard) y no sobre la
+  // razon fr: sumarle un delta fijo a la razon desplaza la barra mucho mas hacia
+  // un lado que hacia el otro, porque la razon no es lineal en el ancho.
   const nudgeZone = (e) => {
-    const step = e.key === "ArrowLeft" ? -0.08 : e.key === "ArrowRight" ? 0.08 : 0;
+    const step = e.key === "ArrowLeft" ? -0.05 : e.key === "ArrowRight" ? 0.05 : 0;
     if (!step) return;
     e.preventDefault();
-    setZoneRatio(prev => Math.round(Math.min(Math.max(prev + step, ZONE_RATIO_MIN), ZONE_RATIO_MAX) * 100) / 100);
+    setZoneRatio(prev => ratioFromPct(clampZonePct(prev / (1 + prev) + step)));
   };
-  const startZoneResize = (e) => {
+  // Mismo arrastre que el separador del Dashboard: pointer events (para que
+  // valga con raton, tactil y lapiz) y un aviso de fin para que el separador
+  // apague su estado activo. finishVisualState lo pasa el propio separador.
+  const startZoneResize = (e, finishVisualState) => {
+    if (e.pointerType === "mouse" && e.button !== 0) { finishVisualState?.(); return; }
     e.preventDefault();
     const grid = zoneGridRef.current;
-    if (!grid) return;
+    if (!grid) { finishVisualState?.(); return; }
     const rect = grid.getBoundingClientRect();
-    const onMove = (ev) => {
-      // La barra parte el ancho de la rejilla: la razon es lo que queda a la
-      // izquierda contra lo que queda a la derecha. Se acota para que ninguna
-      // zona pueda quedar tan estrecha que sus bloques no se lean.
-      const x = Math.min(Math.max(ev.clientX - rect.left, rect.width * 0.28), rect.width * 0.72);
-      const next = x / (rect.width - x);
-      setZoneRatio(Math.round(Math.min(Math.max(next, ZONE_RATIO_MIN), ZONE_RATIO_MAX) * 100) / 100);
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+    // La barra parte el ancho de la rejilla: la razon es lo que queda a la
+    // izquierda contra lo que queda a la derecha.
+    const move = (ev) => setZoneRatio(ratioFromPct(clampZonePct((ev.clientX - rect.left) / Math.max(rect.width, 1))));
+    const end = () => {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      finishVisualState?.();
     };
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
   // Encola los guardados de layout uno tras otro — sin esto, dos cambios
   // seguidos (p. ej. quitar un block justo después de agregar una nota)
@@ -918,6 +935,15 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
     ...customBlocks.filter(b => b.active !== false).map(b => ({ id: b.id, label: `${b.icon ? b.icon + " " : ""}${b.title}` })),
   ].filter(w => !layout.left.includes(w.id) && !layout.right.includes(w.id));
 
+  // Los titulos de los blocks vienen de los connectors ("Leon", "Delfin"...) y
+  // nadie teclea los acentos al buscar, asi que se comparan ambos lados sin
+  // diacriticos en vez de exigir una coincidencia literal.
+  const foldForSearch = value => String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const blockNeedle = foldForSearch(blockQuery).trim();
+  const matchingBlocks = blockNeedle
+    ? availableBlocks.filter(w => foldForSearch(w.label).includes(blockNeedle))
+    : availableBlocks;
+
   // Subtitle: show sync time from meta if available
   const syncedAt = liveMeta?.[0]?.syncedAt;
   const syncInfo = syncedAt ? (() => {
@@ -930,16 +956,19 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   return (
     <div className="home-view" style={{ padding: 20, width: "100%", maxWidth: 1480, margin: "0 auto" }}>
       <div style={{ marginBottom: 22, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <p style={{ margin: 0, color: "var(--muted-fg)", fontSize: 13.5 }}>
-          {vcenterConfigured ? (
-            <>
+        {/* El subtitulo colgaba de vcenterConfigured, asi que sin vCenter decia
+            "No connectors configured" aunque hubiera otros conectores sincronizando.
+            Home pasa a encabezarse con su titulo, como el resto de vistas, y el
+            resumen de vCenter queda debajo solo cuando ese conector esta puesto. */}
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, letterSpacing: -0.2 }}>{t("nav.home.label", "Home")}</h1>
+          {vcenterConfigured && (
+            <p style={{ margin: "4px 0 0", color: "var(--muted-fg)", fontSize: 13.5 }}>
               {t("home.subtitle.summary", "", { online: stats.online, total: stats.total, hosts: hostCount, alerts: stats.alerts.length })}
               {syncInfo && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ok)" }}>● {syncInfo}</span>}
-            </>
-          ) : (
-            t("home.subtitle.noConnectors")
+            </p>
           )}
-        </p>
+        </div>
         <div style={{ position: "relative", flexShrink: 0, display: "flex", gap: 6 }}>
           {[["left", t("home.addBlock.zone1", "+ Block · Zone 1")], ["right", t("home.addBlock.zone2", "+ Block · Zone 2")]].map(([col, etiqueta]) => (
             <button key={col} onClick={() => setShowAddBlock(v => v === col ? null : col)}
@@ -950,17 +979,47 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
           {showAddBlock && (
             <>
               <div onClick={() => setShowAddBlock(null)} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
-              <div style={{
-                position: "absolute", right: 0, top: 34, zIndex: 11, minWidth: 220,
+              {/* La lista crece con cada connector — un catalogo grande sin filtro
+                  es impracticable —, asi que el buscador y "nota nueva" quedan
+                  fijos y solo desplaza la lista de en medio. */}
+              <div onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setShowAddBlock(null); } }}
+                style={{
+                position: "absolute", right: 0, top: 34, zIndex: 11, minWidth: 240,
                 background: "white", border: "1px solid var(--border)", borderRadius: 8,
                 boxShadow: "0 8px 24px rgba(0,0,0,.12)", overflow: "hidden",
+                display: "flex", flexDirection: "column", maxHeight: 360,
               }}>
+                {availableBlocks.length > 0 && (
+                  <div style={{ position: "relative", flex: "0 0 auto", padding: 8, borderBottom: "1px solid var(--border)" }}>
+                    <span aria-hidden="true" style={{ position: "absolute", left: 17, top: 15, color: "var(--muted-fg)", fontSize: 13 }}>⌕</span>
+                    <input
+                      autoFocus
+                      value={blockQuery}
+                      onChange={e => setBlockQuery(e.target.value)}
+                      onKeyDown={e => {
+                        // Enter agrega la primera coincidencia: con el filtro escrito
+                        // suele quedar una sola y obliga a soltar el teclado si no.
+                        if (e.key === "Enter" && matchingBlocks.length) { e.preventDefault(); addBlock(matchingBlocks[0].id, showAddBlock); }
+                      }}
+                      placeholder={t("home.addBlock.search", "Search blocks…")}
+                      aria-label={t("home.addBlock.search", "Search blocks…")}
+                      style={{ width: "100%", height: 30, boxSizing: "border-box", padding: "0 10px 0 26px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5, fontFamily: "inherit", background: "white", outline: "none", color: "var(--fg)" }}
+                      onFocus={e => e.target.style.borderColor = "var(--accent)"}
+                      onBlur={e => e.target.style.borderColor = "var(--border)"} />
+                  </div>
+                )}
+                <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
                 {availableBlocks.length === 0 && (
                   <div style={{ padding: "10px 14px", fontSize: 11.5, color: "var(--muted-fg)" }}>
                     {t("home.addBlock.allAdded")}
                   </div>
                 )}
-                {availableBlocks.map(w => (
+                {availableBlocks.length > 0 && matchingBlocks.length === 0 && (
+                  <div style={{ padding: "10px 14px", fontSize: 11.5, color: "var(--muted-fg)" }}>
+                    {t("home.addBlock.noMatches", "", { q: blockQuery })}
+                  </div>
+                )}
+                {matchingBlocks.map(w => (
                   <button key={w.id} onClick={() => addBlock(w.id, showAddBlock)}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", fontSize: 12.5, background: "none", border: 0, borderBottom: "1px solid var(--border)", cursor: "pointer", fontFamily: "inherit", color: "var(--fg)" }}
                     onMouseEnter={e => e.currentTarget.style.background = "var(--row-hover)"}
@@ -968,6 +1027,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
                     {w.label}
                   </button>
                 ))}
+                </div>
                 <button onClick={() => addNote(showAddBlock)}
                   style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", fontSize: 12.5, fontWeight: 600, background: "none", border: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--accent)" }}
                   onMouseEnter={e => e.currentTarget.style.background = "var(--row-hover)"}
@@ -982,6 +1042,9 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
 
       {/* Draggable panel grid */}
       {modalDoc && <DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
+      {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
+      {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
+      {modalIssue && window.IssueDetailModal && <window.IssueDetailModal issue={modalIssue} onClose={() => setModalIssue(null)} />}
 
       {(() => {
         // Panel content definitions
@@ -1303,6 +1366,24 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
             updatedAt: item.timestamp, absoluteUrl: item.url,
           }),
         };
+        // Un block de pull requests abre su detalle en un modal en vez de
+        // mandarte a GitHub. La clave lleva el id de la conexión, no el tipo:
+        // una segunda conexión GitHub tiene sus propios blocks.
+        // Se filtra tambien por tipo de conector, no solo por blockId: GitLab
+        // declara su propio "recent-commits" y no tiene la ruta de detalle, asi
+        // que capturarle el click lo llevaria a un 404 en vez de a GitHub.
+        connectorBlocks.forEach(candidate => {
+          if ((candidate.connectorType || candidate.connectorId) !== "github") return;
+          if (candidate.blockId === "open-pull-requests") {
+            blockItemHandlers[candidate.id] = item => setModalPR({ ...item, connectorId: candidate.connectorId });
+          }
+          if (candidate.blockId === "recent-commits") {
+            blockItemHandlers[candidate.id] = item => setModalCommit({ ...item, connectorId: candidate.connectorId });
+          }
+          if (candidate.blockId === "open-issues") {
+            blockItemHandlers[candidate.id] = item => setModalIssue({ ...item, connectorId: candidate.connectorId });
+          }
+        });
 
         // Blocks declarados por conectores — genéricos, salvo que alguien haya
         // registrado un componente propio en window.HomeBlocks.
@@ -1336,7 +1417,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
         const renderCol = (colId) => {
           const panels = panelsOf(colId);
           return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}
             onDragOver={e => { e.preventDefault(); if (!layout[colId].length) setDragOver({ col: colId, idx: 0 }); }}
             onDrop={e => {
               e.preventDefault();
@@ -1364,14 +1445,16 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
             // Sin un solo bloque las dos zonas dicen lo mismo, asi que reparten
             // el ancho a partes iguales; el desequilibrio 1.4/1 solo tiene
             // sentido cuando hay contenido que lo justifique.
-            gridTemplateColumns: anyPanels ? `${zoneRatio}fr 14px 1fr` : "1fr 1fr",
-            gap: 16,
+            gridTemplateColumns: anyPanels ? `${zoneRatio}fr 12px 1fr` : "1fr 1fr",
+            columnGap: anyPanels ? 0 : 12,
           }}>
             {renderCol("left")}
             {anyPanels && (
-              <HomeZoneGrip
-                percent={Math.round((zoneRatio / (1 + zoneRatio)) * 100)}
-                onDown={startZoneResize}
+              <window.BoardResizeSeparator
+                vertical
+                className="home-zone-resizer"
+                ratio={zoneRatio / (1 + zoneRatio)}
+                onPointerDown={startZoneResize}
                 onKeyDown={nudgeZone}
               />
             )}
@@ -1383,47 +1466,6 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   );
 }
 
-// Separador entre las dos zonas de Home. Copia el aspecto y el trato de teclado
-// del ZoneGrip de module-builder.jsx (la barra que separa zonas dentro de un
-// Board) en vez del ResizeHandle de repos.jsx: aquel se dibuja casi invisible
-// porque vive sobre un divisor propio, y aqui — como en los Boards — queda
-// pegado a paneles con borde del mismo color y no se distinguiria de uno.
-// No se reusa el componente tal cual porque su geometria va en porcentajes
-// atados al modelo de zonas del editor, que aqui no existe.
-function HomeZoneGrip({ percent, onDown, onKeyDown }) {
-  const [hover, setHover] = useState(false);
-  const [focused, setFocused] = useState(false);
-  return (
-    <div
-      className="home-zone-resizer"
-      role="separator"
-      tabIndex={0}
-      aria-orientation="vertical"
-      aria-label={window.I18N.t("home.zoneResize", "Resize zones. Use left and right arrow keys.")}
-      aria-valuemin={28}
-      aria-valuemax={72}
-      aria-valuenow={percent}
-      onPointerDown={onDown}
-      onKeyDown={onKeyDown}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      title={window.I18N.t("ui.boards.resize", "Drag to resize")}
-      style={{
-        cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center",
-        touchAction: "none", borderRadius: 4, outlineOffset: -2,
-        outline: focused ? "2px solid var(--brand-glass-active)" : "none",
-      }}>
-      <div style={{
-        width: 4, height: "100%", borderRadius: 2,
-        background: hover || focused ? "var(--accent)" : "var(--muted-fg)",
-        opacity: hover || focused ? 1 : 0.4,
-        transition: "background .1s, opacity .1s",
-      }} />
-    </div>
-  );
-}
 function Panel({ title, titleExtra, action, children, draggable: isDraggable, dragId, col, layout, dragging, dragOver, setDragOver, movePanel, onRemove, removeLabel, removeTitle, removeButtonRef, contentScroll, contentScrollLabel, fillHeight, hideHeader = false }) {
   const locale = window.I18N.useLocale();
   const t = window.I18N.t;

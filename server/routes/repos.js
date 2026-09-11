@@ -2121,10 +2121,297 @@ function registerReposRoutes({
           when: c.commit?.author?.date, webUrl: c.html_url,
         }));
       },
+      // Los tres detalles devuelven una forma comun a proposito: el panel los
+      // pinta con un solo componente, y lo que cambia entre fuentes es de donde
+      // sale cada campo, no como se lee.
+      async getSecurityAdvisory(cfg, id, ghsaId) {
+        const advisory = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/security-advisories/${ghsaId}`);
+        return {
+          kind: "advisory",
+          id: advisory.ghsa_id,
+          title: advisory.summary || advisory.ghsa_id,
+          severity: advisory.severity || null,
+          state: advisory.state || null,
+          description: advisory.description || "",
+          cvssScore: advisory.cvss?.score ?? null,
+          cvssVector: advisory.cvss?.vector_string || null,
+          cwes: (advisory.cwes || []).map(cwe => cwe.cwe_id).filter(Boolean),
+          cve: advisory.cve_id || null,
+          // Quien reporto el fallo. Se nombra porque reconocerlo es parte de
+          // como funciona el reporte responsable, no un adorno.
+          credits: (advisory.credits || []).map(credit => credit.login || credit.user?.login).filter(Boolean),
+          affected: (advisory.vulnerabilities || []).map(item => [
+            item.package?.name, item.vulnerable_version_range,
+          ].filter(Boolean).join(" ")).filter(Boolean),
+          publishedAt: advisory.published_at || null,
+          updatedAt: advisory.updated_at || null,
+          webUrl: advisory.html_url || null,
+        };
+      },
+      async getCodeScanningAlert(cfg, id, number) {
+        const alert = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/code-scanning/alerts/${number}`);
+        const location = alert.most_recent_instance?.location;
+        return {
+          kind: "code-scanning",
+          id: String(alert.number),
+          title: alert.rule?.description || alert.rule?.id || String(alert.number),
+          severity: alert.rule?.security_severity_level || alert.rule?.severity || null,
+          state: alert.state || null,
+          // help trae el "como se arregla"; full_description solo repite el que.
+          description: [alert.rule?.full_description, alert.rule?.help].filter(Boolean).join("\n\n"),
+          // El mensaje de la instancia es el hallazgo concreto ("score is 0:
+          // branch protection not enabled"), no la teoria de la regla.
+          finding: alert.most_recent_instance?.message?.text || null,
+          rule: alert.rule?.id || null,
+          tool: alert.tool?.name || null,
+          tags: alert.rule?.tags || [],
+          path: location?.path?.startsWith("no file") ? null : (location?.path || null),
+          line: location?.start_line || null,
+          publishedAt: alert.created_at || null,
+          updatedAt: alert.updated_at || null,
+          webUrl: alert.html_url || null,
+        };
+      },
+      async getDependabotAlert(cfg, id, number) {
+        const alert = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/dependabot/alerts/${number}`);
+        const advisory = alert.security_advisory || {};
+        return {
+          kind: "dependabot",
+          id: String(alert.number),
+          title: advisory.summary || advisory.ghsa_id || String(alert.number),
+          severity: alert.security_vulnerability?.severity || advisory.severity || null,
+          state: alert.state || null,
+          description: advisory.description || "",
+          cvssScore: advisory.cvss?.score ?? null,
+          cvssVector: advisory.cvss?.vector_string || null,
+          cwes: (advisory.cwes || []).map(cwe => cwe.cwe_id).filter(Boolean),
+          cve: advisory.cve_id || null,
+          affected: [[
+            alert.dependency?.package?.name,
+            alert.security_vulnerability?.vulnerable_version_range,
+          ].filter(Boolean).join(" ")].filter(Boolean),
+          fixedIn: alert.security_vulnerability?.first_patched_version?.identifier || null,
+          manifestPath: alert.dependency?.manifest_path || null,
+          publishedAt: alert.created_at || null,
+          updatedAt: alert.updated_at || null,
+          webUrl: alert.html_url || null,
+        };
+      },
+
+      // Los avisos que el propio repositorio publica sobre si mismo: los
+      // redacta un mantenedor, no los deduce un escaner, asi que un "critical"
+      // en estado triage aqui pesa mas que cualquier hallazgo automatico.
+      async listSecurityAdvisories(cfg, id) {
+        const data = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/security-advisories?per_page=100`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(advisory => ({
+          id: advisory.ghsa_id,
+          state: advisory.state,
+          severity: advisory.severity || null,
+          summary: advisory.summary || null,
+          cve: advisory.cve_id || null,
+          publishedAt: advisory.published_at || null,
+          updatedAt: advisory.updated_at || null,
+          webUrl: advisory.html_url || null,
+        }));
+      },
+      // Hallazgos de los escaneres de codigo (CodeQL, Scorecard, lo que el
+      // repositorio tenga conectado). GitHub trae dos severidades por alerta:
+      // manda la de seguridad, y la generica de la regla es el respaldo cuando
+      // la herramienta no clasifica en terminos de seguridad.
+      async listCodeScanningAlerts(cfg, id, state) {
+        const wanted = state === "closed" || state === "dismissed" || state === "fixed" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/code-scanning/alerts?state=${wanted}&per_page=100`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(alert => ({
+          number: alert.number,
+          state: alert.state,
+          severity: alert.rule?.security_severity_level || alert.rule?.severity || null,
+          rule: alert.rule?.id || null,
+          description: alert.rule?.description || null,
+          tool: alert.tool?.name || null,
+          // GitHub devuelve literalmente "no file associated with this alert"
+          // para hallazgos que no viven en una linea (los de Scorecard, por
+          // ejemplo); mostrar esa frase como si fuera una ruta seria peor que
+          // no mostrar nada.
+          path: alert.most_recent_instance?.location?.path?.startsWith("no file") ? null : (alert.most_recent_instance?.location?.path || null),
+          line: alert.most_recent_instance?.location?.start_line || null,
+          createdAt: alert.created_at || null,
+          webUrl: alert.html_url || null,
+        }));
+      },
       // Dependabot alerts — GitHub-only (GitLab/Bitbucket have their own,
       // differently-shaped dependency-scanning APIs, not covered here).
       // Needs the token to carry `security_events` (classic PAT) or
       // "Dependabot alerts: read" (fine-grained PAT); GitHub 403s otherwise.
+      // Pull requests e issues — GitHub-only por ahora, igual que las alertas
+      // de Dependabot de abajo: GitLab llama "merge requests" a lo mismo con
+      // otra forma de respuesta, y Bitbucket Cloud y Server difieren entre si.
+      // Las rutas responden "<recurso>-not-supported" donde no este declarado,
+      // asi que agregar un proveedor es agregar su metodo y nada mas.
+      async listPullRequests(cfg, id, state) {
+        const wanted = state === "closed" || state === "all" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/pulls?state=${wanted}&per_page=50&sort=updated&direction=desc`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(pr => ({
+          number: pr.number,
+          title: pr.title,
+          // GitHub marca como "closed" tanto el PR fusionado como el
+          // descartado, y solo los distingue por merged_at. Sin esto la lista
+          // leeria igual un trabajo aceptado y uno tirado a la basura.
+          state: pr.merged_at ? "merged" : pr.state,
+          draft: !!pr.draft,
+          author: pr.user?.login || null,
+          authorAvatar: pr.user?.avatar_url || null,
+          sourceBranch: pr.head?.ref || null,
+          targetBranch: pr.base?.ref || null,
+          labels: (pr.labels || []).map(label => label?.name).filter(Boolean),
+          createdAt: pr.created_at,
+          updatedAt: pr.updated_at,
+          webUrl: pr.html_url,
+        }));
+      },
+      // Detalle de un pull request: lo que la fila de la lista no trae —
+      // descripcion, si se puede fusionar, cuanto cambia, revisiones y checks.
+      async getPullRequest(cfg, id, number) {
+        const pr = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}`);
+        // Las cuatro listas de apoyo son independientes y ninguna es
+        // imprescindible: un token sin permiso para leer checks no debe tumbar
+        // el detalle entero, asi que cada una cae a vacio por su cuenta.
+        const opcional = promesa => promesa.then(data => Array.isArray(data) ? data : data || null).catch(() => null);
+        const [files, commits, reviews, checks] = await Promise.all([
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/files?per_page=100`)),
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/commits?per_page=100`)),
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/reviews?per_page=100`)),
+          pr.head?.sha
+            ? opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/commits/${pr.head.sha}/check-runs?per_page=100`))
+            : Promise.resolve(null),
+        ]);
+        const runs = Array.isArray(checks?.check_runs) ? checks.check_runs : [];
+        const conclusionDe = run => run.status !== "completed" ? "pending" : (run.conclusion || "pending");
+        return {
+          number: pr.number,
+          title: pr.title,
+          state: pr.merged_at ? "merged" : pr.state,
+          draft: !!pr.draft,
+          body: pr.body || "",
+          author: pr.user?.login || null,
+          authorAvatar: pr.user?.avatar_url || null,
+          sourceBranch: pr.head?.ref || null,
+          targetBranch: pr.base?.ref || null,
+          // El sha completo del head, que es lo que pide merge-pull-request
+          // para asegurarse de fusionar lo que se reviso. Los de la lista de
+          // commits van abreviados para leerse, y GitHub rechaza un abreviado
+          // aqui con 422, asi que este campo existe precisamente para no
+          // tentar a nadie a reusar aquellos.
+          headSha: pr.head?.sha || null,
+          labels: (pr.labels || []).map(label => label?.name).filter(Boolean),
+          assignees: (pr.assignees || []).map(person => person?.login).filter(Boolean),
+          // GitHub separa a quien se le pidio revision de quien ya reviso; la
+          // primera lista se vacia cuando esa persona responde, asi que sola
+          // no dice quien esta involucrado.
+          requestedReviewers: (pr.requested_reviewers || []).map(person => person?.login).filter(Boolean),
+          // mergeable es "no hay conflicto con la rama destino"; mergeableState
+          // ademas incorpora checks y revisiones — "unstable" es fusionable con
+          // algun check sin exito, y no es lo mismo que "dirty" (conflicto).
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state || null,
+          additions: pr.additions ?? null,
+          deletions: pr.deletions ?? null,
+          changedFiles: pr.changed_files ?? null,
+          commitCount: pr.commits ?? null,
+          comments: (pr.comments || 0) + (pr.review_comments || 0),
+          createdAt: pr.created_at,
+          updatedAt: pr.updated_at,
+          mergedAt: pr.merged_at || null,
+          webUrl: pr.html_url,
+          files: (files || []).map(file => ({
+            path: file.filename, status: file.status,
+            additions: file.additions, deletions: file.deletions,
+          })),
+          commits: (commits || []).map(commit => ({
+            sha: (commit.sha || "").slice(0, 8),
+            message: (commit.commit?.message || "").split("\n")[0],
+            author: commit.commit?.author?.name || commit.author?.login || null,
+            when: commit.commit?.author?.date || null,
+          })),
+          reviews: (reviews || [])
+            .filter(review => review.state !== "PENDING")
+            .map(review => ({
+              author: review.user?.login || null,
+              state: review.state,
+              when: review.submitted_at || null,
+            })),
+          checks: {
+            total: runs.length,
+            success: runs.filter(run => conclusionDe(run) === "success").length,
+            failed: runs.filter(run => ["failure", "timed_out", "cancelled", "action_required"].includes(conclusionDe(run))).length,
+            pending: runs.filter(run => conclusionDe(run) === "pending").length,
+            runs: runs.map(run => ({
+              name: run.name, status: run.status,
+              conclusion: conclusionDe(run), webUrl: run.html_url,
+            })),
+          },
+        };
+      },
+      async getIssue(cfg, id, number) {
+        const issue = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/issues/${number}`);
+        // Los comentarios son donde un issue se decide; sin ellos el detalle
+        // repite la fila con mas letras. Fallan por su cuenta: un hilo que no
+        // se puede leer no debe tumbar el resto del detalle.
+        const comentarios = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/issues/${number}/comments?per_page=100`)
+          .then(data => Array.isArray(data) ? data : [])
+          .catch(() => null);
+        return {
+          number: issue.number,
+          title: issue.title,
+          state: issue.state,
+          stateReason: issue.state_reason || null,
+          body: issue.body || "",
+          author: issue.user?.login || null,
+          authorAvatar: issue.user?.avatar_url || null,
+          assignees: (issue.assignees || []).map(person => person?.login).filter(Boolean),
+          labels: (issue.labels || []).map(label => typeof label === "string" ? label : label?.name).filter(Boolean),
+          milestone: issue.milestone?.title || null,
+          commentCount: issue.comments || 0,
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          closedAt: issue.closed_at || null,
+          webUrl: issue.html_url,
+          comments: (comentarios || []).map(comentario => ({
+            id: comentario.id,
+            author: comentario.user?.login || null,
+            body: comentario.body || "",
+            createdAt: comentario.created_at,
+          })),
+        };
+      },
+      async listIssues(cfg, id, state) {
+        const wanted = state === "closed" || state === "all" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/issues?state=${wanted}&per_page=50&sort=updated&direction=desc`);
+        const list = Array.isArray(data) ? data : [];
+        // GitHub modela sus pull requests como issues con la clave
+        // pull_request, asi que /issues los devuelve tambien. Se filtran o la
+        // pestana Issues repetiria entera la de Pull Requests.
+        return list.filter(issue => !issue.pull_request).map(issue => ({
+          number: issue.number,
+          title: issue.title,
+          state: issue.state,
+          author: issue.user?.login || null,
+          authorAvatar: issue.user?.avatar_url || null,
+          assignees: (issue.assignees || []).map(person => person?.login).filter(Boolean),
+          // Una etiqueta llega como objeto, o como string cuando se pidio con
+          // un token sin permiso para leer su color.
+          labels: (issue.labels || []).map(label => typeof label === "string" ? label : label?.name).filter(Boolean),
+          comments: issue.comments || 0,
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          webUrl: issue.html_url,
+        }));
+      },
       async listDependabotAlerts(cfg, id, state) {
         const qs = state ? `?state=${encodeURIComponent(state)}&per_page=100` : "?per_page=100";
         const data = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/dependabot/alerts${qs}`);
@@ -2334,6 +2621,48 @@ function registerReposRoutes({
   // GET /api/connectors/:provider/projects/:id/tree?ref=&source=remote|local
   // Flat list of files (blobs only). `source=local` reads the working copy, which
   // is the only view that shows edits that have not been pushed yet.
+  // GET /api/connectors/:provider/projects/:id/security-advisories
+  app.get("/api/connectors/:provider/projects/:id/security-advisories", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listSecurityAdvisories) return sendAppError(res, AppError.badRequest("security-advisories-not-supported"), req);
+    try {
+      res.json({ advisories: await p.adapter.listSecurityAdvisories(p.cfg, req.params.id) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/code-scanning-alerts?state=
+  app.get("/api/connectors/:provider/projects/:id/code-scanning-alerts", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listCodeScanningAlerts) return sendAppError(res, AppError.badRequest("code-scanning-not-supported"), req);
+    try {
+      res.json({ alerts: await p.adapter.listCodeScanningAlerts(p.cfg, req.params.id, req.query.state) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // Detalle de un aviso, por fuente. Cada una responde la misma forma.
+  for (const [ruta, metodo, parametro] of [
+    ["security-advisories/:advisoryId", "getSecurityAdvisory", "advisoryId"],
+    ["code-scanning-alerts/:alertNumber", "getCodeScanningAlert", "alertNumber"],
+    ["dependabot-alerts/:alertNumber", "getDependabotAlert", "alertNumber"],
+  ]) {
+    app.get(`/api/connectors/:provider/projects/:id/${ruta}`, requireAuth, async (req, res) => {
+      const p = requireProvider(req, res);
+      if (!p) return;
+      if (!p.adapter[metodo]) return sendAppError(res, AppError.badRequest("advisory-detail-not-supported"), req);
+      try {
+        res.json(await p.adapter[metodo](p.cfg, req.params.id, req.params[parametro]));
+      } catch (err) {
+        sendProviderFailure(res, err, req);
+      }
+    });
+  }
+
   app.get("/api/connectors/:provider/projects/:id/tree", requireAuth, async (req, res) => {
     if (req.query.source === "local") {
       const localClone = requireLocalClone(req, res);
@@ -2478,6 +2807,54 @@ function registerReposRoutes({
     if (!p.adapter.listPipelines) return sendAppError(res, AppError.badRequest("pipelines-not-supported"), req);
     try {
       res.json({ pipelines: await p.adapter.listPipelines(p.cfg, req.params.id, ref) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/pull-requests?state=open|closed|all
+  app.get("/api/connectors/:provider/projects/:id/pull-requests", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listPullRequests) return sendAppError(res, AppError.badRequest("pull-requests-not-supported"), req);
+    try {
+      res.json({ pullRequests: await p.adapter.listPullRequests(p.cfg, req.params.id, req.query.state) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/pull-requests/:number — detalle.
+  app.get("/api/connectors/:provider/projects/:id/pull-requests/:number", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.getPullRequest) return sendAppError(res, AppError.badRequest("pull-requests-not-supported"), req);
+    try {
+      res.json(await p.adapter.getPullRequest(p.cfg, req.params.id, req.params.number));
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/issues/:number — detalle.
+  app.get("/api/connectors/:provider/projects/:id/issues/:number", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.getIssue) return sendAppError(res, AppError.badRequest("issues-not-supported"), req);
+    try {
+      res.json(await p.adapter.getIssue(p.cfg, req.params.id, req.params.number));
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/issues?state=open|closed|all
+  app.get("/api/connectors/:provider/projects/:id/issues", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listIssues) return sendAppError(res, AppError.badRequest("issues-not-supported"), req);
+    try {
+      res.json({ issues: await p.adapter.listIssues(p.cfg, req.params.id, req.query.state) });
     } catch (err) {
       sendProviderFailure(res, err, req);
     }

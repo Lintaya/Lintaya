@@ -258,6 +258,89 @@ test("pipeline routes return RFC 9457 validation details", async (t) => {
   assert.equal(missingRef.body.detail, "ref-required");
 });
 
+test("advisory detail routes exist for each source and refuse an adapter that lacks them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+
+  for (const [ruta, parametros] of [
+    ["security-advisories/:advisoryId", { advisoryId: "GHSA-xxxx" }],
+    ["code-scanning-alerts/:alertNumber", { alertNumber: "1" }],
+    ["dependabot-alerts/:alertNumber", { alertNumber: "1" }],
+  ]) {
+    const respuesta = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${ruta}`, {
+      params: { provider: "bitbucket", id: "team/repo", ...parametros },
+    });
+    assert.equal(respuesta.status, 400, `${ruta} debe contestar, no faltar`);
+    assert.equal(respuesta.body.detail, "advisory-detail-not-supported");
+  }
+});
+
+test("advisory routes validate the connector and report which providers implement them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+
+  for (const resource of ["security-advisories", "code-scanning-alerts"]) {
+    const missingConfig = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${resource}`, {
+      params: { provider: "github", id: "owner/repo" },
+    });
+    assert.equal(missingConfig.status, 400);
+    assert.equal(missingConfig.body.detail, "connector-not-configured");
+  }
+
+  // Bitbucket resuelve a un adaptador real que no declara estos metodos.
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+  const advisories = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/security-advisories", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(advisories.status, 400);
+  assert.equal(advisories.body.detail, "security-advisories-not-supported");
+
+  const scanning = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/code-scanning-alerts", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(scanning.status, 400);
+  assert.equal(scanning.body.detail, "code-scanning-not-supported");
+});
+
+test("pull request and issue routes validate the connector and the provider", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+
+  for (const resource of ["pull-requests", "issues"]) {
+    const missingConfig = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${resource}`, {
+      params: { provider: "github", id: "owner/repo" },
+    });
+    assert.equal(missingConfig.status, 400);
+    assert.equal(missingConfig.body.detail, "connector-not-configured");
+  }
+
+  const unknownProvider = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/pull-requests", {
+    params: { provider: "not-a-provider", id: "owner/repo" },
+  });
+  assert.equal(unknownProvider.status, 404);
+});
+
+test("pull requests and issues report which providers implement them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  // Bitbucket resuelve a un adaptador real que no declara estos metodos: la
+  // ruta debe decir "no soportado aqui" y no romperse llamando a undefined.
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+
+  const pulls = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/pull-requests", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(pulls.status, 400);
+  assert.equal(pulls.body.detail, "pull-requests-not-supported");
+
+  const issues = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/issues", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(issues.status, 400);
+  assert.equal(issues.body.detail, "issues-not-supported");
+});
+
 test("editing a GitLab project rejects other providers, empty bodies, and never leaks the slug through", async (t) => {
   const harness = setup();
   t.after(() => harness.cleanup());

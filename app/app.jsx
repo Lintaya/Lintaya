@@ -672,7 +672,8 @@ function App() {
       const saved = JSON.parse(localStorage.getItem("hq.navOrder") || "null");
       if (!Array.isArray(saved)) return null;
       const known = NAV_ROUTES.map(r => r.id);
-      return [...saved.filter(id => known.includes(id)), ...known.filter(id => !saved.includes(id))];
+      const isSurface = id => id.startsWith("dashboard:") || id.startsWith("page:");
+      return [...saved.filter(id => known.includes(id) || isSurface(id)), ...known.filter(id => !saved.includes(id))];
     } catch { return null; }
   });
   const [connectorModules, setConnectorModules] = useState([]);
@@ -693,6 +694,94 @@ function App() {
     localStorage.setItem("hq.navOrder", JSON.stringify(nextIds));
     setNavOrderIds(nextIds);
   }
+  // Ocultar desde el menu contextual. Cada entrada se apaga donde su
+  // visibilidad vive de verdad, para que siempre haya de donde recuperarla: una
+  // ruta core en Ajustes -> Navegacion, y un Board o Dashboard desde el boton
+  // "mostrar en sidebar" de su propio editor. Guardar la de un Board en
+  // hiddenRoutes lo dejaria oculto sin ninguna pantalla que lo liste.
+  function hideSidebarEntry(id) {
+    const surface = id.startsWith("dashboard:") ? ["dashboards", id.slice("dashboard:".length)]
+      : id.startsWith("page:") ? ["module-pages", id.slice("page:".length)]
+      : null;
+    if (!surface) { toggleRoute(id, false); return; }
+    const [collection, recordId] = surface;
+    // El PUT hace merge parcial, asi que mandar solo esta bandera no toca
+    // titulo, arbol ni etiquetas del registro.
+    window.HQ_API.request(`/api/${collection}/${recordId}`, { method: "PUT", body: { showInSidebar: false } })
+      .then(() => window.dispatchEvent(new Event(`hq:${collection}-changed`)))
+      .catch(() => {});
+  }
+
+  // Subir/bajar desde el menu contextual, con la misma regla que Ajustes ->
+  // Navegacion: un grupo se mueve entero y un hijo solo se mueve dentro de su
+  // grupo, porque sacarlo lo dejaria en un grupo al que no pertenece. Solo
+  // aplica a rutas core: el orden de Boards y Dashboards no sale de aqui.
+  function moveNavEntry(id, direction, visibleIds) {
+    const core = NAV_ROUTES.map(route => route.id);
+    // Un Board o un Dashboard no es una ruta declarada: su id se arma con el
+    // registro que lo respalda, y su sitio en el menu es una preferencia de
+    // navegacion mas, igual que la de las secciones fijas.
+    const isSurface = candidate => candidate.startsWith("dashboard:") || candidate.startsWith("page:");
+    if (!core.includes(id) && !isSurface(id)) return;
+    const displayed = Array.isArray(visibleIds) ? visibleIds : [];
+    const base = navOrderIds && navOrderIds.length
+      ? navOrderIds.filter(candidate => core.includes(candidate) || isSurface(candidate))
+      : core.slice().sort((left, right) => (CORE_NAV_ORDER[left] ?? 200) - (CORE_NAV_ORDER[right] ?? 200));
+    const ids = [...base, ...core.filter(candidate => !base.includes(candidate))];
+    // Una superficie que todavia no este en el orden guardado se inserta donde
+    // el sidebar la esta pintando: asi el primer movimiento parte de lo que el
+    // usuario ve y no de un hueco arbitrario al final de la lista.
+    displayed.forEach((candidate, index) => {
+      if (!isSurface(candidate) || ids.includes(candidate)) return;
+      const previous = displayed.slice(0, index).reverse().find(earlier => ids.includes(earlier));
+      ids.splice(previous ? ids.indexOf(previous) + 1 : 0, 0, candidate);
+    });
+    const visible = new Set(displayed.length ? displayed.filter(candidate => ids.includes(candidate)) : ids);
+    const groupOf = new Map();
+    SIDEBAR_NAV_GROUPS.forEach(group => group.children.forEach(child => groupOf.set(child, group)));
+
+    // Un grupo con un solo hijo visible se pinta como una entrada suelta (ver
+    // navList mas abajo), asi que tambien se mueve como tal: dentro del grupo no
+    // hay con quien intercambiarse y "Subir" no haria nada. Es el caso normal
+    // aqui, donde Infra solo muestra Devices y Workspace solo un repositorio.
+    const group = groupOf.get(id);
+    const siblings = group ? ids.filter(candidate => groupOf.get(candidate) === group && visible.has(candidate)) : [];
+    if (group && siblings.length > 1) {
+      const at = siblings.indexOf(id);
+      const to = at + direction;
+      if (to < 0 || to >= siblings.length) return;
+      // Se intercambian los dos hermanos donde esten en la lista completa: los
+      // que no se ven conservan su hueco en vez de arrastrarse con el cambio.
+      const next = ids.slice();
+      const from = next.indexOf(id), into = next.indexOf(siblings[to]);
+      [next[from], next[into]] = [next[into], next[from]];
+      reorderNav(next);
+      return;
+    }
+
+    // Nodos de primer nivel: una ruta suelta, una superficie, o el bloque
+    // entero de un grupo.
+    const nodes = [];
+    const placed = new Set();
+    for (const candidate of ids) {
+      const candidateGroup = groupOf.get(candidate);
+      if (!candidateGroup) { nodes.push([candidate]); continue; }
+      if (placed.has(candidateGroup.id)) continue;
+      placed.add(candidateGroup.id);
+      nodes.push(ids.filter(member => groupOf.get(member) === candidateGroup));
+    }
+    // Un nodo sin ninguna entrada visible no cuenta como vecino: saltar a el
+    // guardaria un orden distinto sin mover nada en pantalla.
+    const visibleNodes = nodes.filter(node => node.some(member => visible.has(member)));
+    const at = visibleNodes.findIndex(node => node.includes(id));
+    const to = at + direction;
+    if (at < 0 || to < 0 || to >= visibleNodes.length) return;
+    const next = nodes.slice();
+    const from = nodes.indexOf(visibleNodes[at]), into = nodes.indexOf(visibleNodes[to]);
+    [next[from], next[into]] = [next[into], next[from]];
+    reorderNav(next.flat());
+  }
+
   useEffect(() => {
     const loadConnectorModules = () => {
       window.HQ_API.request("/api/connectors/modules")
@@ -1147,6 +1236,8 @@ function App() {
           profileRole={tweaks.profileRole || t("profile.defaultRole")}
           hiddenRoutes={hiddenRoutes}
           navOrderIds={navOrderIds}
+          onHideEntry={hideSidebarEntry}
+          onMoveEntry={moveNavEntry}
           connectorModules={connectorModules}
           modulePages={modulePages}
           dashboards={dashboards}
@@ -1172,7 +1263,7 @@ function App() {
       {isMobile && mobileNavOpen && (
         <div className="mobile-drawer-backdrop" onClick={() => setMobileNavOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.48)", zIndex: 80 }}>
           <div className="mobile-drawer" role="dialog" aria-modal="true" aria-label={t("shell.primaryNav")} onClick={e => e.stopPropagation()} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 288, maxWidth: "86vw", background: "var(--surface)", boxShadow: "8px 0 28px -12px rgba(0,0,0,.4)", overflow: "hidden" }}>
-            <Sidebar profileName={tweaks.profileName || DEFAULT_PROFILE.name} profileRole={tweaks.profileRole || t("profile.defaultRole")} route={route} setRoute={setRoute} onClose={() => setMobileNavOpen(false)} onOpenCmd={() => { setMobileNavOpen(false); setCmdOpen(true); }} style="spacious" dark={!!tweaks.dark} hiddenRoutes={hiddenRoutes} navOrderIds={navOrderIds} connectorModules={connectorModules} modulePages={modulePages} dashboards={dashboards} sshSessions={sshSessions} sshSessionStatuses={sshSessionStatuses} onFocusSession={handleFocusSSHSession} dynamicBadges={{ vms: liveVMs ? String(liveVMs.filter(v => v.monitoringEnabled !== false).length) : "", hosts: liveHosts ? String(liveHosts.length) : "", devices: deviceCount > 0 ? String(deviceCount) : "", connectors: connectorCount > 0 ? String(connectorCount) : "", calls: callsCount > 0 ? String(callsCount) : "", containers: containersCount > 0 ? String(containersCount) : "", blockCatalog: blockCatalogCount > 0 ? String(blockCatalogCount) : "", approvals: pendingApprovalCount > 0 ? String(pendingApprovalCount) : "", tags: tagCount > 0 ? String(tagCount) : "" }} />
+            <Sidebar profileName={tweaks.profileName || DEFAULT_PROFILE.name} profileRole={tweaks.profileRole || t("profile.defaultRole")} route={route} setRoute={setRoute} onClose={() => setMobileNavOpen(false)} onOpenCmd={() => { setMobileNavOpen(false); setCmdOpen(true); }} style="spacious" dark={!!tweaks.dark} hiddenRoutes={hiddenRoutes} navOrderIds={navOrderIds} onHideEntry={hideSidebarEntry} onMoveEntry={moveNavEntry} connectorModules={connectorModules} modulePages={modulePages} dashboards={dashboards} sshSessions={sshSessions} sshSessionStatuses={sshSessionStatuses} onFocusSession={handleFocusSSHSession} dynamicBadges={{ vms: liveVMs ? String(liveVMs.filter(v => v.monitoringEnabled !== false).length) : "", hosts: liveHosts ? String(liveHosts.length) : "", devices: deviceCount > 0 ? String(deviceCount) : "", connectors: connectorCount > 0 ? String(connectorCount) : "", calls: callsCount > 0 ? String(callsCount) : "", containers: containersCount > 0 ? String(containersCount) : "", blockCatalog: blockCatalogCount > 0 ? String(blockCatalogCount) : "", approvals: pendingApprovalCount > 0 ? String(pendingApprovalCount) : "", tags: tagCount > 0 ? String(tagCount) : "" }} />
           </div>
         </div>
       )}
@@ -1356,7 +1447,7 @@ function App() {
   );
 }
 
-function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hiddenRoutes = [], navOrderIds = null, onToggleCollapse, dynamicBadges = {},
+function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hiddenRoutes = [], navOrderIds = null, onHideEntry, onMoveEntry, onToggleCollapse, dynamicBadges = {},
   connectorModules = [], modulePages = [], dashboards = [], profileName = DEFAULT_PROFILE.name, profileRole = window.I18N.t("profile.defaultRole"),
   sshSessions = [], sshSessionStatuses = {}, onFocusSession }) {
   const locale = window.I18N.useLocale();
@@ -1369,6 +1460,10 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
   // Ancho arrastrable del modo spacious — mismo patrón que ResizeHandle /
   // useResizableWidth de repos.jsx, guardado aparte de compact/spacious
   // (ese toggle solo elige el PRESET; esto es el ancho fino dentro de él).
+  // Menu contextual del sidebar: { id, label, x, y }. Es un segundo acceso a lo
+  // que ya hacen Ajustes -> Navegacion y el boton "mostrar en sidebar" de cada
+  // Board, no un almacenamiento nuevo.
+  const [navMenu, setNavMenu] = useState(null);
   const [openGroups, setOpenGroups] = useState(
     () => SIDEBAR_NAV_GROUPS.filter(g => g.children.includes(route)).map(g => g.id)
   );
@@ -1511,13 +1606,13 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
     badge: String(dashboard.boardIds?.length || ""),
     // User dashboards belong with the Builder surfaces, immediately after
     // Devices, instead of being pushed to the bottom of the sidebar.
-    navOrder: 64 + i,
+    navOrder: coreNavRank?.[`dashboard:${dashboard.id}`] ?? (64 + i),
   })), ...modulePages.filter(page => page.active && page.showInSidebar !== false).map((page, i) => ({
     id: `page:${page.id}`,
     label: page.title,
     icon: ICONS[page.icon] || ICONS.grid,
     badge: "",
-    navOrder: 65 + i,
+    navOrder: coreNavRank?.[`page:${page.id}`] ?? (65 + i),
   }))].sort((left, right) => left.navOrder - right.navOrder || left.label.localeCompare(right.label));
   const items = allItems
     .filter(it => !hiddenRoutes.includes(it.id))
@@ -1730,6 +1825,11 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
             <React.Fragment key={it.id}>
               <button
                 onClick={() => setRoute(it.id)}
+                onContextMenu={event => {
+                  if (!onHideEntry && !onMoveEntry) return;
+                  event.preventDefault();
+                  setNavMenu({ id: it.id, label: it.label, x: event.clientX, y: event.clientY });
+                }}
                 title={compact ? it.label : ""}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
@@ -1864,6 +1964,30 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
         )}
       </div>
     </aside>
+    {navMenu && (() => {
+      // Reordenar solo vale para las rutas core y para Boards y Dashboards: una
+      // entrada publicada por un conector toma su sitio del conector. Y solo se
+      // ofrece ocultar lo que se puede volver a mostrar desde algun sitio.
+      const esRutaCore = NAV_ROUTES.some(route => route.id === navMenu.id);
+      const esSuperficiePropia = navMenu.id.startsWith("dashboard:") || navMenu.id.startsWith("page:");
+      const sePuedeMover = (esRutaCore || esSuperficiePropia) && !!onMoveEntry;
+      const visibles = () => items.map(item => item.id);
+      return (
+        <window.LintayaContextMenu
+          x={navMenu.x} y={navMenu.y} label={navMenu.label}
+          onClose={() => setNavMenu(null)}
+          options={[
+            { clave: "up", etiqueta: t("nav.ctx.moveUp", "Move up"), activa: sePuedeMover,
+              motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, -1, visibles()) },
+            { clave: "down", etiqueta: t("nav.ctx.moveDown", "Move down"), activa: sePuedeMover,
+              motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, 1, visibles()) },
+            { clave: "hide", etiqueta: t("nav.ctx.hide", "Hide from menu"), separar: true,
+              activa: (esRutaCore || esSuperficiePropia) && !!onHideEntry,
+              motivo: t("nav.ctx.hideUnavailable", ""), hacer: () => onHideEntry(navMenu.id) },
+          ]}
+        />
+      );
+    })()}
     {showResizeHandle && <ResizeHandle onMouseDown={onSidebarResizeStart} />}
     </>
   );

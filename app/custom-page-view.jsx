@@ -15,11 +15,12 @@ function clampBoardRatio(value) {
   return Math.min(BOARD_MAX_RATIO, Math.max(BOARD_MIN_RATIO, value));
 }
 
-function BoardResizeSeparator({ vertical, ratio, onPointerDown, onKeyDown }) {
+function BoardResizeSeparator({ vertical, ratio, onPointerDown, onKeyDown, className }) {
   const [active, setActive] = useState(false);
   const percent = Math.round(ratio * 100);
   return (
     <div
+      className={className}
       role="separator"
       tabIndex={0}
       aria-orientation={vertical ? "vertical" : "horizontal"}
@@ -205,6 +206,9 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
   const focusAfterClose = useRef(null);
   const [saveState, setSaveState] = useState("idle");
   const [modalDoc, setModalDoc] = useState(null);
+  const [modalPR, setModalPR] = useState(null);
+  const [modalCommit, setModalCommit] = useState(null);
+  const [modalIssue, setModalIssue] = useState(null);
   const sectionRef = useRef(null);
   const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < BOARD_MOBILE_BREAKPOINT);
 
@@ -285,6 +289,20 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
       updatedAt: item.timestamp, absoluteUrl: item.url,
     }),
   };
+  // Mismo trato que en Home: el block de pull requests abre su modal. El
+  // catálogo trae los blocks colocados en este Board, con su conexión.
+  (blockCatalog || []).forEach(candidate => {
+    if ((candidate.connectorType || candidate.connectorId) !== "github") return;
+    if (candidate.blockId === "open-pull-requests") {
+      blockItemHandlers[candidate.id] = item => setModalPR({ ...item, connectorId: candidate.connectorId });
+    }
+    if (candidate.blockId === "recent-commits") {
+      blockItemHandlers[candidate.id] = item => setModalCommit({ ...item, connectorId: candidate.connectorId });
+    }
+    if (candidate.blockId === "open-issues") {
+      blockItemHandlers[candidate.id] = item => setModalIssue({ ...item, connectorId: candidate.connectorId });
+    }
+  });
 
   const blockCount = window.ZoneTree.countBlocks(tree);
   const openEditor = () => onEdit?.({ ...page, tree });
@@ -331,8 +349,14 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
       )}
 
       {modalDoc && <window.DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
+      {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
+      {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
+      {modalIssue && window.IssueDetailModal && <window.IssueDetailModal issue={modalIssue} onClose={() => setModalIssue(null)} />}
     </section>
   );
 }
 
 window.CustomPageView = CustomPageView;
+// Home reusa el separador de zonas para que ambas pantallas se vean y se
+// manejen igual; su geometria no depende del arbol de zonas del Dashboard.
+window.BoardResizeSeparator = BoardResizeSeparator;
