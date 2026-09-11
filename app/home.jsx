@@ -742,6 +742,8 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   const qportalConfigured = !!connStatus?.qportal?.configured;
 
   const [modalDoc, setModalDoc] = useState(null);
+  const [modalPR, setModalPR] = useState(null);
+  const [modalCommit, setModalCommit] = useState(null);
 
   // Qportal data
   const [qpData, setQpData]       = useState(null);
@@ -1039,6 +1041,8 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
 
       {/* Draggable panel grid */}
       {modalDoc && <DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
+      {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
+      {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
 
       {(() => {
         // Panel content definitions
@@ -1360,6 +1364,21 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
             updatedAt: item.timestamp, absoluteUrl: item.url,
           }),
         };
+        // Un block de pull requests abre su detalle en un modal en vez de
+        // mandarte a GitHub. La clave lleva el id de la conexión, no el tipo:
+        // una segunda conexión GitHub tiene sus propios blocks.
+        // Se filtra tambien por tipo de conector, no solo por blockId: GitLab
+        // declara su propio "recent-commits" y no tiene la ruta de detalle, asi
+        // que capturarle el click lo llevaria a un 404 en vez de a GitHub.
+        connectorBlocks.forEach(candidate => {
+          if ((candidate.connectorType || candidate.connectorId) !== "github") return;
+          if (candidate.blockId === "open-pull-requests") {
+            blockItemHandlers[candidate.id] = item => setModalPR({ ...item, connectorId: candidate.connectorId });
+          }
+          if (candidate.blockId === "recent-commits") {
+            blockItemHandlers[candidate.id] = item => setModalCommit({ ...item, connectorId: candidate.connectorId });
+          }
+        });
 
         // Blocks declarados por conectores — genéricos, salvo que alguien haya
         // registrado un componente propio en window.HomeBlocks.

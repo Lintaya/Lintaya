@@ -2078,6 +2078,135 @@ function registerReposRoutes({
       // differently-shaped dependency-scanning APIs, not covered here).
       // Needs the token to carry `security_events` (classic PAT) or
       // "Dependabot alerts: read" (fine-grained PAT); GitHub 403s otherwise.
+      // Pull requests e issues — GitHub-only por ahora, igual que las alertas
+      // de Dependabot de abajo: GitLab llama "merge requests" a lo mismo con
+      // otra forma de respuesta, y Bitbucket Cloud y Server difieren entre si.
+      // Las rutas responden "<recurso>-not-supported" donde no este declarado,
+      // asi que agregar un proveedor es agregar su metodo y nada mas.
+      async listPullRequests(cfg, id, state) {
+        const wanted = state === "closed" || state === "all" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/pulls?state=${wanted}&per_page=50&sort=updated&direction=desc`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(pr => ({
+          number: pr.number,
+          title: pr.title,
+          // GitHub marca como "closed" tanto el PR fusionado como el
+          // descartado, y solo los distingue por merged_at. Sin esto la lista
+          // leeria igual un trabajo aceptado y uno tirado a la basura.
+          state: pr.merged_at ? "merged" : pr.state,
+          draft: !!pr.draft,
+          author: pr.user?.login || null,
+          authorAvatar: pr.user?.avatar_url || null,
+          sourceBranch: pr.head?.ref || null,
+          targetBranch: pr.base?.ref || null,
+          labels: (pr.labels || []).map(label => label?.name).filter(Boolean),
+          createdAt: pr.created_at,
+          updatedAt: pr.updated_at,
+          webUrl: pr.html_url,
+        }));
+      },
+      // Detalle de un pull request: lo que la fila de la lista no trae —
+      // descripcion, si se puede fusionar, cuanto cambia, revisiones y checks.
+      async getPullRequest(cfg, id, number) {
+        const pr = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}`);
+        // Las cuatro listas de apoyo son independientes y ninguna es
+        // imprescindible: un token sin permiso para leer checks no debe tumbar
+        // el detalle entero, asi que cada una cae a vacio por su cuenta.
+        const opcional = promesa => promesa.then(data => Array.isArray(data) ? data : data || null).catch(() => null);
+        const [files, commits, reviews, checks] = await Promise.all([
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/files?per_page=100`)),
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/commits?per_page=100`)),
+          opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/pulls/${number}/reviews?per_page=100`)),
+          pr.head?.sha
+            ? opcional(githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/commits/${pr.head.sha}/check-runs?per_page=100`))
+            : Promise.resolve(null),
+        ]);
+        const runs = Array.isArray(checks?.check_runs) ? checks.check_runs : [];
+        const conclusionDe = run => run.status !== "completed" ? "pending" : (run.conclusion || "pending");
+        return {
+          number: pr.number,
+          title: pr.title,
+          state: pr.merged_at ? "merged" : pr.state,
+          draft: !!pr.draft,
+          body: pr.body || "",
+          author: pr.user?.login || null,
+          authorAvatar: pr.user?.avatar_url || null,
+          sourceBranch: pr.head?.ref || null,
+          targetBranch: pr.base?.ref || null,
+          labels: (pr.labels || []).map(label => label?.name).filter(Boolean),
+          assignees: (pr.assignees || []).map(person => person?.login).filter(Boolean),
+          // GitHub separa a quien se le pidio revision de quien ya reviso; la
+          // primera lista se vacia cuando esa persona responde, asi que sola
+          // no dice quien esta involucrado.
+          requestedReviewers: (pr.requested_reviewers || []).map(person => person?.login).filter(Boolean),
+          // mergeable es "no hay conflicto con la rama destino"; mergeableState
+          // ademas incorpora checks y revisiones — "unstable" es fusionable con
+          // algun check sin exito, y no es lo mismo que "dirty" (conflicto).
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state || null,
+          additions: pr.additions ?? null,
+          deletions: pr.deletions ?? null,
+          changedFiles: pr.changed_files ?? null,
+          commitCount: pr.commits ?? null,
+          comments: (pr.comments || 0) + (pr.review_comments || 0),
+          createdAt: pr.created_at,
+          updatedAt: pr.updated_at,
+          mergedAt: pr.merged_at || null,
+          webUrl: pr.html_url,
+          files: (files || []).map(file => ({
+            path: file.filename, status: file.status,
+            additions: file.additions, deletions: file.deletions,
+          })),
+          commits: (commits || []).map(commit => ({
+            sha: (commit.sha || "").slice(0, 8),
+            message: (commit.commit?.message || "").split("\n")[0],
+            author: commit.commit?.author?.name || commit.author?.login || null,
+            when: commit.commit?.author?.date || null,
+          })),
+          reviews: (reviews || [])
+            .filter(review => review.state !== "PENDING")
+            .map(review => ({
+              author: review.user?.login || null,
+              state: review.state,
+              when: review.submitted_at || null,
+            })),
+          checks: {
+            total: runs.length,
+            success: runs.filter(run => conclusionDe(run) === "success").length,
+            failed: runs.filter(run => ["failure", "timed_out", "cancelled", "action_required"].includes(conclusionDe(run))).length,
+            pending: runs.filter(run => conclusionDe(run) === "pending").length,
+            runs: runs.map(run => ({
+              name: run.name, status: run.status,
+              conclusion: conclusionDe(run), webUrl: run.html_url,
+            })),
+          },
+        };
+      },
+      async listIssues(cfg, id, state) {
+        const wanted = state === "closed" || state === "all" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/issues?state=${wanted}&per_page=50&sort=updated&direction=desc`);
+        const list = Array.isArray(data) ? data : [];
+        // GitHub modela sus pull requests como issues con la clave
+        // pull_request, asi que /issues los devuelve tambien. Se filtran o la
+        // pestana Issues repetiria entera la de Pull Requests.
+        return list.filter(issue => !issue.pull_request).map(issue => ({
+          number: issue.number,
+          title: issue.title,
+          state: issue.state,
+          author: issue.user?.login || null,
+          authorAvatar: issue.user?.avatar_url || null,
+          assignees: (issue.assignees || []).map(person => person?.login).filter(Boolean),
+          // Una etiqueta llega como objeto, o como string cuando se pidio con
+          // un token sin permiso para leer su color.
+          labels: (issue.labels || []).map(label => typeof label === "string" ? label : label?.name).filter(Boolean),
+          comments: issue.comments || 0,
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          webUrl: issue.html_url,
+        }));
+      },
       async listDependabotAlerts(cfg, id, state) {
         const qs = state ? `?state=${encodeURIComponent(state)}&per_page=100` : "?per_page=100";
         const data = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/dependabot/alerts${qs}`);
@@ -2431,6 +2560,42 @@ function registerReposRoutes({
     if (!p.adapter.listPipelines) return sendAppError(res, AppError.badRequest("pipelines-not-supported"), req);
     try {
       res.json({ pipelines: await p.adapter.listPipelines(p.cfg, req.params.id, ref) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/pull-requests?state=open|closed|all
+  app.get("/api/connectors/:provider/projects/:id/pull-requests", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listPullRequests) return sendAppError(res, AppError.badRequest("pull-requests-not-supported"), req);
+    try {
+      res.json({ pullRequests: await p.adapter.listPullRequests(p.cfg, req.params.id, req.query.state) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/pull-requests/:number — detalle.
+  app.get("/api/connectors/:provider/projects/:id/pull-requests/:number", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.getPullRequest) return sendAppError(res, AppError.badRequest("pull-requests-not-supported"), req);
+    try {
+      res.json(await p.adapter.getPullRequest(p.cfg, req.params.id, req.params.number));
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/issues?state=open|closed|all
+  app.get("/api/connectors/:provider/projects/:id/issues", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listIssues) return sendAppError(res, AppError.badRequest("issues-not-supported"), req);
+    try {
+      res.json({ issues: await p.adapter.listIssues(p.cfg, req.params.id, req.query.state) });
     } catch (err) {
       sendProviderFailure(res, err, req);
     }

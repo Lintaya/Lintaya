@@ -62,6 +62,7 @@ async function syncGithub(cfg, options = {}) {
 
   const allDeployments = [];
   const allCommits = [];
+  const allPullRequests = [];
   const projects = await Promise.all(repoList.map(async (repository) => {
     const owner = repository.owner?.login || String(repository.full_name || "").split("/")[0];
     const name = repository.name;
@@ -133,7 +134,26 @@ async function syncGithub(cfg, options = {}) {
         cfg.token,
         `/repos/${owner}/${name}/pulls?state=open&per_page=100`,
       );
-      openMRs = Array.isArray(pullRequests) ? pullRequests.length : 0;
+      const list = Array.isArray(pullRequests) ? pullRequests : [];
+      openMRs = list.length;
+      // Esta llamada ya se hacía para contar; quedarse con la lista no cuesta
+      // ninguna petición extra y es lo que alimenta el block de pull requests.
+      for (const pullRequest of list) {
+        allPullRequests.push({
+          id: `${repository.full_name}#${pullRequest.number}`,
+          number: pullRequest.number,
+          title: pullRequest.title,
+          projectId: repository.full_name,
+          projectName: repository.name,
+          draft: !!pullRequest.draft,
+          author: pullRequest.user?.login || null,
+          sourceBranch: pullRequest.head?.ref || null,
+          targetBranch: pullRequest.base?.ref || null,
+          createdAt: pullRequest.created_at,
+          updatedAt: pullRequest.updated_at,
+          webUrl: pullRequest.html_url,
+        });
+      }
     } catch {}
 
     // GitHub's tags endpoint isn't date-sorted, so a plain tag list can't
@@ -178,8 +198,9 @@ async function syncGithub(cfg, options = {}) {
 
   allDeployments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   allCommits.sort((a, b) => new Date(b.date) - new Date(a.date));
+  allPullRequests.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   return {
-    projects, deployments: allDeployments, commits: allCommits,
+    projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests,
     pagination: { projects: { pages: repositoryPages.pageCount, truncated: repositoryPages.truncated } },
   };
 }

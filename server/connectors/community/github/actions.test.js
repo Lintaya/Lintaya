@@ -92,14 +92,52 @@ test("github.status rejects unexpected input per its inputSchema", async () => {
   );
 });
 
-test("registerGithubActions registers exactly its three actions, all under connectorTypeId github", () => {
+test("registerGithubActions registers exactly its four actions, all under connectorTypeId github", () => {
   const registry = createActionRegistry();
   registerGithubActions({ registry, request: async () => ({}), sync: async () => ({ projects: [], deployments: [], commits: [] }) });
   const actions = registry.listActionsForType("github");
-  assert.deepEqual(actions.map((a) => a.id).sort(), ["create-repository", "status", "sync"]);
+  assert.deepEqual(actions.map((a) => a.id).sort(), ["approve-pull-request", "create-repository", "status", "sync"]);
   assert.equal(registry.getAction("github", "status").effect, "read");
   assert.equal(registry.getAction("github", "sync").effect, "write");
   assert.equal(registry.getAction("github", "create-repository").effect, "write");
+  // Aprobar escribe en el proveedor, pero no destruye nada y se puede retirar
+  // desde GitHub: "write", no "destructive", que exigiria Approval Center.
+  assert.equal(registry.getAction("github", "approve-pull-request").effect, "write");
+});
+
+test("github.approve-pull-request submits an APPROVE review and validates its input", async () => {
+  let calledWith = null;
+  const { executeAction } = setup({
+    seed: { "connector-config-github": { baseUrl: "https://api.github.com", token: "t" } },
+    request: async (baseUrl, token, path, method, body) => {
+      calledWith = { path, method, body };
+      return { id: 99, state: "APPROVED", user: { login: "reviewer" },
+        submitted_at: "2026-09-11T10:00:00Z", html_url: "https://github.com/octo/lintaya/pull/10#pullrequestreview-99" };
+    },
+  });
+
+  const result = await executeAction({
+    connectionId: "github", actionId: "approve-pull-request",
+    input: { project: "octo/lintaya", number: 10, body: "looks good" },
+  });
+
+  assert.deepEqual(calledWith, {
+    path: "/repos/octo/lintaya/pulls/10/reviews",
+    method: "POST",
+    body: { event: "APPROVE", body: "looks good" },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.result.state, "APPROVED");
+  assert.equal(result.result.reviewer, "reviewer");
+
+  // Sin repositorio no hay a quien aprobar: el esquema tiene que frenarlo antes
+  // de que salga una peticion.
+  calledWith = null;
+  await assert.rejects(
+    () => executeAction({ connectionId: "github", actionId: "approve-pull-request", input: { number: 10 } }),
+    (error) => error.code === "BAD_REQUEST",
+  );
+  assert.equal(calledWith, null, "una entrada invalida no llega al proveedor");
 });
 
 test("github.create-repository posts through the real client function", async () => {

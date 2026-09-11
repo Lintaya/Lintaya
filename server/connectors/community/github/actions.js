@@ -61,6 +61,30 @@ const CREATE_REPOSITORY_OUTPUT_SCHEMA = {
   },
 };
 
+const APPROVE_PULL_REQUEST_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["project", "number"],
+  properties: {
+    project: { type: "string", minLength: 1, description: "Repository as owner/name." },
+    number: { type: "integer", minimum: 1 },
+    body: { type: "string", description: "Optional comment to submit with the approval." },
+  },
+};
+
+const APPROVE_PULL_REQUEST_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["state"],
+  properties: {
+    id: { type: ["integer", "null"] },
+    state: { type: "string" },
+    reviewer: { type: ["string", "null"] },
+    submittedAt: { type: ["string", "null"] },
+    webUrl: { type: ["string", "null"] },
+  },
+};
+
 function registerGithubActions({
   registry,
   request = githubRequest,
@@ -94,9 +118,9 @@ function registerGithubActions({
     outputSchema: SYNC_OUTPUT_SCHEMA,
     handler: async ({ services }) => {
       const cfg = services.store.getConfig();
-      const { projects, deployments, commits } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests } = await sync(cfg, { request });
       const syncedAt = isoNow();
-      services.store.setData({ projects, deployments, commits, syncedAt });
+      services.store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], syncedAt });
       services.store.setStatus({
         status: "ok",
         lastSync: syncedAt,
@@ -108,6 +132,41 @@ function registerGithubActions({
         deploymentCount: deployments.length,
         commitCount: commits.length,
         syncedAt,
+      };
+    },
+  });
+
+  // Aprobar es una escritura al proveedor y queda en el registro como tal, con
+  // sus esquemas — no una llamada suelta desde una ruta. No es "destructive":
+  // no borra nada y una aprobación se puede retirar desde GitHub, asi que no
+  // pasa por el Approval Center.
+  //
+  // GitHub rechaza con 422 que alguien apruebe su propio pull request. No se
+  // adivina aqui quien es el autor — haria falta una llamada extra por cada
+  // apertura del detalle —; se deja hablar al proveedor y su mensaje llega tal
+  // cual a quien pulso el boton.
+  registry.registerAction({
+    id: "approve-pull-request",
+    connectorTypeId: "github",
+    title: "Approve a pull request",
+    effect: "write",
+    inputSchema: APPROVE_PULL_REQUEST_INPUT_SCHEMA,
+    outputSchema: APPROVE_PULL_REQUEST_OUTPUT_SCHEMA,
+    handler: async ({ services, input }) => {
+      const cfg = services.store.getConfig();
+      const review = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${input.project}/pulls/${input.number}/reviews`,
+        "POST",
+        { event: "APPROVE", ...(input.body ? { body: input.body } : {}) },
+      );
+      return {
+        id: review?.id ?? null,
+        state: review?.state || "APPROVED",
+        reviewer: review?.user?.login || null,
+        submittedAt: review?.submitted_at || null,
+        webUrl: review?.html_url || null,
       };
     },
   });

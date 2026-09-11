@@ -1464,14 +1464,6 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
   // que ya hacen Ajustes -> Navegacion y el boton "mostrar en sidebar" de cada
   // Board, no un almacenamiento nuevo.
   const [navMenu, setNavMenu] = useState(null);
-  useEffect(() => {
-    if (!navMenu) return;
-    const onKey = event => { if (event.key === "Escape") setNavMenu(null); };
-    const onScroll = () => setNavMenu(null);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onScroll);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("resize", onScroll); };
-  }, [navMenu]);
   const [openGroups, setOpenGroups] = useState(
     () => SIDEBAR_NAV_GROUPS.filter(g => g.children.includes(route)).map(g => g.id)
   );
@@ -1973,57 +1965,27 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
       </div>
     </aside>
     {navMenu && (() => {
-      // Reordenar solo vale para las rutas core: un Board o un Dashboard toma su
-      // posicion de su propio registro, no del orden guardado del menu. Y solo
-      // se ofrece ocultar lo que se puede volver a mostrar desde algun sitio.
+      // Reordenar solo vale para las rutas core y para Boards y Dashboards: una
+      // entrada publicada por un conector toma su sitio del conector. Y solo se
+      // ofrece ocultar lo que se puede volver a mostrar desde algun sitio.
       const esRutaCore = NAV_ROUTES.some(route => route.id === navMenu.id);
       const esSuperficiePropia = navMenu.id.startsWith("dashboard:") || navMenu.id.startsWith("page:");
-      const sePuedeOcultar = esRutaCore || esSuperficiePropia;
-      const cerrar = () => setNavMenu(null);
-      const opciones = [
-        { clave: "up", etiqueta: t("nav.ctx.moveUp", "Move up"), activa: (esRutaCore || esSuperficiePropia) && !!onMoveEntry,
-          motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, -1, items.map(item => item.id)) },
-        { clave: "down", etiqueta: t("nav.ctx.moveDown", "Move down"), activa: (esRutaCore || esSuperficiePropia) && !!onMoveEntry,
-          motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, 1, items.map(item => item.id)) },
-        { clave: "hide", etiqueta: t("nav.ctx.hide", "Hide from menu"), activa: sePuedeOcultar && !!onHideEntry,
-          motivo: t("nav.ctx.hideUnavailable", ""), separar: true, hacer: () => onHideEntry(navMenu.id) },
-      ];
+      const sePuedeMover = (esRutaCore || esSuperficiePropia) && !!onMoveEntry;
+      const visibles = () => items.map(item => item.id);
       return (
-        <>
-          <div onClick={cerrar} onContextMenu={event => { event.preventDefault(); cerrar(); }}
-            style={{ position: "fixed", inset: 0, zIndex: 60 }} />
-          <div role="menu" aria-label={navMenu.label}
-            style={{
-              position: "fixed", zIndex: 61,
-              // Se ancla al cursor pero sin salirse de la ventana.
-              left: Math.min(navMenu.x, window.innerWidth - 240),
-              top: Math.min(navMenu.y, window.innerHeight - 140),
-              minWidth: 216, background: "var(--surface)",
-              border: "1px solid var(--border)", borderRadius: 8,
-              boxShadow: "0 8px 24px rgba(0,0,0,.14)", overflow: "hidden", padding: "4px 0",
-            }}>
-            <div style={{ padding: "6px 12px 7px", fontSize: 11, color: "var(--muted-fg)", borderBottom: "1px solid var(--border)", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{navMenu.label}</div>
-            {opciones.map(opcion => (
-              <React.Fragment key={opcion.clave}>
-                {opcion.separar && <div aria-hidden="true" style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />}
-                <button role="menuitem" disabled={!opcion.activa}
-                  title={opcion.activa ? "" : opcion.motivo}
-                  onClick={() => { opcion.hacer(); cerrar(); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left", padding: "7px 12px",
-                    background: "none", border: 0, fontFamily: "inherit", fontSize: 12.5,
-                    color: opcion.activa ? "var(--fg)" : "var(--muted-fg)",
-                    cursor: opcion.activa ? "pointer" : "not-allowed",
-                    opacity: opcion.activa ? 1 : 0.55,
-                  }}
-                  onMouseEnter={event => { if (opcion.activa) event.currentTarget.style.background = "var(--row-hover)"; }}
-                  onMouseLeave={event => { event.currentTarget.style.background = "transparent"; }}>
-                  {opcion.etiqueta}
-                </button>
-              </React.Fragment>
-            ))}
-          </div>
-        </>
+        <window.LintayaContextMenu
+          x={navMenu.x} y={navMenu.y} label={navMenu.label}
+          onClose={() => setNavMenu(null)}
+          options={[
+            { clave: "up", etiqueta: t("nav.ctx.moveUp", "Move up"), activa: sePuedeMover,
+              motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, -1, visibles()) },
+            { clave: "down", etiqueta: t("nav.ctx.moveDown", "Move down"), activa: sePuedeMover,
+              motivo: t("nav.ctx.reorderOnlyCore", ""), hacer: () => onMoveEntry(navMenu.id, 1, visibles()) },
+            { clave: "hide", etiqueta: t("nav.ctx.hide", "Hide from menu"), separar: true,
+              activa: (esRutaCore || esSuperficiePropia) && !!onHideEntry,
+              motivo: t("nav.ctx.hideUnavailable", ""), hacer: () => onHideEntry(navMenu.id) },
+          ]}
+        />
       );
     })()}
     {showResizeHandle && <ResizeHandle onMouseDown={onSidebarResizeStart} />}

@@ -117,6 +117,55 @@ test("sync preserves the existing response and KV contracts", async () => {
   assert.equal(harness.values.get("connector-status-github").itemsSynced, 3);
 });
 
+test("commit detail resolves the repository from synced data and maps the provider payload", async () => {
+  const calls = [];
+  const harness = createEnvelopeHarness({
+    request: (baseUrl, token, path) => {
+      calls.push(path);
+      return Promise.resolve({
+        sha: "bbb2220000000000000000000000000000000000",
+        commit: {
+          message: "newer feature\n\nwhy it was needed",
+          author: { name: "dev", date: "2026-08-15T10:00:00Z" },
+          verification: { verified: true },
+        },
+        author: { login: "dev-login", avatar_url: "https://avatars.example/dev.png" },
+        html_url: "https://github.com/lintaya/hq/commit/bbb222",
+        parents: [{ sha: "aaa1110000000000000000000000000000000000" }],
+        stats: { additions: 12, deletions: 3 },
+        files: [{ filename: "server/app.js", status: "modified", additions: 12, deletions: 3 }],
+      });
+    },
+  });
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "test-token" });
+  harness.values.set("connector-data-github", {
+    commits: [{ id: "bbb222", title: "newer feature", projectId: "lintaya/hq", projectName: "hq" }],
+  });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/commits/:sha", { params: { sha: "bbb222" } });
+  assert.equal(response.status, 200);
+  assert.equal(calls[0], "/repos/lintaya/hq/commits/bbb222", "el repositorio sale de los datos ya sincronizados");
+  assert.equal(response.body.sha, "bbb22200");
+  assert.equal(response.body.title, "newer feature");
+  assert.equal(response.body.body, "why it was needed", "el cuerpo se separa del titulo");
+  assert.equal(response.body.projectId, "lintaya/hq");
+  assert.equal(response.body.verified, true);
+  assert.deepEqual(response.body.stats, { additions: 12, deletions: 3 });
+  assert.deepEqual(response.body.files, [{ path: "server/app.js", status: "modified", additions: 12, deletions: 3 }]);
+});
+
+test("commit detail refuses a sha the sync never saw, without calling the provider", async () => {
+  const calls = [];
+  const harness = createEnvelopeHarness({ request: (...args) => { calls.push(args); return Promise.resolve({}); } });
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "test-token" });
+  harness.values.set("connector-data-github", { commits: [{ id: "bbb222", projectId: "lintaya/hq" }] });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/commits/:sha", { params: { sha: "zzz999" } });
+  assert.equal(response.status, 404);
+  assert.deepEqual(response.body, { error: "commit-not-synced" });
+  assert.equal(calls.length, 0, "sin repositorio conocido no hay a quien preguntar");
+});
+
 test("Home block recent-commits maps synced commits to the normalized shape, newest first", async () => {
   const harness = createHarness();
   harness.values.set("connector-config-github", {

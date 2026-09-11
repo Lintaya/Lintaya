@@ -30,6 +30,29 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Added
 
+- A repository opened from Repos has Pull Requests and Issues tabs, and a pull
+  request opens to show what the row cannot: whether it can actually be merged,
+  its description, its checks one by one, its commits, and every changed file
+  with its own `+/-`. A merged pull request is told apart from one closed
+  without merging — GitHub marks both as closed and only `merged_at` separates
+  them — and "able to merge" keeps the distinction GitHub's green label hides,
+  between a clean merge, one with a check that is not green, and one blocked by
+  reviews or branch rules. GitHub only for now: GitLab calls the same thing a
+  merge request with a different response shape, and the tabs simply do not
+  appear for a provider that has not been implemented.
+- A Home block lists open pull requests, and clicking one opens that same
+  detail in a modal instead of leaving for GitHub. It works on Boards and
+  Dashboards too. Clicking a commit in the existing "recent commits" block now
+  opens its own detail — full message, signature, changed files — the same way.
+- A pull request can be approved from its modal. Approving is an Action
+  Registry action with input and output schemas and a `write` effect, like
+  every other remote mutation. The button is offered only while the pull
+  request is open, and says so rather than offering a second identical review
+  when one is already approved.
+- Right-clicking a tab in a repository offers to move it left or right, with
+  the order remembered per browser. It is the same menu the sidebar uses,
+  extracted into one component so the two cannot drift apart.
+
 - The sidebar answers a right-click on any entry with a menu to move it up or
   down and to hide it. It is a second door into what Settings → Navigation and
   each Board's "show in sidebar" toggle already did, so anything hidden from

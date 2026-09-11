@@ -23,6 +23,13 @@ public configuration filtering, and credential redaction in logs.
 
 ## Runtime contract
 
+A sync stores `projects`, `deployments`, `commits` and `pullRequests`. The
+open pull requests were already being fetched to count `openMRs` per
+repository; keeping the list costs no extra request and is what feeds the
+`open-pull-requests` block. Both writers — the `POST /sync` route and the
+`sync` action — must persist all four, or a block silently empties depending on
+which one ran.
+
 ```js
 const { registerGithubRoutes } = require("./connectors/community/github");
 
@@ -42,6 +49,39 @@ The module owns these unchanged routes:
 - `POST /api/connectors/github/test`
 - `POST /api/connectors/github/sync`
 - `POST /api/connectors/github/repositories`
+- `GET /api/connectors/github/commits/:sha`
+- `GET /api/connectors/github/blocks/<blockId>` for `recent-commits`,
+  `recent-deployments`, `open-pull-requests` and `repos-overview`
+
+### Commit detail
+
+`GET /api/connectors/github/commits/:sha` answers the full message, author,
+`+/-` totals, signature flag, parents and changed files for one commit.
+
+The repository is **not** in the path. A Home block item carries only
+`{ id, title, subtitle, timestamp, url, badge }`, so there is nowhere to put it,
+and the `recent-commits` item id is the short sha — a shape already published
+and pinned by a test. The route therefore resolves the sha against the commits
+the last sync stored, which know their repository. A sha the sync never saw
+answers `404 commit-not-synced` **without calling GitHub**: with no repository
+there is nobody to ask.
+
+The comparison is by prefix in both directions, because the block stores the
+short sha while GitHub accepts either length.
+
+### Approving a pull request
+
+Approving is the `approve-pull-request` action (`write`), not a REST route:
+every remote mutation goes through the Action Registry with its schemas. It
+submits `POST /repos/{project}/pulls/{number}/reviews` with
+`event: "APPROVE"`, and takes an optional `body` comment.
+
+It is **not** `destructive` — nothing is deleted and an approval can be
+withdrawn from GitHub — so it does not go through the Approval Center.
+
+GitHub answers `422` when the token's own account authored the pull request:
+nobody approves their own. The connector does not try to predict that (it would
+cost an extra call on every open) and lets the provider's message through.
 
 ### Creating a repository
 

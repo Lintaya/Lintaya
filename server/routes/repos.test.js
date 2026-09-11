@@ -198,6 +198,44 @@ test("pipeline routes return RFC 9457 validation details", async (t) => {
   assert.equal(missingRef.body.detail, "ref-required");
 });
 
+test("pull request and issue routes validate the connector and the provider", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+
+  for (const resource of ["pull-requests", "issues"]) {
+    const missingConfig = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${resource}`, {
+      params: { provider: "github", id: "owner/repo" },
+    });
+    assert.equal(missingConfig.status, 400);
+    assert.equal(missingConfig.body.detail, "connector-not-configured");
+  }
+
+  const unknownProvider = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/pull-requests", {
+    params: { provider: "not-a-provider", id: "owner/repo" },
+  });
+  assert.equal(unknownProvider.status, 404);
+});
+
+test("pull requests and issues report which providers implement them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  // Bitbucket resuelve a un adaptador real que no declara estos metodos: la
+  // ruta debe decir "no soportado aqui" y no romperse llamando a undefined.
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+
+  const pulls = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/pull-requests", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(pulls.status, 400);
+  assert.equal(pulls.body.detail, "pull-requests-not-supported");
+
+  const issues = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/issues", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(issues.status, 400);
+  assert.equal(issues.body.detail, "issues-not-supported");
+});
+
 test("editing a GitLab project rejects other providers, empty bodies, and never leaks the slug through", async (t) => {
   const harness = setup();
   t.after(() => harness.cleanup());
