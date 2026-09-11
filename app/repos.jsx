@@ -2402,6 +2402,261 @@ function RepoItemsPanel({ repo, kind }) {
 
 // Detalle de un pull request: lo que la fila no cabe a decir. Vive fuera de
 // RepoItemsPanel porque solo se monta cuando hay algo desplegado.
+// ── Advisories ───────────────────────────────────────────────────────────────
+// Reúne las tres fuentes de seguridad que GitHub expone por separado, porque
+// mirar solo una da una falsa tranquilidad: un repositorio puede tener cero
+// alertas de Dependabot y a la vez un aviso crítico escrito a mano.
+//
+// Las tres se piden a la vez y cada una falla por su cuenta: un token sin
+// permiso para una no debe vaciar las otras dos, y "no tengo acceso" no es lo
+// mismo que "no hay nada", así que se dicen distinto.
+function AdvisoriesPanel({ repo }) {
+  const [datos, setDatos] = useState({ advisories: null, scanning: null, dependabot: null });
+  // { ruta, titulo }: la ruta ya trae la fuente, así que el modal no necesita
+  // saber de qué sección salió.
+  const [abierto, setAbierto] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    const base = `/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}`;
+    const pedir = (ruta, clave) => window.HQ_API.request(`${base}/${ruta}`)
+      .then(respuesta => ({ ok: true, lista: respuesta?.[clave] || [] }))
+      .catch(error => ({ ok: false, error: error?.detail || error?.message || String(error) }));
+
+    setDatos({ advisories: null, scanning: null, dependabot: null });
+    Promise.all([
+      pedir("security-advisories", "advisories"),
+      pedir("code-scanning-alerts", "alerts"),
+      // state=open explícito: la ruta de Dependabot sin estado devuelve también
+      // las ya arregladas, y pintarlas junto a los hallazgos abiertos con su
+      // insignia de gravedad hace parecer que hay vulnerabilidades vivas que no
+      // las hay. Code scanning arriba ya filtra por abiertas.
+      pedir("dependabot-alerts?state=open", "alerts"),
+    ]).then(([advisories, scanning, dependabot]) => {
+      if (!cancelado) setDatos({ advisories, scanning, dependabot });
+    });
+    return () => { cancelado = true; };
+  }, [repo.provider, repo.id]);
+
+  // El orden es el de urgencia, no el alfabético: lo que hay que mirar primero
+  // va primero, y es también el orden en que se cuentan los totales.
+  const ESCALA = ["critical", "high", "medium", "moderate", "low", "warning", "note", "error"];
+  const COLOR = {
+    critical: "#b91c1c", high: "#dc2626", medium: "#ca8a04", moderate: "#ca8a04",
+    low: "#0891b2", warning: "#ca8a04", note: "#64748b", error: "#dc2626",
+  };
+  const porGravedad = lista => lista.slice().sort((izquierda, derecha) => {
+    const a = ESCALA.indexOf(String(izquierda.severity || "").toLowerCase());
+    const b = ESCALA.indexOf(String(derecha.severity || "").toLowerCase());
+    return (a < 0 ? 99 : a) - (b < 0 ? 99 : b);
+  });
+
+  const insignia = severidad => (
+    <span style={{
+      fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3,
+      padding: "1px 6px", borderRadius: 3, flexShrink: 0,
+      color: COLOR[String(severidad || "").toLowerCase()] || "var(--muted-fg)",
+      background: `color-mix(in srgb, ${COLOR[String(severidad || "").toLowerCase()] || "var(--muted-fg)"} 12%, white)`,
+    }}>{severidad || "—"}</span>
+  );
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--muted-fg)" };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "0 0 8px" };
+
+  const bloque = (titulo, fuente, pintar, vacio) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={seccion}>
+        {titulo}
+        {fuente?.ok && <span style={{ marginLeft: 6, color: "var(--fg)" }}>{fuente.lista.length}</span>}
+      </div>
+      {!fuente && <div style={{ fontSize: 12, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+      {fuente && !fuente.ok && (
+        <div style={{ fontSize: 11.5, color: "var(--muted-fg)", fontStyle: "italic" }}>
+          {rt("ui.repos.advisorySourceUnavailable", "Not available: {0}", { 0: fuente.error })}
+        </div>
+      )}
+      {fuente?.ok && fuente.lista.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--ok)" }}>✓ {vacio}</div>
+      )}
+      {fuente?.ok && porGravedad(fuente.lista).map(pintar)}
+    </div>
+  );
+
+  const fila = (clave, contenido, ruta, titulo) => (
+    <div key={clave}
+      onClick={() => setAbierto({ ruta, titulo })}
+      role="button" tabIndex={0}
+      onKeyDown={evento => { if (evento.key === "Enter" || evento.key === " ") { evento.preventDefault(); setAbierto({ ruta, titulo }); } }}
+      style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "white", border: "1px solid var(--border)", borderRadius: 7, padding: "8px 11px", marginBottom: 6, cursor: "pointer" }}>
+      {contenido}
+    </div>
+  );
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      {bloque(
+        rt("ui.repos.repoAdvisories", "Repository security advisories"),
+        datos.advisories,
+        item => fila(item.id, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.summary || item.id}</div>
+              <div style={mono}>{item.id}{item.cve ? ` · ${item.cve}` : ""} · {item.state}</div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `security-advisories/${item.id}`, item.summary || item.id),
+        rt("ui.repos.noRepoAdvisories", "This repository has published no advisories."),
+      )}
+
+      {bloque(
+        rt("ui.repos.codeScanning", "Code scanning"),
+        datos.scanning,
+        item => fila(item.number, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.description || item.rule}</div>
+              <div style={mono}>
+                {item.tool || "—"} · {item.rule}
+                {item.path ? ` · ${item.path}:${item.line}` : ""}
+              </div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `code-scanning-alerts/${item.number}`, item.description || item.rule),
+        rt("ui.repos.noCodeScanning", "No open code scanning alerts."),
+      )}
+
+      {bloque(
+        rt("ui.repos.dependabot", "Dependabot"),
+        datos.dependabot,
+        item => fila(item.number, (
+          <>
+            {insignia(item.severity)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 500 }}>{item.summary || item.ghsaId}</div>
+              <div style={mono}>
+                {item.package}{item.ecosystem ? ` (${item.ecosystem})` : ""}
+                {item.vulnerableRange ? ` · ${item.vulnerableRange}` : ""}
+                {item.firstPatchedVersion ? ` → ${item.firstPatchedVersion}` : ""}
+              </div>
+            </div>
+            {item.webUrl && <a href={item.webUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", textDecoration: "none", fontSize: 12 }}>↗</a>}
+          </>
+        ), `dependabot-alerts/${item.number}`, item.summary || item.package),
+        rt("ui.repos.noDependabot", "No open Dependabot alerts."),
+      )}
+      {abierto && <AdvisoryDetailModal repo={repo} ruta={abierto.ruta} titulo={abierto.titulo} onClose={() => setAbierto(null)} />}
+    </div>
+  );
+}
+
+// Detalle de un aviso, sea cual sea su fuente: las tres rutas contestan la
+// misma forma, así que aquí no hay ramas por origen — solo campos que están o
+// no están. Lo que la fila no cabía a decir es justamente lo accionable: el
+// cómo se arregla, la puntuación CVSS y el hallazgo concreto.
+function AdvisoryDetailModal({ repo, ruta, titulo, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/${ruta}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [repo.provider, repo.id, ruta]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+  const caja = { fontSize: 12, lineHeight: 1.55, whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "9px 11px", wordBreak: "break-word" };
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={titulo || "Advisory"}
+        style={{ width: "min(800px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600 }}>{detalle?.title || titulo}</div>
+          {(detalle?.webUrl) && (
+            <a href={detalle.webUrl} target="_blank" rel="noreferrer"
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+
+        {!detalle && <div style={{ padding: 16, fontSize: 12, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>}
+        {detalle?.error && <div style={{ padding: 16, fontSize: 12, color: "var(--err)" }}>{detalle.error}</div>}
+
+        {detalle && !detalle.error && (
+          <div style={{ padding: "10px 16px 16px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+              {detalle.severity && <span style={{ fontWeight: 700, textTransform: "uppercase" }}>{detalle.severity}</span>}
+              {detalle.state && <span>{detalle.state}</span>}
+              {detalle.cvssScore != null && <span style={mono}>CVSS {detalle.cvssScore}</span>}
+              {detalle.cve && <span style={mono}>{detalle.cve}</span>}
+              {(detalle.cwes || []).length > 0 && <span style={mono}>{detalle.cwes.join(" · ")}</span>}
+              {detalle.tool && <span>{detalle.tool}{detalle.rule ? ` · ${detalle.rule}` : ""}</span>}
+              {detalle.path && <span style={mono}>{detalle.path}{detalle.line ? `:${detalle.line}` : ""}</span>}
+              {detalle.fixedIn && <span style={{ color: "var(--ok)", fontWeight: 600 }}>{rt("ui.repos.fixedIn", "Fixed in {0}", { 0: detalle.fixedIn })}</span>}
+            </div>
+
+            {detalle.cvssVector && <div style={{ ...mono, color: "var(--muted-fg)", marginTop: 4 }}>{detalle.cvssVector}</div>}
+
+            {detalle.finding && (
+              <>
+                <div style={seccion}>{rt("ui.repos.finding", "Finding")}</div>
+                <div style={caja}>{detalle.finding}</div>
+              </>
+            )}
+
+            {(detalle.affected || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.affected", "Affected")}</div>
+                {detalle.affected.map(item => <div key={item} style={{ ...mono, padding: "1px 0" }}>{item}</div>)}
+                {detalle.manifestPath && <div style={{ ...mono, color: "var(--muted-fg)", paddingTop: 2 }}>{detalle.manifestPath}</div>}
+              </>
+            )}
+
+            {detalle.description && (
+              <>
+                <div style={seccion}>{rt("ui.repos.description", "Description")}</div>
+                <div style={caja}>{detalle.description}</div>
+              </>
+            )}
+
+            {(detalle.tags || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.tags", "Tags")}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {detalle.tags.map(tag => (
+                    <span key={tag} style={{ ...mono, padding: "2px 7px", borderRadius: 999, background: "white", border: "1px solid var(--border)", color: "var(--muted-fg)" }}>{tag}</span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {(detalle.credits || []).length > 0 && (
+              <>
+                <div style={seccion}>{rt("ui.repos.credits", "Reported by")}</div>
+                <div style={mono}>{detalle.credits.join(", ")}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DetallePR({ detalle, acciones = null }) {
   const marco = { padding: "10px 12px 12px 31px", fontSize: 12, borderTop: "1px solid var(--border)" };
   if (!detalle) return <div style={{ ...marco, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>;
@@ -2882,7 +3137,7 @@ function RepoDetail({ repo, onClose, onClone, onLinkExisting, cloning, onPlayNet
   const tabsDisponibles = [
     ["code", "Code"],
     ...(/^(gitlab|github)/.test(repo.provider) ? [["build", "Build / Pipeline"]] : []),
-    ...(/^github/.test(repo.provider) ? [["pulls", rt("ui.repos.pullRequests", "Pull Requests")], ["issues", rt("ui.repos.issues", "Issues")]] : []),
+    ...(/^github/.test(repo.provider) ? [["pulls", rt("ui.repos.pullRequests", "Pull Requests")], ["issues", rt("ui.repos.issues", "Issues")], ["advisories", rt("ui.repos.advisories", "Advisories")]] : []),
     ...(isLocal ? [["history", "History"], ["analysis", rt("ui.repos.analysis", "Analysis")]] : []),
   ];
   // Las que el usuario ya ordenó van primero, en ese orden; una pestaña nueva
@@ -3213,6 +3468,7 @@ function RepoDetail({ repo, onClose, onClone, onLinkExisting, cloning, onPlayNet
         )}
         {tab === "build" && <BuildPanel repo={repo} branch={branch} />}
         {(tab === "pulls" || tab === "issues") && <RepoItemsPanel repo={repo} kind={tab} />}
+        {tab === "advisories" && <AdvisoriesPanel repo={repo} />}
         {tab === "history" && isLocal && <HistoryPanel repo={repo} branch={branch} onBranchChanged={setBranch} />}
         {tab === "analysis" && isLocal && <AnalysisPanel repo={repo} />}
       </div>

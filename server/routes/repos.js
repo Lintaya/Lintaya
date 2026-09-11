@@ -2074,6 +2074,126 @@ function registerReposRoutes({
           when: c.commit?.author?.date, webUrl: c.html_url,
         }));
       },
+      // Los tres detalles devuelven una forma comun a proposito: el panel los
+      // pinta con un solo componente, y lo que cambia entre fuentes es de donde
+      // sale cada campo, no como se lee.
+      async getSecurityAdvisory(cfg, id, ghsaId) {
+        const advisory = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/security-advisories/${ghsaId}`);
+        return {
+          kind: "advisory",
+          id: advisory.ghsa_id,
+          title: advisory.summary || advisory.ghsa_id,
+          severity: advisory.severity || null,
+          state: advisory.state || null,
+          description: advisory.description || "",
+          cvssScore: advisory.cvss?.score ?? null,
+          cvssVector: advisory.cvss?.vector_string || null,
+          cwes: (advisory.cwes || []).map(cwe => cwe.cwe_id).filter(Boolean),
+          cve: advisory.cve_id || null,
+          // Quien reporto el fallo. Se nombra porque reconocerlo es parte de
+          // como funciona el reporte responsable, no un adorno.
+          credits: (advisory.credits || []).map(credit => credit.login || credit.user?.login).filter(Boolean),
+          affected: (advisory.vulnerabilities || []).map(item => [
+            item.package?.name, item.vulnerable_version_range,
+          ].filter(Boolean).join(" ")).filter(Boolean),
+          publishedAt: advisory.published_at || null,
+          updatedAt: advisory.updated_at || null,
+          webUrl: advisory.html_url || null,
+        };
+      },
+      async getCodeScanningAlert(cfg, id, number) {
+        const alert = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/code-scanning/alerts/${number}`);
+        const location = alert.most_recent_instance?.location;
+        return {
+          kind: "code-scanning",
+          id: String(alert.number),
+          title: alert.rule?.description || alert.rule?.id || String(alert.number),
+          severity: alert.rule?.security_severity_level || alert.rule?.severity || null,
+          state: alert.state || null,
+          // help trae el "como se arregla"; full_description solo repite el que.
+          description: [alert.rule?.full_description, alert.rule?.help].filter(Boolean).join("\n\n"),
+          // El mensaje de la instancia es el hallazgo concreto ("score is 0:
+          // branch protection not enabled"), no la teoria de la regla.
+          finding: alert.most_recent_instance?.message?.text || null,
+          rule: alert.rule?.id || null,
+          tool: alert.tool?.name || null,
+          tags: alert.rule?.tags || [],
+          path: location?.path?.startsWith("no file") ? null : (location?.path || null),
+          line: location?.start_line || null,
+          publishedAt: alert.created_at || null,
+          updatedAt: alert.updated_at || null,
+          webUrl: alert.html_url || null,
+        };
+      },
+      async getDependabotAlert(cfg, id, number) {
+        const alert = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/dependabot/alerts/${number}`);
+        const advisory = alert.security_advisory || {};
+        return {
+          kind: "dependabot",
+          id: String(alert.number),
+          title: advisory.summary || advisory.ghsa_id || String(alert.number),
+          severity: alert.security_vulnerability?.severity || advisory.severity || null,
+          state: alert.state || null,
+          description: advisory.description || "",
+          cvssScore: advisory.cvss?.score ?? null,
+          cvssVector: advisory.cvss?.vector_string || null,
+          cwes: (advisory.cwes || []).map(cwe => cwe.cwe_id).filter(Boolean),
+          cve: advisory.cve_id || null,
+          affected: [[
+            alert.dependency?.package?.name,
+            alert.security_vulnerability?.vulnerable_version_range,
+          ].filter(Boolean).join(" ")].filter(Boolean),
+          fixedIn: alert.security_vulnerability?.first_patched_version?.identifier || null,
+          manifestPath: alert.dependency?.manifest_path || null,
+          publishedAt: alert.created_at || null,
+          updatedAt: alert.updated_at || null,
+          webUrl: alert.html_url || null,
+        };
+      },
+
+      // Los avisos que el propio repositorio publica sobre si mismo: los
+      // redacta un mantenedor, no los deduce un escaner, asi que un "critical"
+      // en estado triage aqui pesa mas que cualquier hallazgo automatico.
+      async listSecurityAdvisories(cfg, id) {
+        const data = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/security-advisories?per_page=100`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(advisory => ({
+          id: advisory.ghsa_id,
+          state: advisory.state,
+          severity: advisory.severity || null,
+          summary: advisory.summary || null,
+          cve: advisory.cve_id || null,
+          publishedAt: advisory.published_at || null,
+          updatedAt: advisory.updated_at || null,
+          webUrl: advisory.html_url || null,
+        }));
+      },
+      // Hallazgos de los escaneres de codigo (CodeQL, Scorecard, lo que el
+      // repositorio tenga conectado). GitHub trae dos severidades por alerta:
+      // manda la de seguridad, y la generica de la regla es el respaldo cuando
+      // la herramienta no clasifica en terminos de seguridad.
+      async listCodeScanningAlerts(cfg, id, state) {
+        const wanted = state === "closed" || state === "dismissed" || state === "fixed" ? state : "open";
+        const data = await githubRequest(cfg.baseUrl, cfg.token,
+          `/repos/${id}/code-scanning/alerts?state=${wanted}&per_page=100`);
+        const list = Array.isArray(data) ? data : [];
+        return list.map(alert => ({
+          number: alert.number,
+          state: alert.state,
+          severity: alert.rule?.security_severity_level || alert.rule?.severity || null,
+          rule: alert.rule?.id || null,
+          description: alert.rule?.description || null,
+          tool: alert.tool?.name || null,
+          // GitHub devuelve literalmente "no file associated with this alert"
+          // para hallazgos que no viven en una linea (los de Scorecard, por
+          // ejemplo); mostrar esa frase como si fuera una ruta seria peor que
+          // no mostrar nada.
+          path: alert.most_recent_instance?.location?.path?.startsWith("no file") ? null : (alert.most_recent_instance?.location?.path || null),
+          line: alert.most_recent_instance?.location?.start_line || null,
+          createdAt: alert.created_at || null,
+          webUrl: alert.html_url || null,
+        }));
+      },
       // Dependabot alerts — GitHub-only (GitLab/Bitbucket have their own,
       // differently-shaped dependency-scanning APIs, not covered here).
       // Needs the token to carry `security_events` (classic PAT) or
@@ -2416,6 +2536,48 @@ function registerReposRoutes({
   // GET /api/connectors/:provider/projects/:id/tree?ref=&source=remote|local
   // Flat list of files (blobs only). `source=local` reads the working copy, which
   // is the only view that shows edits that have not been pushed yet.
+  // GET /api/connectors/:provider/projects/:id/security-advisories
+  app.get("/api/connectors/:provider/projects/:id/security-advisories", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listSecurityAdvisories) return sendAppError(res, AppError.badRequest("security-advisories-not-supported"), req);
+    try {
+      res.json({ advisories: await p.adapter.listSecurityAdvisories(p.cfg, req.params.id) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/code-scanning-alerts?state=
+  app.get("/api/connectors/:provider/projects/:id/code-scanning-alerts", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.listCodeScanningAlerts) return sendAppError(res, AppError.badRequest("code-scanning-not-supported"), req);
+    try {
+      res.json({ alerts: await p.adapter.listCodeScanningAlerts(p.cfg, req.params.id, req.query.state) });
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // Detalle de un aviso, por fuente. Cada una responde la misma forma.
+  for (const [ruta, metodo, parametro] of [
+    ["security-advisories/:advisoryId", "getSecurityAdvisory", "advisoryId"],
+    ["code-scanning-alerts/:alertNumber", "getCodeScanningAlert", "alertNumber"],
+    ["dependabot-alerts/:alertNumber", "getDependabotAlert", "alertNumber"],
+  ]) {
+    app.get(`/api/connectors/:provider/projects/:id/${ruta}`, requireAuth, async (req, res) => {
+      const p = requireProvider(req, res);
+      if (!p) return;
+      if (!p.adapter[metodo]) return sendAppError(res, AppError.badRequest("advisory-detail-not-supported"), req);
+      try {
+        res.json(await p.adapter[metodo](p.cfg, req.params.id, req.params[parametro]));
+      } catch (err) {
+        sendProviderFailure(res, err, req);
+      }
+    });
+  }
+
   app.get("/api/connectors/:provider/projects/:id/tree", requireAuth, async (req, res) => {
     if (req.query.source === "local") {
       const localClone = requireLocalClone(req, res);

@@ -198,6 +198,51 @@ test("pipeline routes return RFC 9457 validation details", async (t) => {
   assert.equal(missingRef.body.detail, "ref-required");
 });
 
+test("advisory detail routes exist for each source and refuse an adapter that lacks them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+
+  for (const [ruta, parametros] of [
+    ["security-advisories/:advisoryId", { advisoryId: "GHSA-xxxx" }],
+    ["code-scanning-alerts/:alertNumber", { alertNumber: "1" }],
+    ["dependabot-alerts/:alertNumber", { alertNumber: "1" }],
+  ]) {
+    const respuesta = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${ruta}`, {
+      params: { provider: "bitbucket", id: "team/repo", ...parametros },
+    });
+    assert.equal(respuesta.status, 400, `${ruta} debe contestar, no faltar`);
+    assert.equal(respuesta.body.detail, "advisory-detail-not-supported");
+  }
+});
+
+test("advisory routes validate the connector and report which providers implement them", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+
+  for (const resource of ["security-advisories", "code-scanning-alerts"]) {
+    const missingConfig = await harness.invoke("GET", `/api/connectors/:provider/projects/:id/${resource}`, {
+      params: { provider: "github", id: "owner/repo" },
+    });
+    assert.equal(missingConfig.status, 400);
+    assert.equal(missingConfig.body.detail, "connector-not-configured");
+  }
+
+  // Bitbucket resuelve a un adaptador real que no declara estos metodos.
+  harness.store.set("connector-config-bitbucket", { baseUrl: "https://bitbucket.example.test", token: "test-token" });
+  const advisories = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/security-advisories", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(advisories.status, 400);
+  assert.equal(advisories.body.detail, "security-advisories-not-supported");
+
+  const scanning = await harness.invoke("GET", "/api/connectors/:provider/projects/:id/code-scanning-alerts", {
+    params: { provider: "bitbucket", id: "team/repo" },
+  });
+  assert.equal(scanning.status, 400);
+  assert.equal(scanning.body.detail, "code-scanning-not-supported");
+});
+
 test("pull request and issue routes validate the connector and the provider", async (t) => {
   const harness = setup();
   t.after(() => harness.cleanup());

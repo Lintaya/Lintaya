@@ -30,6 +30,18 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Added
 
+- A repository has an Advisories tab reporting its security standing from the
+  three places GitHub keeps it separately: the advisories the repository
+  publishes about itself, its code scanning alerts, and its Dependabot alerts.
+  Looking at only one is a false reassurance — a repository can have no
+  Dependabot alerts and a hand-written critical advisory at the same time — so
+  the three are shown together, ordered by severity rather than alphabetically.
+  Each source is fetched independently and fails on its own: a token without
+  access to one does not empty the other two, and "no access" is said
+  differently from "nothing found". Clicking any of them opens what the row
+  cannot hold: the CVSS score and vector, the CWEs, the affected versions, who
+  reported it, and for a scanner finding the help text that says how to fix it
+  along with the concrete finding rather than the rule's theory.
 - A repository opened from Repos has Pull Requests and Issues tabs, and a pull
   request opens to show what the row cannot: whether it can actually be merged,
   its description, its checks one by one, its commits, and every changed file
