@@ -744,6 +744,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   const [modalDoc, setModalDoc] = useState(null);
   const [modalPR, setModalPR] = useState(null);
   const [modalCommit, setModalCommit] = useState(null);
+  const [modalIssue, setModalIssue] = useState(null);
 
   // Qportal data
   const [qpData, setQpData]       = useState(null);
@@ -1043,6 +1044,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
       {modalDoc && <DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
       {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
       {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
+      {modalIssue && window.IssueDetailModal && <window.IssueDetailModal issue={modalIssue} onClose={() => setModalIssue(null)} />}
 
       {(() => {
         // Panel content definitions
@@ -1377,6 +1379,9 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
           }
           if (candidate.blockId === "recent-commits") {
             blockItemHandlers[candidate.id] = item => setModalCommit({ ...item, connectorId: candidate.connectorId });
+          }
+          if (candidate.blockId === "open-issues") {
+            blockItemHandlers[candidate.id] = item => setModalIssue({ ...item, connectorId: candidate.connectorId });
           }
         });
 

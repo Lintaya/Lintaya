@@ -46,6 +46,12 @@
       "type": "list"
     },
     {
+      "id": "open-issues",
+      "title": "GitHub — issues abiertos",
+      "icon": "🐞",
+      "type": "list"
+    },
+    {
       "id": "repos-overview",
       "title": "GitHub — mis repos",
       "icon": "📦",

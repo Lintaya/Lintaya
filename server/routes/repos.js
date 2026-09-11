@@ -2303,6 +2303,38 @@ function registerReposRoutes({
           },
         };
       },
+      async getIssue(cfg, id, number) {
+        const issue = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/issues/${number}`);
+        // Los comentarios son donde un issue se decide; sin ellos el detalle
+        // repite la fila con mas letras. Fallan por su cuenta: un hilo que no
+        // se puede leer no debe tumbar el resto del detalle.
+        const comentarios = await githubRequest(cfg.baseUrl, cfg.token, `/repos/${id}/issues/${number}/comments?per_page=100`)
+          .then(data => Array.isArray(data) ? data : [])
+          .catch(() => null);
+        return {
+          number: issue.number,
+          title: issue.title,
+          state: issue.state,
+          stateReason: issue.state_reason || null,
+          body: issue.body || "",
+          author: issue.user?.login || null,
+          authorAvatar: issue.user?.avatar_url || null,
+          assignees: (issue.assignees || []).map(person => person?.login).filter(Boolean),
+          labels: (issue.labels || []).map(label => typeof label === "string" ? label : label?.name).filter(Boolean),
+          milestone: issue.milestone?.title || null,
+          commentCount: issue.comments || 0,
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          closedAt: issue.closed_at || null,
+          webUrl: issue.html_url,
+          comments: (comentarios || []).map(comentario => ({
+            id: comentario.id,
+            author: comentario.user?.login || null,
+            body: comentario.body || "",
+            createdAt: comentario.created_at,
+          })),
+        };
+      },
       async listIssues(cfg, id, state) {
         const wanted = state === "closed" || state === "all" ? state : "open";
         const data = await githubRequest(cfg.baseUrl, cfg.token,
@@ -2746,6 +2778,18 @@ function registerReposRoutes({
     if (!p.adapter.getPullRequest) return sendAppError(res, AppError.badRequest("pull-requests-not-supported"), req);
     try {
       res.json(await p.adapter.getPullRequest(p.cfg, req.params.id, req.params.number));
+    } catch (err) {
+      sendProviderFailure(res, err, req);
+    }
+  });
+
+  // GET /api/connectors/:provider/projects/:id/issues/:number — detalle.
+  app.get("/api/connectors/:provider/projects/:id/issues/:number", requireAuth, async (req, res) => {
+    const p = requireProvider(req, res);
+    if (!p) return;
+    if (!p.adapter.getIssue) return sendAppError(res, AppError.badRequest("issues-not-supported"), req);
+    try {
+      res.json(await p.adapter.getIssue(p.cfg, req.params.id, req.params.number));
     } catch (err) {
       sendProviderFailure(res, err, req);
     }

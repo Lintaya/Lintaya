@@ -30,6 +30,13 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Added
 
+- An issue opens the same way a pull request does, showing its description and
+  its conversation — which is where an issue is actually decided — alongside
+  its state, milestone, assignees and dates. Until now only pull requests
+  expanded, and an issue row said no more than its title.
+- A Home block lists open issues, and clicking one opens that detail in a modal
+  rather than leaving for GitHub. Unlike the pull-request block this costs one
+  new request per repository on each sync: nothing was fetching issues before.
 - A repository has an Advisories tab reporting its security standing from the
   three places GitHub keeps it separately: the advisories the repository
   publishes about itself, its code scanning alerts, and its Dependabot alerts.

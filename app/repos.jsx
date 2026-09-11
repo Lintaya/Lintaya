@@ -2299,7 +2299,7 @@ function RepoItemsPanel({ repo, kind }) {
     if (abierto === numero) { setAbierto(null); return; }
     setAbierto(numero);
     if (detalles[numero]) return;
-    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/pull-requests/${numero}`)
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/${esPR ? "pull-requests" : "issues"}/${numero}`)
       .then(data => setDetalles(previo => ({ ...previo, [numero]: data })))
       .catch(error => setDetalles(previo => ({ ...previo, [numero]: { error: error?.detail || error?.message || String(error) } })));
   };
@@ -2362,12 +2362,12 @@ function RepoItemsPanel({ repo, kind }) {
       {items && !fallo && items.map(item => (
         <div key={item.number} style={{ background: "white", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 8, overflow: "hidden" }}>
         <div
-          onClick={esPR ? () => alternarDetalle(item.number) : undefined}
-          role={esPR ? "button" : undefined}
-          tabIndex={esPR ? 0 : undefined}
-          aria-expanded={esPR ? abierto === item.number : undefined}
-          onKeyDown={esPR ? (event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); alternarDetalle(item.number); } }) : undefined}
-          style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", cursor: esPR ? "pointer" : "default" }}>
+          onClick={() => alternarDetalle(item.number)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={abierto === item.number}
+          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); alternarDetalle(item.number); } }}
+          style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", cursor: "pointer" }}>
           <span style={{ flexShrink: 0, marginTop: 2, width: 9, height: 9, borderRadius: 999, background: COLOR_ESTADO[item.state] || "var(--muted-fg)" }}
             title={item.state} aria-hidden="true" />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -2393,12 +2393,112 @@ function RepoItemsPanel({ repo, kind }) {
               style={{ flexShrink: 0, fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>↗</a>
           )}
         </div>
-        {esPR && abierto === item.number && <DetallePR detalle={detalles[item.number]} />}
+        {abierto === item.number && (esPR
+          ? <DetallePR detalle={detalles[item.number]} />
+          : <DetalleIssue detalle={detalles[item.number]} />)}
         </div>
       ))}
     </div>
   );
 }
+
+// Detalle de un issue. Aparte del de pull request porque lo que importa de un
+// issue es otra cosa: no hay ramas ni checks que mirar, y en cambio la
+// conversación es donde el issue se decide.
+function DetalleIssue({ detalle }) {
+  const marco = { padding: "10px 12px 12px 31px", fontSize: 12, borderTop: "1px solid var(--border)" };
+  if (!detalle) return <div style={{ ...marco, color: "var(--muted-fg)" }}>{rt("ui.repos.loadingItems", "Loading…")}</div>;
+  if (detalle.error) return <div style={{ ...marco, color: "var(--err)" }}>{detalle.error}</div>;
+
+  const mono = { fontFamily: "var(--font-mono)", fontSize: 11 };
+  const seccion = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: "var(--muted-fg)", textTransform: "uppercase", margin: "12px 0 5px" };
+  const cuando = iso => iso ? new Date(iso).toLocaleDateString() : "—";
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", padding: "10px 14px 14px", background: "color-mix(in srgb, var(--muted) 25%, white)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 11.5, color: "var(--muted-fg)" }}>
+        <span style={{ fontWeight: 600, color: detalle.state === "open" ? "var(--ok)" : "#8250df" }}>
+          ● {detalle.state}{detalle.stateReason ? ` · ${detalle.stateReason}` : ""}
+        </span>
+        <span>{rt("ui.repos.opened", "opened {0}", { 0: cuando(detalle.createdAt) })}</span>
+        {detalle.closedAt && <span>{rt("ui.repos.closed", "closed {0}", { 0: cuando(detalle.closedAt) })}</span>}
+        {detalle.milestone && <span>🎯 {detalle.milestone}</span>}
+        {(detalle.assignees || []).length > 0 && <span>{rt("ui.repos.assignedTo", "assigned to {0}", { 0: detalle.assignees.join(", ") })}</span>}
+        {detalle.commentCount > 0 && <span>{rt("ui.repos.comments", "{0} comments", { 0: detalle.commentCount })}</span>}
+      </div>
+
+      {detalle.body ? (
+        <>
+          <div style={seccion}>{rt("ui.repos.description", "Description")}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 220, overflow: "auto", background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>{detalle.body}</div>
+        </>
+      ) : (
+        <div style={{ ...seccion, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 11.5, fontStyle: "italic" }}>
+          {rt("ui.repos.noIssueBody", "Opened with no description.")}
+        </div>
+      )}
+
+      {(detalle.comments || []).length > 0 && (
+        <>
+          <div style={seccion}>{rt("ui.repos.conversation", "Conversation")}</div>
+          {detalle.comments.map(comentario => (
+            <div key={comentario.id} style={{ background: "white", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", marginBottom: 6 }}>
+              <div style={{ ...mono, color: "var(--muted-fg)", marginBottom: 3 }}>{comentario.author || "—"} · {cuando(comentario.createdAt)}</div>
+              <div style={{ fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto" }}>{comentario.body}</div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Modal de un issue, para el block de Home y de los Boards. Reusa DetalleIssue
+// por lo mismo que el de pull request reusa DetallePR: si divergen es un bug.
+function IssueDetailModal({ issue, onClose }) {
+  const [detalle, setDetalle] = useState(null);
+
+  useEffect(() => {
+    const corte = String(issue?.id || "").lastIndexOf("#");
+    if (corte < 0) { setDetalle({ error: rt("ui.repos.issueIdUnreadable", "Unreadable issue reference.") }); return; }
+    const proyecto = issue.id.slice(0, corte);
+    const numero = issue.id.slice(corte + 1);
+    let cancelado = false;
+    window.HQ_API.request(`/api/connectors/${issue.connectorId || "github"}/projects/${encodeURIComponent(proyecto)}/issues/${numero}`)
+      .then(data => { if (!cancelado) setDetalle(data); })
+      .catch(error => { if (!cancelado) setDetalle({ error: error?.detail || error?.message || String(error) }); });
+    return () => { cancelado = true; };
+  }, [issue]);
+
+  useEffect(() => {
+    const alPulsar = evento => { if (evento.key === "Escape") onClose(); };
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [onClose]);
+
+  return (
+    <div onClick={onClose} role="presentation"
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={evento => evento.stopPropagation()} role="dialog" aria-modal="true" aria-label={issue?.title || "Issue"}
+        style={{ width: "min(760px, 100%)", maxHeight: "86vh", overflow: "auto", background: "white", borderRadius: 10, border: "1px solid var(--border)", boxShadow: "0 16px 48px rgba(0,0,0,.22)" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{detalle?.title || issue?.title}</div>
+            {issue?.subtitle && <div style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", marginTop: 2 }}>{issue.subtitle}</div>}
+          </div>
+          {(detalle?.webUrl || issue?.url) && (
+            <a href={detalle?.webUrl || issue.url} target="_blank" rel="noreferrer"
+              style={{ flexShrink: 0, fontSize: 12.5, color: "var(--accent)", textDecoration: "none" }}>↗</a>
+          )}
+          <button onClick={onClose} aria-label={rt("home.close", "Close")}
+            style={{ flexShrink: 0, background: "none", border: 0, cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted-fg)", fontFamily: "inherit" }}>×</button>
+        </div>
+        <DetalleIssue detalle={detalle} />
+      </div>
+    </div>
+  );
+}
+window.IssueDetailModal = IssueDetailModal;
 
 // Detalle de un pull request: lo que la fila no cabe a decir. Vive fuera de
 // RepoItemsPanel porque solo se monta cuando hay algo desplegado.

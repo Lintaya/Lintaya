@@ -208,6 +208,7 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
   const [modalDoc, setModalDoc] = useState(null);
   const [modalPR, setModalPR] = useState(null);
   const [modalCommit, setModalCommit] = useState(null);
+  const [modalIssue, setModalIssue] = useState(null);
   const sectionRef = useRef(null);
   const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < BOARD_MOBILE_BREAKPOINT);
 
@@ -298,6 +299,9 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
     if (candidate.blockId === "recent-commits") {
       blockItemHandlers[candidate.id] = item => setModalCommit({ ...item, connectorId: candidate.connectorId });
     }
+    if (candidate.blockId === "open-issues") {
+      blockItemHandlers[candidate.id] = item => setModalIssue({ ...item, connectorId: candidate.connectorId });
+    }
   });
 
   const blockCount = window.ZoneTree.countBlocks(tree);
@@ -347,6 +351,7 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
       {modalDoc && <window.DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
       {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
       {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
+      {modalIssue && window.IssueDetailModal && <window.IssueDetailModal issue={modalIssue} onClose={() => setModalIssue(null)} />}
     </section>
   );
 }

@@ -63,6 +63,7 @@ async function syncGithub(cfg, options = {}) {
   const allDeployments = [];
   const allCommits = [];
   const allPullRequests = [];
+  const allIssues = [];
   const projects = await Promise.all(repoList.map(async (repository) => {
     const owner = repository.owner?.login || String(repository.full_name || "").split("/")[0];
     const name = repository.name;
@@ -156,6 +157,35 @@ async function syncGithub(cfg, options = {}) {
       }
     } catch {}
 
+    // A diferencia de los pull requests, esto es una llamada nueva por
+    // repositorio: nada la pedia antes. Es el precio de tener el block de
+    // issues, y se paga una vez por sync, no por cada vista.
+    try {
+      const issues = await request(
+        cfg.baseUrl,
+        cfg.token,
+        `/repos/${owner}/${name}/issues?state=open&per_page=100`,
+      );
+      // GitHub modela sus pull requests como issues: sin este filtro el block
+      // de issues repetiria entero el de pull requests.
+      for (const issue of (Array.isArray(issues) ? issues : []).filter(candidate => !candidate.pull_request)) {
+        allIssues.push({
+          id: `${repository.full_name}#${issue.number}`,
+          number: issue.number,
+          title: issue.title,
+          projectId: repository.full_name,
+          projectName: repository.name,
+          author: issue.user?.login || null,
+          labels: (issue.labels || []).map(label => typeof label === "string" ? label : label?.name).filter(Boolean),
+          assignees: (issue.assignees || []).map(person => person?.login).filter(Boolean),
+          comments: issue.comments || 0,
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          webUrl: issue.html_url,
+        });
+      }
+    } catch {}
+
     // GitHub's tags endpoint isn't date-sorted, so a plain tag list can't
     // reliably surface the newest one with a single call — try the formal
     // "Releases" feature first (already sorted, newest first) and only fall
@@ -199,8 +229,9 @@ async function syncGithub(cfg, options = {}) {
   allDeployments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   allCommits.sort((a, b) => new Date(b.date) - new Date(a.date));
   allPullRequests.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  allIssues.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   return {
-    projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests,
+    projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests, issues: allIssues,
     pagination: { projects: { pages: repositoryPages.pageCount, truncated: repositoryPages.truncated } },
   };
 }

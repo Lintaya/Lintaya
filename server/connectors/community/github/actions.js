@@ -180,9 +180,9 @@ function registerGithubActions({
     outputSchema: SYNC_OUTPUT_SCHEMA,
     handler: async ({ services }) => {
       const cfg = services.store.getConfig();
-      const { projects, deployments, commits, pullRequests } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests, issues } = await sync(cfg, { request });
       const syncedAt = isoNow();
-      services.store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], syncedAt });
+      services.store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], syncedAt });
       services.store.setStatus({
         status: "ok",
         lastSync: syncedAt,

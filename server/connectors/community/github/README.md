@@ -23,7 +23,11 @@ public configuration filtering, and credential redaction in logs.
 
 ## Runtime contract
 
-A sync stores `projects`, `deployments`, `commits` and `pullRequests`. The
+A sync stores `projects`, `deployments`, `commits`, `pullRequests` and
+`issues`. Issues cost one extra request per repository — nothing was fetching
+them before — and GitHub's `/issues` returns pull requests too (it models them
+as issues with a `pull_request` key), so they are filtered out or the issues
+block would repeat the pull-requests block in full. The
 open pull requests were already being fetched to count `openMRs` per
 repository; keeping the list costs no extra request and is what feeds the
 `open-pull-requests` block. Both writers — the `POST /sync` route and the

@@ -123,14 +123,14 @@ function registerGithubRoutes(options) {
     if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
     const startedAt = now();
     try {
-      const { projects, deployments, commits, pullRequests } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests, issues } = await sync(cfg, { request });
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const syncedAt = isoNow();
       const deploymentCount = deployments.length;
       const commitCount = commits.length;
       const total = projects.length + deploymentCount + commitCount;
 
-      store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], syncedAt });
+      store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], syncedAt });
       store.setStatus({
         status: "ok",
         latency,
@@ -350,6 +350,35 @@ function registerGithubRoutes(options) {
           badge: pr.draft
             ? { text: "draft", color: "#64748b" }
             : { text: "open", color: "#16a34a" },
+        })),
+        updatedAt: data?.syncedAt || null,
+      };
+    },
+  });
+
+  // Home block "open-issues" — lo que esta pedido y sin hacer. Al hacer click,
+  // Home abre su modal de detalle igual que con los pull requests.
+  registerBlockRoute({
+    app,
+    requireAuth,
+    id,
+    blockId: "open-issues",
+    getBlock: (req) => {
+      if (!store.getConfig()) return null;
+      const data = store.getData();
+      const { scope, limit } = req?.query || {};
+      let issues = [...(data?.issues || [])]
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      if (scope) issues = issues.filter(issue => String(issue.projectId) === String(scope));
+      issues = issues.slice(0, Number(limit) || 30);
+      return {
+        items: issues.map(issue => ({
+          id: issue.id,
+          title: issue.title,
+          subtitle: `#${issue.number} · ${issue.author || "—"} · ${issue.projectName}${issue.labels?.length ? " · " + issue.labels.join(", ") : ""}`,
+          timestamp: issue.updatedAt,
+          url: issue.webUrl,
+          ...(issue.comments > 0 ? { badge: { text: `${issue.comments} 💬`, color: "#64748b" } } : {}),
         })),
         updatedAt: data?.syncedAt || null,
       };
