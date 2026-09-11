@@ -258,6 +258,35 @@ test("pipeline routes return RFC 9457 validation details", async (t) => {
   assert.equal(missingRef.body.detail, "ref-required");
 });
 
+test("deleting a branch validates its name and refuses one without a clone", async (t) => {
+  const harness = setup();
+  t.after(() => harness.cleanup());
+
+  // Sin clon local no hay rama que borrar: misma respuesta que el resto de
+  // rutas git locales, 404 y no 400 — no es una entrada invalida, es que no
+  // existe la copia de trabajo sobre la que actuar.
+  const sinClon = await harness.invoke("POST", "/api/connectors/:provider/projects/:id/git/delete-branch", {
+    params: { provider: "gitlab", id: "project-1" }, body: { branch: "vieja" },
+  });
+  assert.equal(sinClon.status, 404);
+
+  const clonePath = path.join(harness.root, "clone-delete");
+  fs.mkdirSync(clonePath);
+  harness.store.set("gitlab-clone-state", { "project-1": { path: clonePath } });
+
+  // Falta el nombre.
+  const sinNombre = await harness.invoke("POST", "/api/connectors/:provider/projects/:id/git/delete-branch", {
+    params: { provider: "gitlab", id: "project-1" }, body: {},
+  });
+  assert.equal(sinNombre.status, 400);
+
+  // Un nombre que no es una ref valida no llega nunca a git.
+  const nombreInvalido = await harness.invoke("POST", "/api/connectors/:provider/projects/:id/git/delete-branch", {
+    params: { provider: "gitlab", id: "project-1" }, body: { branch: "rama; rm -rf /" },
+  });
+  assert.equal(nombreInvalido.status, 400);
+});
+
 test("advisory detail routes exist for each source and refuse an adapter that lacks them", async (t) => {
   const harness = setup();
   t.after(() => harness.cleanup());

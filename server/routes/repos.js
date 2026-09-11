@@ -1730,6 +1730,38 @@ function registerReposRoutes({
     }
   });
 
+  // POST /api/connectors/:provider/projects/:id/git/delete-branch
+  //
+  // Borra una rama LOCAL, nunca la remota: el remoto es de todos y esta ruta
+  // solo administra la copia de trabajo de esta maquina.
+  //
+  // Usa -d y jamas -D. La minuscula hace que git se niegue si la rama tiene
+  // commits que no esten en ningun sitio, asi que la operacion no puede perder
+  // trabajo — y esa garantia la da git, no una comprobacion nuestra que
+  // habria que recordar mantener. La mayuscula existe precisamente para
+  // saltarsela, y por eso no aparece aqui.
+  app.post("/api/connectors/:provider/projects/:id/git/delete-branch", requireAuth,
+    auditWrite({ provider: (req) => req.params.provider, action: "git branch -d" }),
+    async (req, res) => {
+    const localClone = requireLocalClone(req, res);
+    if (!localClone) return;
+    const { branch } = req.body || {};
+    const safeBranch = requireRef(req, res, branch);
+    if (!safeBranch) return;
+    // Borrar la rama en la que estas parado es un error de git poco claro;
+    // decirlo aqui ahorra tener que interpretarlo.
+    if (readGitBranch(localClone.path) === safeBranch) {
+      return sendAppError(res, AppError.badRequest("cannot-delete-current-branch"), req);
+    }
+    try {
+      const result = await runProcess("git", ["-C", localClone.path, "branch", "-d", safeBranch]);
+      res.locals.auditMessage = `git branch -d ${safeBranch} en ${req.params.id}`;
+      res.json({ ok: true, branch: safeBranch, output: `${result.stdout}\n${result.stderr}`.trim() });
+    } catch (err) {
+      sendGitFailure(res, err, req);
+    }
+  });
+
   // POST /api/connectors/:provider/projects/:id/git/push
   app.post("/api/connectors/:provider/projects/:id/git/push", requireAuth,
     auditWrite({ provider: (req) => req.params.provider, action: "git push" }),

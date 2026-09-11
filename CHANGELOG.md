@@ -63,6 +63,14 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   detail in a modal instead of leaving for GitHub. It works on Boards and
   Dashboards too. Clicking a commit in the existing "recent commits" block now
   opens its own detail — full message, signature, changed files — the same way.
+- A local branch can be deleted through the repository's git routes, alongside
+  the checkout, pull and push already there. It runs `git branch -d` and never
+  `-D`: the lowercase form makes git itself refuse a branch holding commits
+  that exist nowhere else, so the operation cannot lose work — a guarantee git
+  gives rather than a check of ours that would have to be remembered. Deleting
+  the branch currently checked out is refused in plain words instead of
+  through git's own cryptic error, and only local branches are touched: the
+  remote belongs to everyone.
 - A pull request can be merged through the `merge-pull-request` action. It is
   the connector's only destructive action: merging rewrites the target branch
   and no click undoes it, so the first call only records a pending request and
