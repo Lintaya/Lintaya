@@ -1509,13 +1509,15 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
     label: dashboard.title,
     icon: ICONS[dashboard.icon] || ICONS.grid,
     badge: String(dashboard.boardIds?.length || ""),
-    navOrder: 480 + i,
+    // User dashboards belong with the Builder surfaces, immediately after
+    // Devices, instead of being pushed to the bottom of the sidebar.
+    navOrder: 64 + i,
   })), ...modulePages.filter(page => page.active && page.showInSidebar !== false).map((page, i) => ({
     id: `page:${page.id}`,
     label: page.title,
     icon: ICONS[page.icon] || ICONS.grid,
     badge: "",
-    navOrder: 500 + i,
+    navOrder: 65 + i,
   }))].sort((left, right) => left.navOrder - right.navOrder || left.label.localeCompare(right.label));
   const items = allItems
     .filter(it => !hiddenRoutes.includes(it.id))

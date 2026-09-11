@@ -117,6 +117,21 @@ function registerDashboardsRoutes({ app, requireAuth, kvGet, kvSet, auditActivit
     const dashboards = kvGet("dashboards")?.value || [];
     const removed = dashboards.find(dashboard => dashboard.id === req.params.id);
     if (!removed) return sendAppError(res, AppError.notFound("not-found"), req);
+    if (req.body?.cascade === true) {
+      if (String(req.body.confirmationCode || "") !== "DELETE ALL") return sendAppError(res, AppError.badRequest("cascade-confirmation-required"), req);
+      const pages = kvGet("module-pages")?.value || [];
+      const pageIds = new Set(removed.boardIds || []);
+      const removedPages = pages.filter(page => pageIds.has(page.id));
+      const blockIds = new Set();
+      const walk = node => { if (!node) return; if (node.t === "z") return (node.blocks || []).forEach(id => blockIds.add(id)); walk(node.a); walk(node.b); };
+      removedPages.forEach(page => walk(page.tree));
+      const blocks = kvGet("custom-blocks")?.value || [];
+      kvSet("module-pages", pages.filter(page => !pageIds.has(page.id)));
+      kvSet("custom-blocks", blocks.filter(block => !blockIds.has(block.id)));
+      kvSet("dashboards", dashboards.filter(dashboard => dashboard.id !== req.params.id));
+      res.locals.auditMessage = `Borrado en cadena Dashboard "${removed.title}" (${removedPages.length} Boards, ${blockIds.size} Blocks)`;
+      return res.json({ ok: true, cascade: true, boards: removedPages.length, blocks: blockIds.size });
+    }
     kvSet("dashboards", dashboards.filter(dashboard => dashboard.id !== req.params.id));
     res.locals.auditMessage = `Borrar Dashboard "${removed.title}"`;
     res.json({ ok: true });
