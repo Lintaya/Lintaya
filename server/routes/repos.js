@@ -1226,6 +1226,43 @@ function registerReposRoutes({
     return file;
   }
 
+  // File paths already sit behind a `--`, but refs cannot: git needs the
+  // revision BEFORE the separator. A ref starting with "-" is parsed as an
+  // option, and `log`/`show`/`diff` all accept `--output=<file>`, which writes
+  // wherever it is told — arbitrary file write as the server user. So every ref
+  // is validated against a known shape before it reaches argv.
+  const SHA_PATTERN = /^[0-9a-fA-F]{4,40}$/;
+  // One property closes the hole: the ref must NOT start with "-", because
+  // every git option does. The rest of the pattern is defence in depth — it
+  // rejects ".." (smuggled ranges) and the characters git-check-ref-format
+  // refuses anyway. Deliberately permissive otherwise (@, +, #, accents): git
+  // already validates ref shape and returns its own error, and a shorter
+  // allowlist would break legitimate branch names.
+  const REF_PATTERN = /^(?!-)(?!.*\.\.)[^\s~^:?*\[\\]{1,255}$/;
+
+  function requireSha(req, res, sha) {
+    if (typeof sha !== "string" || !SHA_PATTERN.test(sha)) {
+      sendAppError(res, AppError.badRequest("sha-invalid"), req);
+      return null;
+    }
+    return sha;
+  }
+
+  // `fallback` covers the callers where the ref is optional and git would
+  // otherwise receive HEAD.
+  function requireRef(req, res, ref, fallback = null) {
+    if (ref === undefined || ref === null || ref === "") {
+      if (fallback) return fallback;
+      sendAppError(res, AppError.badRequest("ref-required"), req);
+      return null;
+    }
+    if (typeof ref !== "string" || !REF_PATTERN.test(ref)) {
+      sendAppError(res, AppError.badRequest("ref-invalid"), req);
+      return null;
+    }
+    return ref;
+  }
+
   // Classified in core/services/git-errors.js: a diverged branch, a rejected
   // push, an expired token and an unreachable remote each get their own code
   // and status instead of one opaque 502. Never forwards git's stderr — git
@@ -1418,7 +1455,8 @@ function registerReposRoutes({
   app.get("/api/connectors/:provider/projects/:id/git/log", requireAuth, async (req, res) => {
     const localClone = requireLocalClone(req, res);
     if (!localClone) return;
-    const branch = req.query.branch || "HEAD";
+    const branch = requireRef(req, res, req.query.branch, "HEAD");
+    if (!branch) return;
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 300);
     try {
       const fmt = ["%H", "%h", "%an", "%ae", "%ad", "%s", "%P", "%D"].join("\x1f");
@@ -1444,11 +1482,13 @@ function registerReposRoutes({
   app.get("/api/connectors/:provider/projects/:id/git/commit/:sha", requireAuth, async (req, res) => {
     const localClone = requireLocalClone(req, res);
     if (!localClone) return;
+    const sha = requireSha(req, res, req.params.sha);
+    if (!sha) return;
     try {
       const [nameStatus, numstat, fullDiff] = await Promise.all([
-        runProcess("git", ["-C", localClone.path, "show", "--name-status", "--pretty=format:", req.params.sha]),
-        runProcess("git", ["-C", localClone.path, "show", "--numstat", "--pretty=format:", req.params.sha]),
-        runProcess("git", ["-C", localClone.path, "show", "--pretty=format:", req.params.sha]),
+        runProcess("git", ["-C", localClone.path, "show", "--name-status", "--pretty=format:", sha]),
+        runProcess("git", ["-C", localClone.path, "show", "--numstat", "--pretty=format:", sha]),
+        runProcess("git", ["-C", localClone.path, "show", "--pretty=format:", sha]),
       ]);
 
       const statusByFile = {};
@@ -1562,10 +1602,13 @@ function registerReposRoutes({
     const { path: file, sha, ref } = req.query;
     const safeFile = requireCloneFile(req, res, localClone, file);
     if (!safeFile) return;
-    if (typeof sha !== "string" || !sha) return sendAppError(res, AppError.badRequest("sha-required"), req);
+    const safeSha = requireSha(req, res, sha);
+    if (!safeSha) return;
+    const safeRef = requireRef(req, res, ref, "HEAD");
+    if (!safeRef) return;
     try {
       const result = await runProcess("git", [
-        "-C", localClone.path, "diff", `${sha}..${ref || "HEAD"}`, "--", safeFile,
+        "-C", localClone.path, "diff", `${safeSha}..${safeRef}`, "--", safeFile,
       ]);
       res.json({ diff: result.stdout.split(/\r?\n/).slice(0, 2000) });
     } catch (err) {
@@ -1711,10 +1754,14 @@ function registerReposRoutes({
     const localClone = requireLocalClone(req, res);
     if (!localClone) return;
     const { branch } = req.body || {};
-    if (!branch) return sendAppError(res, AppError.badRequest("branch-required"), req);
-    const localName = branch.replace(/^origin\//, "");
+    const safeBranch = requireRef(req, res, branch);
+    if (!safeBranch) return;
+    // The derived name is validated too: it comes from the same untrusted value
+    // and is the argument to -B.
+    const localName = requireRef(req, res, safeBranch.replace(/^origin\//, ""));
+    if (!localName) return;
     try {
-      await runProcess("git", ["-C", localClone.path, "checkout", "-B", localName, branch]);
+      await runProcess("git", ["-C", localClone.path, "checkout", "-B", localName, safeBranch]);
       const current = readGitBranch(localClone.path);
       persistGitlabCloneState(req.params.id, { branch: current });
       res.locals.auditMessage = `git checkout ${current} en ${req.params.id}`;

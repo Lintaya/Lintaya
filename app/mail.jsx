@@ -11,6 +11,37 @@ const mt = (key, fallback, vars) => window.I18N?.t(key, fallback, vars) || fallb
 const toast = (msg, kind = "ok") =>
   window.dispatchEvent(new CustomEvent("toast", { detail: { msg, kind } }));
 
+// A mail body is the most hostile input this app renders: it is entirely
+// controlled by whoever sent the message — no prior access to Lintaya needed —
+// and the API token sits in localStorage (app/api.js) one XSS away. Everything
+// coming from the provider goes through block-builder.jsx's shared sanitizer
+// (DOMPurify plus its hook restricting src/poster to http(s)), which fails
+// closed to plain text if DOMPurify did not load.
+function escapeHtml(text) {
+  return String(text == null ? "" : text)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function sanitizeMailHtml(html) {
+  // Read off window on every call rather than at module eval: block-builder.jsx
+  // loads after this file in Lintaya.html.
+  const sanitize = window.sanitizeContentHtml;
+  if (typeof sanitize !== "function") {
+    return escapeHtml(String(html || "").replace(/<[^>]*>/g, ""));
+  }
+  const holder = document.createElement("div");
+  holder.innerHTML = sanitize(html || "");
+  // Every surviving link leaves the app: noopener stops the opened page from
+  // reaching back through window.opener. Current browsers imply it for
+  // target=_blank; this covers the older ones.
+  for (const anchor of holder.querySelectorAll("a[href]")) {
+    anchor.setAttribute("target", "_blank");
+    anchor.setAttribute("rel", "noopener noreferrer");
+  }
+  return holder.innerHTML;
+}
+
 function fmtWhen(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -123,7 +154,9 @@ function RichBody({ html, onChange, minHeight = 120 }) {
   const ref = useRef(null);
   const initialized = useRef(false);
   useEffect(() => {
-    if (!initialized.current && ref.current) { ref.current.innerHTML = html || ""; initialized.current = true; }
+    // The seed HTML is the quoted message on reply/forward — sender-controlled
+    // content, so it goes through the same sanitizer as the viewer.
+    if (!initialized.current && ref.current) { ref.current.innerHTML = sanitizeMailHtml(html); initialized.current = true; }
   }, [html]);
   const exec = (cmd, arg) => {
     document.execCommand(cmd, false, arg);
@@ -354,7 +387,9 @@ function ReadModal({ mail, connectorId, onClose, onChanged }) {
           <div style={fld}><span style={fk}>{window.I18N.t("ui.mail.to", "To")}</span><span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{mail.to}</span></div>
           <div style={fld}><span style={fk}>{window.I18N.t("ui.mail.date", "Date")}</span><span style={{ fontSize: 12 }}>{fmtFull(mail.receivedAt)}</span></div>
           <div style={{ padding: "12px 14px", fontSize: 12.5, lineHeight: 1.6, color: "var(--fg)" }}
-            dangerouslySetInnerHTML={{ __html: mail.htmlBody || `<p>${(mail.body || "").replace(/\n/g, "<br/>")}</p>` }} />
+            dangerouslySetInnerHTML={{ __html: mail.htmlBody
+              ? sanitizeMailHtml(mail.htmlBody)
+              : `<p>${escapeHtml(mail.body || "").replace(/\n/g, "<br/>")}</p>` }} />
 
           {mode && (
             <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10 }}>

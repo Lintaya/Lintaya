@@ -1,5 +1,6 @@
 // Interactive SSH sessions, persistent logs and the terminal WebSocket.  The
 // container/fabric one-command helpers live separately in core/services.
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { WebSocketServer } = require("ws");
@@ -45,6 +46,15 @@ function registerSshRoutes({
     }, SESSION_TTL);
     entry.timeoutId.unref?.();
   };
+  // Fingerprint of the credential a session was opened with. It decides whether
+  // a reattach request comes from whoever authenticated it; the plaintext
+  // password is never stored and never compared.
+  const credentialFingerprint = (password) =>
+    password ? crypto.createHash("sha256").update(String(password)).digest() : null;
+
+  const sameFingerprint = (a, b) =>
+    Boolean(a) && Boolean(b) && a.length === b.length && crypto.timingSafeEqual(a, b);
+
   const emitError = (id, entry, message) => {
     entry.status = "error";
     entry.error = message;
@@ -110,11 +120,18 @@ function registerSshRoutes({
       }
     }
 
-    if (!directPassword) {
-      for (const [id, entry] of sshPool) {
-        if (entry.ip === ip && entry.username === username && ["connected", "connecting"].includes(entry.status) && entry.stream && !entry.stream.destroyed) {
-          return res.json({ sessionId: id, reattach: true });
-        }
+    // Reattach by explicit sessionId: holding the id means you opened the
+    // session (or were handed it), so the id IS the capability and the
+    // credential does not need re-proving. This runs before anything is
+    // resolved because it is the one path that must keep working with the vault
+    // locked — reconnecting a tab, not opening new access.
+    const requestedSessionId = typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
+    if (requestedSessionId) {
+      const existing = sshPool.get(requestedSessionId);
+      if (existing && existing.ip === ip && existing.username === username
+        && ["connected", "connecting"].includes(existing.status)
+        && existing.stream && !existing.stream.destroyed) {
+        return res.json({ sessionId: requestedSessionId, reattach: true });
       }
     }
 
@@ -146,12 +163,32 @@ function registerSshRoutes({
         "Could not fetch the jump host's stored password from the vault (Bitwarden lookup failed) — this is not a wrong password, retry the connection."), req);
     }
 
+    // Discovery by (ip, username): a live session is only handed back to a
+    // caller presenting the SAME credential it was opened with. This lookup
+    // used to run before any credential was resolved, so a request carrying
+    // just {ip, username} — no password, no vaultItemId, vault locked — was
+    // given a shell somebody else had already authenticated.
+    // A session opened with no server-side credential (the user authenticated
+    // by typing into the pty) has nothing to compare against, so it is not
+    // discoverable at all: it can only be reattached with its sessionId.
+    const fingerprint = credentialFingerprint(password);
+    if (fingerprint) {
+      for (const [id, entry] of sshPool) {
+        if (entry.ip === ip && entry.username === username
+          && ["connected", "connecting"].includes(entry.status)
+          && entry.stream && !entry.stream.destroyed
+          && sameFingerprint(entry.credentialFingerprint, fingerprint)) {
+          return res.json({ sessionId: id, reattach: true });
+        }
+      }
+    }
+
     const id = sessionId();
     const safeIp = String(ip).replace(/[^0-9a-zA-Z.\-]/g, "_");
     const safeUser = String(username).replace(/[^0-9a-zA-Z.\-]/g, "_");
     const logPath = path.join(logsDir, `${new Date().toISOString().slice(0, 10)}_${safeIp}_${safeUser}_${id}.log`);
     fs.writeFileSync(logPath, `# SSH log — ${username}@${ip}:${port} — ${new Date().toISOString()}\n\n`);
-    const entry = { sessionId: id, ip, username, port: parseInt(port, 10), ssh: null, stream: null, jumpSsh: null, replayBuffer: Buffer.alloc(0), clients: new Set(), status: "connecting", error: null, timeoutId: null, createdAt: Date.now(), logPath };
+    const entry = { sessionId: id, ip, username, port: parseInt(port, 10), ssh: null, stream: null, jumpSsh: null, replayBuffer: Buffer.alloc(0), clients: new Set(), status: "connecting", error: null, timeoutId: null, createdAt: Date.now(), logPath, credentialFingerprint: fingerprint };
     sshPool.set(id, entry);
     const ssh = new SSHClient();
     entry.ssh = ssh;
