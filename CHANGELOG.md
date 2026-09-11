@@ -9,6 +9,16 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Changed
 
+- Home's two zones are separated by the same handle the Dashboard uses, and at
+  the same distance. The zones sat 44 px apart — the grid added its own gap on
+  each side of the 12 px handle — against the Dashboard's 12 px, and blocks
+  stacked 16 px apart against its 10 px. The handle is now the Dashboard's own
+  component rather than a copy of its looks, so the two screens cannot drift
+  apart again; its keyboard step moves by a percentage of the width, which
+  makes an arrow press shift the divider by the same amount in either
+  direction, and dragging accepts touch and pen and not only a mouse.
+- Home is headed by its own title, like every other view.
+
 - The public build ships the community connectors only. The enterprise and
   development tiers — Qportal, UCS Manager, vCenter, Outlook, Outlook local and
   Lintaya remote — moved to their own repository, installed from a directory
@@ -19,6 +29,22 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   machine is still configured once through the UI.
 
 ### Added
+
+- The sidebar answers a right-click on any entry with a menu to move it up or
+  down and to hide it. It is a second door into what Settings → Navigation and
+  each Board's "show in sidebar" toggle already did, so anything hidden from
+  here can still be brought back from where it always lived: built-in sections
+  from Settings, and a Board or Dashboard from its own editor. Ordering a Board
+  or Dashboard is new — until now its place in the menu came from its place in
+  the list that loaded it and could not be changed — and, like the order of the
+  built-in sections, it is remembered per browser. An entry published by a
+  connector keeps its position and visibility from the connector, and the menu
+  says so rather than offering an action that would leave it unreachable.
+- Home's "+ Block" menu opens on a search box, scrolls instead of growing, and
+  keeps "new note" in view at the bottom. The menu listed every available block
+  at full height, which a catalogue of any size makes unusable. Accents are
+  ignored when matching, because block titles arrive from connectors with them
+  and nobody types them when searching.
 
 - An installed connector can ship its own documentation page. Anything under
   `<connector>/docs/` in the connector directory is indexed beside the
@@ -181,6 +207,11 @@ Semantic Versioning, beginning with prereleases before the first stable release.
   and a sample hostname used as a form placeholder in Devices.
 
 ### Fixed
+
+- Home no longer announces "No connectors configured" while connectors are
+  connected and syncing. The line was chosen by whether vCenter specifically
+  was configured, so every install without that one connector was told it had
+  none at all.
 
 - One page that fails no longer takes the application with it. A view throwing
   during render used to take down the whole React tree — a blank screen,

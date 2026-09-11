@@ -15,11 +15,12 @@ function clampBoardRatio(value) {
   return Math.min(BOARD_MAX_RATIO, Math.max(BOARD_MIN_RATIO, value));
 }
 
-function BoardResizeSeparator({ vertical, ratio, onPointerDown, onKeyDown }) {
+function BoardResizeSeparator({ vertical, ratio, onPointerDown, onKeyDown, className }) {
   const [active, setActive] = useState(false);
   const percent = Math.round(ratio * 100);
   return (
     <div
+      className={className}
       role="separator"
       tabIndex={0}
       aria-orientation={vertical ? "vertical" : "horizontal"}
@@ -336,3 +337,6 @@ function CustomPageView({ page, blockCatalog = [], onEdit, presentation = false,
 }
 
 window.CustomPageView = CustomPageView;
+// Home reusa el separador de zonas para que ambas pantallas se vean y se
+// manejen igual; su geometria no depende del arbol de zonas del Dashboard.
+window.BoardResizeSeparator = BoardResizeSeparator;
