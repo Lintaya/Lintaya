@@ -173,7 +173,7 @@ test("PUT can switch a block's kind and content/format fields", async () => {
   assert.equal(body.content, "<p>Hola</p>");
   // Campos del kind anterior no se limpian solos, pero ya no se usan — el
   // renderer decide qué mirar según `kind`, no según qué campos existen.
-  assert.equal(body.connectorId, "gitlab");
+  assert.equal(body.connectorId, undefined, "switching kind strips stale connector fields");
 });
 
 test("PUT can update a content block's prompt independently of its content", async () => {
@@ -251,4 +251,22 @@ test("DELETE also drops the block's id from home-layout if it was added there", 
   await request(app, "DELETE", `/api/home/custom-blocks/${block.id}`, { headers });
 
   assert.deepEqual(store.get("home-layout"), { left: [], right: ["plane"] });
+});
+
+test("QR blocks round-trip, reject unknown kinds, and reject incomplete QR PUTs", async () => {
+  const { app, headers } = setup();
+  const body = { kind: "qr", title: "Docs QR", payload: { mode: "manual", value: "https://例子.test/é" }, logo: { source: "brand", variant: "light" }, style: { ecLevel: "Q", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } };
+  const created = await request(app, "POST", "/api/home/custom-blocks", { headers, body });
+  assert.equal(created.status, 200); assert.deepEqual(created.json().payload, body.payload);
+  const listed = await request(app, "GET", "/api/home/custom-blocks", { headers }); assert.deepEqual(listed.json()[0].style, body.style);
+  const unknown = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { kind: "wat", title: "x" } }); assert.equal(unknown.status, 400);
+  const connector = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { connectorId: "gitlab", blockId: "recent-commits", title: "connector" } });
+  const incomplete = await request(app, "PUT", `/api/home/custom-blocks/${connector.json().id}`, { headers, body: { kind: "qr" } }); assert.equal(incomplete.status, 400);
+});
+
+test("PUT switching between kinds strips stale fields", async () => {
+  const { app, headers } = setup();
+  const created = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { connectorId: "gitlab", blockId: "recent-commits", title: "x" } });
+  const switched = await request(app, "PUT", `/api/home/custom-blocks/${created.json().id}`, { headers, body: { kind: "qr", payload: { mode: "manual", value: "https://example.com" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } } });
+  assert.equal(switched.status, 200); assert.equal(switched.json().connectorId, undefined); assert.equal(switched.json().blockId, undefined);
 });

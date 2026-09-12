@@ -111,9 +111,11 @@ erDiagram
 
 Most product state is intentionally stored as JSON values in `kv`, keyed by a
 stable domain prefix such as `connector-config-<id>`, `connector-data-<id>`,
-`dashboards`, `custom-blocks`, or `activity-log-<domain>`. The diagram shows
-the physical tables; the logical records inside `kv` are documented by the
-routes and services that own each key. Connector secrets are not stored in
+`dashboards`, `custom-blocks`, or `activity-log-<domain>`. The `custom-blocks`
+list stores connector, content and QR records; QR records contain static
+payload, logo and style fields. The diagram shows the physical tables; the
+logical records inside `kv` are documented by the routes and services that own
+each key. Connector secrets are not stored in
 public connector configuration and must be handled by the Secret Store.
 
 There is no frontend build step. Lintaya.html loads app/*.jsx as browser Babel

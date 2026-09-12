@@ -13,6 +13,7 @@ its content.
 | Static Markdown (.md) | Text, lists, tables, links, code and Mermaid diagrams. | Edit and save the content. |
 | Static HTML | An HTML fragment containing headings, paragraphs, lists or tables. | Edit and save the content. |
 | Dynamic connector | Commits, repositories, tasks, documents and other provider data. | Connection reads and synchronization. |
+| QR | Static text or URL encoded as a QR symbol. | Edit and save the payload. |
 
 The editor labels Markdown/HTML content **IA**, but you can paste handwritten
 content without generating anything. AI-generated text remains static; its saved
@@ -65,6 +66,27 @@ block saves your own configuration, such as a different scope or limit. Only
 block types and filters implemented by that connector are available. Sync needs
 a working connection.
 
+## Create a QR block
+
+1. Open **Blocks → + New block** and choose **QR** under **Type**.
+2. Leave **Static** selected; the disabled **Dynamic** option is reserved for a
+   later milestone.
+3. Enter the URL or text in the centre configuration panel. The Lintaya brand
+   mark is included by default; turn the logo off when needed.
+4. Review the preview and save. QR modules are square. Decorative patterns and
+   custom logo uploads are reserved for a later milestone.
+
+The builder keeps Type and the Static/Dynamic choice in the left identity column;
+the destination, colours and logo are in the centre configuration panel. The
+logo is placed on an opaque backing plate, within a tested budget, without
+covering finder, timing or alignment patterns. If it cannot fit, the builder
+warns and generates the code without it. Error correction is selected
+automatically and stored in `style.ecLevel`.
+
+The rendered panel offers SVG and PNG downloads. QR blocks are included in
+workspace package export/import. The Assistant can list QR blocks but cannot
+create them.
+
 ## Reuse a block across Boards
 
 1. Create or edit a Board from **Boards**.
@@ -83,7 +105,8 @@ where it may appear unavailable.
 
 ## Storage and implementation
 
-Custom blocks are saved on the Lintaya server, not as independent .md or .html
-files. The editor is app/block-builder.jsx, the catalog app/block-catalog.jsx,
-and the API server/routes/custom-blocks.js. Board editing lives in
-app/module-builder.jsx.
+Custom blocks are saved on the Lintaya server in the `custom-blocks` KV list,
+not as independent .md or .html files. Connector, content and QR blocks share
+that list. QR records store a static payload plus logo and style fields. The
+editor is app/block-builder.jsx, the catalog app/block-catalog.jsx, and the API
+server/routes/custom-blocks.js. Board editing lives in app/module-builder.jsx.

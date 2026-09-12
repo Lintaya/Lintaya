@@ -373,15 +373,18 @@ function BlockCatalogView({ isMobile }) {
                   onMouseEnter={e => e.currentTarget.style.background = "var(--row-hover)"}
                   onMouseLeave={e => e.currentTarget.style.background = (pageConnectorBlocks.length + i) % 2 === 1 ? "color-mix(in srgb, var(--fg) 4%, transparent)" : "transparent"}>
                   <td className="blocks-catalog-icon" style={{ padding: "8px 12px" }}>
-                    {b.kind === "content"
-                      ? <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--accent)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{b.icon || "🤖"}</div>
+                    {/* Un block QR no tiene connectorId: pasarlo a BlockLogo
+                        caía en el fallback "?" sobre gris, que es lo que se
+                        veía en la lista. Lleva su propio avatar, igual que IA. */}
+                    {b.kind === "content" || b.kind === "qr"
+                      ? <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--accent)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: b.kind === "qr" && !b.icon ? 11 : 14, fontWeight: b.kind === "qr" && !b.icon ? 700 : 400, flexShrink: 0 }}>{b.icon || (b.kind === "qr" ? "QR" : "🤖")}</div>
                       : <BlockLogo connectorId={b.connectorId} color={connectorColors[b.connectorId]} />}
                   </td>
                   <td className="blocks-catalog-title" style={{ padding: "8px 12px", fontWeight: 500 }}>
                     {b.icon ? `${b.icon} ` : ""}{b.title}
                     {b.description && <div style={{ fontWeight: 400, fontSize: 11, color: "var(--muted-fg)", marginTop: 1 }}>{b.description}</div>}
                   </td>
-                  <td className="blocks-catalog-secondary" style={{ padding: "8px 12px", color: "var(--muted-fg)", textTransform: "capitalize" }}>{b.kind === "content" ? "IA" : b.connectorId}</td>
+                  <td className="blocks-catalog-secondary" style={{ padding: "8px 12px", color: "var(--muted-fg)", textTransform: "capitalize" }}>{b.kind === "content" ? "IA" : b.kind === "qr" ? "QR" : b.connectorId}</td>
                   <td className="blocks-catalog-secondary" style={{ padding: "8px 12px" }}>
                     <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 14%, white)", color: "var(--accent)" }}>{bct("blocks.custom", "Custom")}</span>
                   </td>

@@ -24,19 +24,17 @@
   "$defs": {
     "key": { "type": "string", "pattern": "^(block|requirement|board|dashboard):[a-z0-9][a-z0-9._-]{0,79}$" },
     "blockRef": { "type": "string", "pattern": "^(block|requirement):[a-z0-9][a-z0-9._-]{0,79}$" },
-    "block": {
-      "type": "object", "additionalProperties": false,
-      "required": ["key", "kind", "title", "format", "content"],
-      "properties": {
-        "key": { "$ref": "#/$defs/key" }, "kind": { "const": "content" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
-        "description": { "type": ["string", "null"], "maxLength": 2000 },
-        "icon": { "type": ["string", "null"], "maxLength": 80 },
-        "format": { "enum": ["md", "html"] }, "content": { "type": "string", "maxLength": 250000 },
-        "prompt": { "type": ["string", "null"], "maxLength": 20000 },
-        "rules": { "type": ["string", "null"], "maxLength": 20000 }
-      }
-    },
+    "block": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["key", "kind", "title", "format", "content"], "properties": {
+        "key": { "$ref": "#/$defs/key" }, "kind": { "const": "content" }, "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "description": { "type": ["string", "null"], "maxLength": 2000 }, "icon": { "type": ["string", "null"], "maxLength": 80 }, "format": { "enum": ["md", "html"] }, "content": { "type": "string", "maxLength": 250000 }, "prompt": { "type": ["string", "null"], "maxLength": 20000 }, "rules": { "type": ["string", "null"], "maxLength": 20000 }
+      } },
+      { "type": "object", "additionalProperties": false, "required": ["key", "kind", "title", "payload", "logo", "style"], "properties": {
+        "key": { "$ref": "#/$defs/key" }, "kind": { "const": "qr" }, "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "description": { "type": ["string", "null"], "maxLength": 2000 }, "icon": { "type": ["string", "null"], "maxLength": 80 },
+        "payload": { "type": "object", "additionalProperties": false, "required": ["mode", "value"], "properties": { "mode": { "const": "manual" }, "value": { "type": "string", "minLength": 1, "maxLength": 10000 } } },
+        "logo": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["source", "variant"], "properties": { "source": { "const": "brand" }, "variant": { "enum": ["light", "dark"] } } }, { "type": "object", "additionalProperties": false, "required": ["source"], "properties": { "source": { "const": "none" } } }] },
+        "style": { "type": "object", "additionalProperties": false, "required": ["ecLevel", "pattern", "corners", "fgColor", "bgColor"], "properties": { "ecLevel": { "enum": ["L", "M", "Q", "H"] }, "pattern": { "const": "square" }, "corners": { "const": "square" }, "fgColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }, "bgColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" } } }
+      } }
+    ] },
     "requirement": {
       "type": "object", "additionalProperties": false,
       "required": ["key", "connectorTypeId", "blockId", "connectionAlias"],

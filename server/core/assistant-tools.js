@@ -202,6 +202,7 @@ function listCustomBlocksSummary({ kvGet }) {
       title: block.title,
       kind: block.kind || "connector",
       ...(block.kind === "content" ? { format: block.format || "md" } : {}),
+      ...(block.kind === "qr" ? { payload: block.payload } : {}),
     }));
 }
 

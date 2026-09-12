@@ -159,7 +159,7 @@ function buildSearchEntries({ modulePages, dashboards, blockCatalog, itemsByKey 
     for (const blockId of collectBlockIds(board.tree)) {
       const block = catalogById.get(blockId);
       if (!block) continue;
-      if (block.kind === "content") {
+      if (block.kind === "content" || block.kind === "qr") {
         entries.push({
           type: "block", label: block.title,
           hint: `${board.title} · ${(block.content || "").slice(0, 400)}`,

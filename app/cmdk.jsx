@@ -59,7 +59,9 @@ function CommandK({ open, onClose, onNavigate, connectorModules = [], modulePage
       window.ZoneTree.blockIds(board.tree).forEach(blockId => {
         const block = catalogById.get(blockId);
         if (!block) return;
-        if (block.kind === "content") {
+        if (block.kind === "content" || block.kind === "qr") {
+          const hint = block.kind === "qr" ? (block.payload?.value || "") : (block.content || "").slice(0, 400);
+          block = { ...block, content: hint };
           out.push({ type: "block", label: block.title, hint: `${board.title} · ${(block.content || "").slice(0, 400)}`,
             boardId: board.id, dashboardId: dash?.id });
           return;

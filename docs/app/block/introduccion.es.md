@@ -13,6 +13,7 @@ Boards sin copiar su contenido.
 | Estático Markdown (.md) | Texto, listas, tablas, enlaces, código y diagramas Mermaid. | Al editar y guardar el contenido. |
 | Estático HTML | Un fragmento HTML con títulos, párrafos, listas o tablas. | Al editar y guardar el contenido. |
 | Dinámico de conector | Datos como commits, repositorios, tareas o documentos. | Mediante las lecturas y sincronización de su conexión. |
+| QR | Texto o URL estáticos codificados como un símbolo QR. | Al editar y guardar el payload. |
 
 El editor llama **IA** al tipo de contenido Markdown/HTML, pero también permite
 pegar texto escrito a mano: no necesitas generar nada con IA. Un texto generado
@@ -67,6 +68,25 @@ Crear un block personalizado sirve para guardar una configuración propia, por
 ejemplo un alcance o límite distinto. Solo están disponibles los tipos y filtros
 que implementa ese conector. La sincronización requiere una conexión operativa.
 
+## Crear un block QR
+
+1. Abre **Blocks → + New block** y elige **QR** en **Type**.
+2. Deja seleccionado **Static**; la opción **Dynamic**, desactivada, queda
+   reservada para un hito posterior.
+3. Escribe la URL o el texto en el panel central. El logotipo de Lintaya viene
+   incluido por defecto; puedes desactivarlo.
+4. Revisa la vista previa y guarda. Los módulos QR son cuadrados; los patrones
+   decorativos y los logotipos personalizados quedan para otro hito.
+
+Type y Static/Dynamic viven en la columna izquierda de identidad; el destino,
+los colores y el logotipo están en el panel central. El logotipo usa una placa
+opaca y nunca cubre patrones de búsqueda, temporización o alineación. Si no
+cabe, el editor avisa y genera el código sin logotipo. La corrección de errores
+se elige automáticamente y se guarda en `style.ecLevel`.
+
+El panel ofrece descargas SVG y PNG. Los blocks QR se incluyen al exportar e
+importar paquetes de workspace. El Asistente puede listarlos, pero no crearlos.
+
 ## Usar el mismo block en varios Boards
 
 1. Crea o edita un Board desde **Boards**.
@@ -86,7 +106,10 @@ Boards que lo referencian, donde puede aparecer como no disponible.
 
 ## Dónde se guarda y se implementa
 
-Los blocks personalizados se guardan en el servidor de Lintaya, no como archivos
-.md o .html independientes. El editor está en app/block-builder.jsx, el catálogo
-en app/block-catalog.jsx y la API en server/routes/custom-blocks.js. El editor de
-Boards está en app/module-builder.jsx.
+Los blocks personalizados se guardan en el servidor de Lintaya, dentro de la
+lista KV `custom-blocks`, no como archivos .md o .html independientes. Los
+blocks de conector, contenido y QR comparten esa lista; los QR guardan un
+payload estático y campos de logotipo y estilo. El editor está en
+app/block-builder.jsx, el catálogo en app/block-catalog.jsx y la API en
+server/routes/custom-blocks.js. El editor de Boards está en
+app/module-builder.jsx.

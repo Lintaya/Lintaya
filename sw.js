@@ -37,6 +37,7 @@ const STATIC_ASSETS = [
   "./app/approvals.jsx",
   "./app/mail.jsx",
   "./app/block-builder.jsx",
+  "./app/qr-block.jsx",
   "./app/block-catalog.jsx",
   "./app/confirm-modal.jsx",
   "./app/custom-page-view.jsx",
@@ -52,6 +53,7 @@ const STATIC_ASSETS = [
   "./vendor/mermaid.min.js",
   "./vendor/marked.min.js",
   "./vendor/purify.min.js",
+  "./vendor/qrcode-generator.js",
 ];
 
 // Install — precachear shell

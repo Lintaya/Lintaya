@@ -108,6 +108,12 @@ function buildWorkspacePackage({ dashboardIds = [], boardIds = [], dashboards = 
       blockKeys.set(localId, key);
       return key;
     }
+    if (custom?.kind === "qr") {
+      const key = `block:qr-${blocks.length + 1}`;
+      blocks.push({ key, kind: "qr", title: custom.title, description: custom.description ?? null, icon: custom.icon ?? null, payload: custom.payload, logo: custom.logo, style: custom.style });
+      blockKeys.set(localId, key);
+      return key;
+    }
     let connectorId;
     let blockId;
     let title;
@@ -262,7 +268,11 @@ function applyWorkspaceImport(value, { names = {}, resourceActions = {}, connect
     }
     const id = `custom-${newId()}`;
     localBlockIds.set(block.key, id);
-    return [{
+    return [block.kind === "qr" ? {
+      id, kind: "qr", title: action.title, description: block.description ?? null,
+      icon: block.icon ?? null, active: true, createdAt,
+      payload: block.payload, logo: block.logo, style: block.style,
+    } : {
       id, kind: "content", title: action.title, description: block.description ?? null,
       icon: block.icon ?? null, active: true, createdAt, format: block.format,
       content: block.content, prompt: block.prompt ?? null, rules: block.rules ?? null,

@@ -1,5 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const babel = require("../../vendor/babel.min.js");
 const { FORMAT, VERSION, applyWorkspaceImport, buildWorkspacePackage, previewWorkspaceImport, validateWorkspacePackage } = require("./workspace-package");
 
 function sample() {
@@ -93,6 +96,62 @@ test("builds a portable graph and deduplicates Blocks shared by two Boards", () 
   assert.equal(value.resources.boards[0].tree.blocks[0], value.resources.boards[1].tree.blocks[0]);
   assert.equal(JSON.stringify(value).includes("page-a"), false);
   assert.equal(validateWorkspacePackage(value).valid, true);
+});
+
+test("QR workspace export/import preserves payload, logo, and style", () => {
+  const qr = { id: "qr-local", kind: "qr", title: "QR", payload: { mode: "manual", value: "https://例子.test/é" }, logo: { source: "brand", variant: "light" }, style: { ecLevel: "Q", pattern: "square", corners: "square", fgColor: "#123456", bgColor: "#ffffff" } };
+  const pack = buildWorkspacePackage({ boardIds: ["board-local"], boards: [{ id: "board-local", title: "Board", tree: { t: "z", k: "z", blocks: ["qr-local"] } }], customBlocks: [qr], now: () => new Date("2026-08-27T12:00:00.000Z") });
+  assert.equal(validateWorkspacePackage(pack).valid, true);
+  const imported = applyWorkspaceImport(pack, { newId: () => "x", now: () => new Date("2026-08-27T12:00:00.000Z") });
+  assert.deepEqual(imported.next.blocks[0].payload, qr.payload); assert.deepEqual(imported.next.blocks[0].logo, qr.logo); assert.deepEqual(imported.next.blocks[0].style, qr.style);
+});
+
+test("QR alignment protection follows the independent ISO table for every version", () => {
+  const context = vm.createContext({ window: {}, console, React: { useState: initial => [typeof initial === "function" ? initial() : initial, () => {}], useEffect() {}, createElement: () => ({}) }, fetch: () => Promise.reject(new Error("offline")) });
+  vm.runInContext(fs.readFileSync(require("node:path").join(__dirname, "../../vendor/qrcode-generator.js"), "utf8"), context);
+  context.window.qrcode = context.qrcode; context.window.I18N = { t: (_, fallback) => fallback };
+  vm.runInContext(babel.transform(fs.readFileSync(require("node:path").join(__dirname, "../../app/qr-block.jsx"), "utf8"), { presets: ["react"] }).code, context);
+  const spec = [[], [6,18], [6,22], [6,26], [6,30], [6,34], [6,22,38], [6,24,42], [6,26,46], [6,28,50], [6,30,54], [6,32,58], [6,34,62], [6,26,46,66], [6,26,48,70], [6,26,50,74], [6,30,54,78], [6,30,56,82], [6,30,58,86], [6,34,62,90], [6,28,50,72,94], [6,26,50,74,98], [6,30,54,78,102], [6,28,54,80,106], [6,32,58,84,110], [6,30,58,86,114], [6,34,62,90,118], [6,26,50,74,98,122], [6,30,54,78,102,126], [6,26,52,78,104,130], [6,30,56,82,108,134], [6,34,60,86,112,138], [6,30,58,86,114,142], [6,34,62,90,118,146], [6,30,54,78,102,126,150], [6,24,50,76,102,128,154], [6,28,54,80,106,132,158], [6,32,58,84,110,136,162], [6,26,54,82,110,138,166], [6,30,58,86,114,142,170]];
+  const protectedModule = context.window.QRProtectedModule; const logoRect = context.window.QRLogoRect;
+  for (let version = 1; version <= 40; version++) {
+    const n = 17 + version * 4; const positions = spec[version - 1];
+    for (const r of positions) for (const c of positions) if (!((r === 6 && c === 6) || (r === 6 && c === n - 7) || (r === n - 7 && c === 6))) for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) assert.equal(protectedModule(r + dr, c + dc, n), true, `alignment v${version}`);
+    for (const [r, c] of [[0, 0], [0, n - 7], [n - 7, 0]]) for (let dr = -1; dr < 8; dr++) for (let dc = -1; dc < 8; dc++) assert.equal(protectedModule(r + dr, c + dc, n), true, `finder v${version}`);
+    for (let i = 0; i < n; i++) { assert.equal(protectedModule(6, i, n), true); assert.equal(protectedModule(i, 6, n), true); }
+    const rect = logoRect(n, 9); if (rect) for (let r = rect.y; r < rect.y + rect.h; r++) for (let c = rect.x; c < rect.x + rect.w; c++) assert.equal(protectedModule(r, c, n), false, `logo overlap v${version}`);
+  }
+});
+
+// El logo se recorta del símbolo, así que su placa es daño real. El titular del
+// estándar (Q 25%) es lo recuperable cuando se sabe dónde está el daño; el
+// lector no lo sabe, así que el techo utilizable es la mitad. Sin este tope la
+// placa llegaba al 16% con Q y el código no escaneaba en un móvil real: sin
+// logo funcionaba, con logo no.
+test("QR logo knockout stays inside the usable error-correction budget", () => {
+  const context = vm.createContext({ window: {}, console, React: { useState: initial => [typeof initial === "function" ? initial() : initial, () => {}], useEffect() {}, createElement: () => ({}) }, fetch: () => Promise.reject(new Error("offline")) });
+  vm.runInContext(fs.readFileSync(require("node:path").join(__dirname, "../../vendor/qrcode-generator.js"), "utf8"), context);
+  context.window.qrcode = context.qrcode; context.window.I18N = { t: (_, fallback) => fallback };
+  vm.runInContext(babel.transform(fs.readFileSync(require("node:path").join(__dirname, "../../app/qr-block.jsx"), "utf8"), { presets: ["react"] }).code, context);
+  const logoRect = context.window.QRLogoRect;
+  // Mitad del titular L 7 / M 15 / Q 25 / H 30, calculado acá aparte para que
+  // el test no herede la misma tabla que la implementación.
+  const usable = { L: 0.07 / 2, M: 0.15 / 2, Q: 0.25 / 2, H: 0.30 / 2 };
+  for (const [level, budget] of Object.entries(usable)) {
+    for (let version = 1; version <= 40; version++) {
+      const n = 17 + version * 4;
+      const rect = logoRect(n, 9, level);
+      if (!rect) continue;
+      // Lo que cuenta es la placa opaca: el rectángulo más un módulo de margen.
+      const covered = ((rect.w + 2) * (rect.h + 2)) / (n * n);
+      assert.ok(covered <= budget, `${level} v${version}: la placa tapa ${(covered * 100).toFixed(1)}%, por encima del ${(budget * 100).toFixed(1)}% utilizable`);
+    }
+  }
+  // Y el caso que rompía en la práctica: URL corta con logo.
+  const short = context.window.qrcode(0, "Q"); short.addData("https://lintaya.com"); short.make();
+  const n = short.getModuleCount();
+  const before = ((8 + 2) ** 2) / (n * n); // lo que devolvía sin tope
+  assert.ok(before > usable.Q, "el caso de regresión debe estar por encima del techo de Q");
+  assert.ok(((logoRect(n, 9, "Q").w + 2) ** 2) / (n * n) <= usable.Q, "con tope debe quedar dentro");
 });
 
 test("previews conflicts and connector mappings without performing writes", () => {

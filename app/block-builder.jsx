@@ -745,7 +745,31 @@ function BlockBuilder({ onClose, editing }) {
   // caso de uso es algo que ya armaste con una IA afuera (ChatGPT, Claude,
   // lo que sea) y solo querés pegar como un block más, usable en Home o en
   // cualquier Board igual que uno conectado a datos reales.
-  const [kind, setKind] = useState(() => (editing?.kind === "content" ? "content" : "connector"));
+  const [kind, setKind] = useState(() => ["content", "qr"].includes(editing?.kind) ? editing.kind : "connector");
+  const [qrMode, setQrMode] = useState(() => editing?.payload?.mode === "dynamic" ? "dynamic" : "manual");
+  const [qrValue, setQrValue] = useState(() => editing?.payload?.value || "");
+  const [qrLogo, setQrLogo] = useState(() => editing?.logo?.source || "brand");
+  const [qrLogoVariant, setQrLogoVariant] = useState(() => editing?.logo?.variant || "light");
+  // El nivel de corrección ya no es un control: lo decide window.QRAutoEcLevel a
+  // partir del payload y de si hay logo. L/M/Q/H no significan nada para quien
+  // no conoce el formato, y elegir mal rompe el código sin avisar (L con logo no
+  // escanea). Sigue guardándose en style.ecLevel, solo que calculado, así que el
+  // esquema y el hito 4 no cambian. Va después de qrLogo a propósito: leerlo
+  // antes de su declaración es zona muerta temporal. Ver qr-block.jsx.
+  const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrValue, qrLogo === "brand") : (qrLogo === "brand" ? "H" : "M");
+  // ¿Cabe el logo con este payload? No siempre: si el símbolo lleva un patrón
+  // de alineación en el centro exacto, ningún tamaño centrado lo esquiva. Se
+  // calcula acá para poder avisarlo en vez de generar el QR pelado en silencio.
+  const qrLogoFits = (() => {
+    if (qrLogo !== "brand" || !qrValue.trim() || !window.qrcode || !window.QRLogoRect) return true;
+    try {
+      const probe = window.qrcode(0, qrEc);
+      probe.addData(qrValue); probe.make();
+      return !!window.QRLogoRect(probe.getModuleCount(), 9, qrEc);
+    } catch (error) { return true; }
+  })();
+  const [qrFg, setQrFg] = useState(() => editing?.style?.fgColor || "#000000");
+  const [qrBg, setQrBg] = useState(() => editing?.style?.bgColor || "#ffffff");
   const [format, setFormat] = useState(() => (editing?.format === "html" ? "html" : "md"));
   const [content, setContent] = useState(() => editing?.content || "");
   // Sub-modo dentro de "IA": mismo espíritu que conector→tipo de dato — una
@@ -888,7 +912,7 @@ function BlockBuilder({ onClose, editing }) {
 
   const connectorCanSave = step1Done && step2Done && step3Done;
   const contentCanSave = !!format && content.trim().length > 0;
-  const canSave = kind === "content" ? contentCanSave : connectorCanSave;
+  const canSave = kind === "content" ? contentCanSave : kind === "qr" ? qrMode === "manual" && !!qrValue.trim() : connectorCanSave;
 
   // Nombre por defecto, derivado de la selección — solo se usa como
   // placeholder/fallback; el campo "Nombre" en sí queda vacío hasta que el
@@ -909,7 +933,7 @@ function BlockBuilder({ onClose, editing }) {
   const [icon, setIcon] = useState(() => editing?.icon || null);
   const [active, setActive] = useState(() => editing ? editing.active !== false : true);
   const [tags, setTags] = useState(() => editing?.tags || []);
-  const blockTitle = title.trim() || autoTitle || (kind === "content" ? window.I18N.t("ui.blocks.aiBlock", "AI block") : null);
+  const blockTitle = title.trim() || autoTitle || (kind === "content" ? window.I18N.t("ui.blocks.aiBlock", "AI block") : kind === "qr" ? window.I18N.t("ui.blocks.qrTitle", "QR code") : null);
 
   // Datos reales del block — un solo fetch, compartido por el preview y la
   // tabla .md (antes cada uno llamaba genPreviewItems() por separado). No
@@ -935,6 +959,12 @@ function BlockBuilder({ onClose, editing }) {
     try {
       const body = kind === "content"
         ? { kind: "content", title: blockTitle, description: description.trim() || null, icon, active, tags, format, content, prompt: prompt.trim() || null, rules: (rules != null && rules.trim()) ? rules : null }
+        : kind === "qr"
+          // El nivel de corrección que se guarda es el que eligió el usuario.
+          // Poner el logo sube el default a Q (ver setQrLogo), pero elegir H
+          // después para imprimir tiene que respetarse — antes se forzaba Q
+          // acá y la selección se perdía en silencio.
+          ? { kind: "qr", title: blockTitle, description: description.trim() || null, icon, active, tags, payload: { mode: qrMode, value: qrValue }, logo: qrLogo === "brand" ? { source: "brand", variant: qrLogoVariant } : { source: "none" }, style: { ecLevel: qrEc, pattern: "square", corners: "square", fgColor: qrFg, bgColor: qrBg } }
         : {
             kind: "connector", connectorId: connector.id, blockId: dataType, title: blockTitle,
             description: description.trim() || null, icon, active, tags,
@@ -1019,7 +1049,7 @@ function BlockBuilder({ onClose, editing }) {
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
         <div style={labelStyle}>{window.I18N.t("boards.type", "Type")}</div>
         <div role="group" aria-label={bbt("blockBuilder.blockType", "Block type")} style={{ display: "flex", gap: 5 }}>
-          {[["connector", window.I18N.t("boards.connector", "Connector")], ["content", "IA"]].map(([k, l]) => {
+          {[["connector", window.I18N.t("boards.connector", "Connector")], ["content", "IA"], ["qr", window.I18N.t("ui.blocks.qr", "QR")]].map(([k, l]) => {
             const on = kind === k;
             return (
               <button key={k} type="button" aria-pressed={on} onClick={() => setKind(k)} style={{
@@ -1032,6 +1062,34 @@ function BlockBuilder({ onClose, editing }) {
           })}
         </div>
       </div>
+
+      {/* Mismo patrón que el conector y el modo de contenido: el discriminante
+          de origen vive acá, en la identidad; la configuración va al centro.
+          "Dinámico" se muestra desactivado en vez de ocultarse — el esquema ya
+          reserva el modo, así que el hueco existe desde ahora y no aparece de
+          golpe cuando llegue. */}
+      {kind === "qr" && (
+        <div>
+          <div style={labelStyle}>{window.I18N.t("ui.blocks.mode", "Mode")}</div>
+          <div role="group" aria-label={window.I18N.t("ui.blocks.mode", "Mode")} style={{ display: "flex", gap: 5 }}>
+            {[["manual", window.I18N.t("ui.blocks.static", "Static"), true], ["dynamic", window.I18N.t("ui.blocks.dynamic", "Dynamic"), false]].map(([m, l, ready]) => {
+              const on = qrMode === m;
+              return (
+                <button key={m} type="button" aria-pressed={on} disabled={!ready}
+                  title={ready ? undefined : window.I18N.t("ui.blocks.dynamicUnavailable", "Dynamic payloads arrive in a later milestone.")}
+                  onClick={() => ready && setQrMode(m)} style={{
+                    flex: 1, height: 30, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5,
+                    border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                    background: on ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "white",
+                    color: on ? "var(--accent)" : "var(--fg)", borderRadius: 6,
+                  }}>{l}</button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 5 }}>{window.I18N.t("ui.blocks.dynamicUnavailable", "Dynamic payloads arrive in a later milestone.")}</div>
+        </div>
+      )}
 
       {kind === "connector" && (
         <div>
@@ -1067,7 +1125,55 @@ function BlockBuilder({ onClose, editing }) {
     </>
   );
 
-  const configContent = kind === "content" ? (
+  const configContent = kind === "qr" ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div>
+        <label htmlFor="qr-payload" style={labelStyle}>{window.I18N.t("ui.blocks.qrPayload", "Destination")}</label>
+        <textarea id="qr-payload" value={qrValue} onChange={e => setQrValue(e.target.value)} rows={3}
+          placeholder="https://example.com" style={{
+            width: "100%", padding: 10, border: "1px solid var(--border)", borderRadius: 6,
+            font: "inherit", fontSize: 12, resize: "vertical",
+          }} />
+      </div>
+
+      {/* Los dos colores comparten fila pero cada uno lleva su etiqueta arriba:
+          antes iban en línea y en un panel angosto las etiquetas se partían. */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor="qr-fg" style={labelStyle}>{window.I18N.t("ui.blocks.moduleColor", "Module color")}</label>
+          <input id="qr-fg" type="color" value={qrFg} onChange={e => setQrFg(e.target.value)}
+            style={{ width: "100%", height: 30, padding: 2, border: "1px solid var(--border)", borderRadius: 6, background: "white", cursor: "pointer" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor="qr-bg" style={labelStyle}>{window.I18N.t("ui.blocks.backgroundColor", "Background")}</label>
+          <input id="qr-bg" type="color" value={qrBg} onChange={e => setQrBg(e.target.value)}
+            style={{ width: "100%", height: 30, padding: 2, border: "1px solid var(--border)", borderRadius: 6, background: "white", cursor: "pointer" }} />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="qr-logo" style={labelStyle}>{window.I18N.t("ui.blocks.logo", "Logo")}</label>
+        {/* Cambiar el logo recalcula solo el nivel de corrección: qrEc se deriva
+            de qrLogo, así que no hay nada que sincronizar a mano acá. */}
+        <select id="qr-logo" value={qrLogo} onChange={e => setQrLogo(e.target.value)} style={{
+          width: "100%", height: 32, fontSize: 12, fontFamily: "inherit",
+          border: "1px solid var(--border)", borderRadius: 6, background: "white", color: "var(--fg)",
+        }}>
+          <option value="brand">Lintaya</option>
+          <option value="none">{window.I18N.t("ui.blocks.logoOff", "Off")}</option>
+        </select>
+        {/* Hay longitudes de payload en las que el logo no cabe: cuando el
+            símbolo tiene un patrón de alineación justo en el centro, ningún
+            tamaño centrado lo esquiva y logoRect devuelve null. Antes eso se
+            traducía en un QR sin logo y sin explicación. */}
+        {!qrLogoFits && (
+          <div role="status" style={{ fontSize: 11, color: "#b45309", marginTop: 6, lineHeight: 1.45 }}>
+            {window.I18N.t("ui.blocks.logoDoesNotFit", "The logo does not fit this content without hurting readability, so the code is generated without it. Shorten the destination or turn the logo off.")}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : kind === "content" ? (
     <div style={{ height: mobile ? "auto" : "calc(100% - 34px)", display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -1187,7 +1293,7 @@ function BlockBuilder({ onClose, editing }) {
     </div>
   );
 
-  const previewContent = kind === "content" ? (
+  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrValue} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={{ source: qrLogo, variant: qrLogoVariant }} size={240} /></div> : kind === "content" ? (
     <>
       <div style={{ ...labelStyle, marginBottom: 8 }}>{window.I18N.t("tags.preview", "Preview")}</div>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>

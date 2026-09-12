@@ -415,6 +415,20 @@ function NoteBlockContent({ note, onSave, onDelete }) {
 // monta en su lugar con las mismas props.
 function ConnectorBlockPanel(props) {
   const { block, panelProps } = props;
+  // Un block QR no tiene connectorId ni blockId, así que nunca puede caer en la
+  // rama de conector: el fetch iría a /api/connectors/undefined/blocks/undefined
+  // y el panel mostraría un error de conexión. El `&&` sobre el global hacía
+  // exactamente eso cuando qr-block.jsx todavía no se había ejecutado — Babel
+  // transpila los .jsx en el navegador, así que ese hueco existe de verdad.
+  // Ahora la rama es por kind y el global que falta se trata como "cargando".
+  if (block.kind === "qr") {
+    if (window.QRBlockPanel) return <window.QRBlockPanel block={block} panelProps={panelProps} />;
+    return (
+      <Panel title={`${block.icon ? block.icon + " " : ""}${block.title}`} {...panelProps}>
+        <div style={{ padding: 14, fontSize: 12.5, color: "var(--muted-fg)" }}>{window.I18N.t("ui.blocks.loadingData", "Loading…")}</div>
+      </Panel>
+    );
+  }
   if ((block.connectorType || block.connectorId) === "plane" && block.blockId === "my-issues") {
     return <PlaneTasksPanel connectionId={block.connectorId} panelProps={panelProps} />;
   }
