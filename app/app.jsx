@@ -892,8 +892,12 @@ function App() {
   const [callsCount, setCallsCount] = useState(0);
   // Containers count — running containers across monitored VMs
   const [containersCount, setContainersCount] = useState(0);
-  // Blocks count — blocks activos hoy en Home (declarados por manifest.json,
-  // ya filtrados server-side por "conector configurado")
+  // La insignia de una entrada del menú cuenta lo que hay detrás de esa
+  // entrada. La pantalla Blocks lista los de conector y los personalizados
+  // juntos, así que la insignia suma los dos: contaba solo los primeros y
+  // decía 5 sobre una pantalla que enseñaba 20, y los personalizados eran la
+  // mayoría. El comentario anterior hablaba de "blocks activos hoy en Home",
+  // que además no era lo que el código hacía.
   const [blockCatalogCount, setBlockCatalogCount] = useState(0);
   // Merged connector + custom blocks — the same "which blocks can a page use"
   // catalog the Module Builder editor sources, kept here too so a rendered
@@ -946,7 +950,7 @@ function App() {
       ]).then(([connectorBlocks, customBlocks]) => {
         const connList = Array.isArray(connectorBlocks) ? connectorBlocks : [];
         const customList = Array.isArray(customBlocks) ? customBlocks : [];
-        setBlockCatalogCount(connList.length);
+        setBlockCatalogCount(connList.length + customList.length);
         setBlockCatalog([...connList, ...customList]);
       });
     };
@@ -1544,7 +1548,14 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
     hosts: dynamicBadges.hosts || "",
     devices: dynamicBadges.devices || "",
     connectors: dynamicBadges.connectors || "",
-    modules: navigableModules.length ? String(navigableModules.length) : "",
+    // Mismo criterio: la pantalla Boards lista los módulos de conector y los
+    // Boards propios (su contador dice "6 / 14"), mientras la insignia contaba
+    // solo los módulos navegables — 1 de 9 — e ignoraba los cinco Boards. Se
+    // cuentan todos los módulos, no solo los navegables, porque la pantalla
+    // también los lista y deja filtrar.
+    modules: (connectorModules.length + modulePages.length)
+      ? String(connectorModules.length + modulePages.length)
+      : "",
     dashboards: dashboards.length ? String(dashboards.length) : "",
     tags: dynamicBadges.tags || "",
     calls: dynamicBadges.calls || "",
