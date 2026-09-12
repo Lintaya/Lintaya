@@ -134,6 +134,20 @@ know what auxiliary config exists) additionally has:
 | Agent | `.cursor/agents/lintaya.md` | when delegating Lintaya work |
 | Skills | `.cursor/skills/` | when adding a module or connector |
 
+## Split of work with Codex
+
+Two agents work this repo (the `codex` plugin is installed). The split is deliberate — don't
+collapse it into one agent doing everything.
+
+- **Planning and deciding: Claude.** Before writing code, a short plan and the user's approval.
+- **Writing code that touches more than one file: delegate to Codex** with `/codex:rescue`, with
+  the already-approved plan inside the request.
+- **Review is done by whoever didn't write it.** If the code came from Codex, Claude reviews it.
+  If Claude wrote it, run `/codex:adversarial-review`.
+- **Nothing counts as finished until the user has read the change.**
+- **If Codex and Claude disagree, the one who shows the reproduced error wins**, not the one who
+  argues better.
+
 ## Common tasks
 
 - **New module:** skill `add-frontend-module` — `app/x.jsx` → script tag in the HTML → `NAV_ROUTES` in `app.jsx`
