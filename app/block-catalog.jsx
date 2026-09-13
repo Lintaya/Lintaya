@@ -62,6 +62,18 @@ function BlockLogo({ connectorId, size = 28, color, icon }) {
   );
 }
 
+function BlockAvatar({ block, size = 28 }) {
+  if (block?.kind === "content" || block?.kind === "qr") {
+    const isQr = block.kind === "qr";
+    return (
+      <div style={{ width: size, height: size, borderRadius: 7, background: "var(--accent)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: isQr && !block.icon ? size * 0.39 : size * 0.5, fontWeight: isQr && !block.icon ? 700 : 400, flexShrink: 0 }}>
+        {block.icon || (isQr ? window.I18N.t("ui.blocks.qr", "QR") : "🤖")}
+      </div>
+    );
+  }
+  return <BlockLogo connectorId={block?.connectorType || block?.connectorId} size={size} color={block?.color} />;
+}
+
 // Mismo select-con-label que usa el toolbar de VMs (vms.jsx) — duplicado acá
 // porque este repo no comparte componentes entre .jsx sin pasar por window.*.
 function FilterChip({ label, value, options, onChange }) {
@@ -376,9 +388,7 @@ function BlockCatalogView({ isMobile }) {
                     {/* Un block QR no tiene connectorId: pasarlo a BlockLogo
                         caía en el fallback "?" sobre gris, que es lo que se
                         veía en la lista. Lleva su propio avatar, igual que IA. */}
-                    {b.kind === "content" || b.kind === "qr"
-                      ? <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--accent)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: b.kind === "qr" && !b.icon ? 11 : 14, fontWeight: b.kind === "qr" && !b.icon ? 700 : 400, flexShrink: 0 }}>{b.icon || (b.kind === "qr" ? "QR" : "🤖")}</div>
-                      : <BlockLogo connectorId={b.connectorId} color={connectorColors[b.connectorId]} />}
+                    <BlockAvatar block={{ ...b, color: connectorColors[b.connectorId] }} />
                   </td>
                   <td className="blocks-catalog-title" style={{ padding: "8px 12px", fontWeight: 500 }}>
                     {b.icon ? `${b.icon} ` : ""}{b.title}
@@ -456,3 +466,4 @@ window.BlockCatalogView = BlockCatalogView;
 // connector color/initials match the existing Blocks catalog exactly.
 window.BLOCK_CONNECTOR_STYLE = BLOCK_CONNECTOR_STYLE;
 window.BlockLogo = BlockLogo;
+window.BlockAvatar = BlockAvatar;

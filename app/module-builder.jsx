@@ -24,13 +24,11 @@ function pageIcon(key) {
   return (window.ICONS && window.ICONS[key]) || (window.ICONS && window.ICONS[PAGE_ICON_FALLBACK]) || null;
 }
 
-function connectorSwatch(connectorId, size = 20) {
-  const s = (window.BLOCK_CONNECTOR_STYLE && window.BLOCK_CONNECTOR_STYLE[connectorId]) || { icon: "?", color: "var(--muted-fg)" };
-  return (
-    <span style={{ width: size, height: size, borderRadius: 5, background: s.color, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.36, fontWeight: 700, fontFamily: "var(--font-mono)", flexShrink: 0 }}>
-      {s.icon}
-    </span>
-  );
+function connectorSwatch(block, size = 20) {
+  if (window.BlockAvatar) return <window.BlockAvatar block={block} size={size} />;
+  return window.BlockLogo
+    ? <window.BlockLogo connectorId={block?.connectorType || block?.connectorId} size={size} />
+    : null;
 }
 
 function allUsedBlocks(zones) {
@@ -121,7 +119,7 @@ function ZoneEditor({ tree, setTree, mode, sel, setSel, flip, catalog }) {
                 const b = findBlock(id);
                 return (
                   <div key={i} onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 5px", background: "white", border: "1px solid var(--border)", borderRadius: 5, flexShrink: 0 }}>
-                    {connectorSwatch(b?.connectorId)}
+                    {connectorSwatch(b)}
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 10.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b?.title || id}</span>
                       {b?.scope && <span style={{ display: "block", fontSize: 8.5, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.scope}</span>}
@@ -573,7 +571,7 @@ function PageEditor({ page, catalog, connections = [], onCancel, onSaved }) {
                   background: u ? "color-mix(in srgb, var(--accent) 7%, transparent)" : "white",
                   borderRadius: 6, cursor: canAdd ? "pointer" : "default", opacity: canAdd || u ? 1 : 0.65,
                 }}>
-                {connectorSwatch(b.connectorId, 21)}
+                {connectorSwatch(b, 21)}
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</span>
                   {b.scope && <span style={{ display: "block", fontSize: 9, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.scope}</span>}
