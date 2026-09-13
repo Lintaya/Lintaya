@@ -1,7 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const { applyWorkspaceImport, buildWorkspacePackage, previewWorkspaceImport } = require("../core/workspace-package");
 
-function registerWorkspacePackageRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, resolveConnectorType, connectionAlias, connectionCandidates = () => [], AppError, sendAppError }) {
+function registerWorkspacePackageRoutes({ app, db, requireAuth, kvGet, kvSet, auditActivity, resolveConnectorType, connectionAlias, connectionCandidates = () => [], AppError, sendAppError }) {
   app.post("/api/workspace-packages/export", requireAuth, (req, res) => {
     const dashboardIds = Array.isArray(req.body?.dashboardIds) ? req.body.dashboardIds : [];
     const boardIds = Array.isArray(req.body?.boardIds) ? req.body.boardIds : [];
@@ -12,11 +12,19 @@ function registerWorkspacePackageRoutes({ app, requireAuth, kvGet, kvSet, auditA
       return sendAppError(res, AppError.badRequest("resource-ids-must-be-non-empty-strings"), req);
     }
     try {
+      // Export policy: dynamic links are deployment-local, so export a static
+      // snapshot of their current destination; qr-base-url never travels.
+      const customBlocks = (kvGet("custom-blocks")?.value || []).map(block => {
+        if (block.kind !== "qr" || block.payload?.mode !== "dynamic") return block;
+        const link = db?.prepare("SELECT destination FROM qr_links WHERE code = ?").get(block.payload.linkId);
+        if (!link) throw new Error(`block-not-portable:qr-link-missing:${block.payload.linkId}`);
+        return { ...block, payload: { mode: "manual", value: link.destination } };
+      });
       const packageValue = buildWorkspacePackage({
         dashboardIds, boardIds,
         dashboards: kvGet("dashboards")?.value || [],
         boards: kvGet("module-pages")?.value || [],
-        customBlocks: kvGet("custom-blocks")?.value || [],
+        customBlocks,
         resolveConnectorType,
         connectionAlias,
       });

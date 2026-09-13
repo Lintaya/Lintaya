@@ -65,7 +65,18 @@ const NAV_GROUPS = [
 
 // Keep version/build information separate from editable application settings.
 NAV_GROUPS.push({ id: "info", title: "Info", items: [{ id: "about", label: "Acerca de", icon: "about" }] });
+NAV_GROUPS.find(group => group.id === "system")?.items.push({ id: "qr", label: "QR links", icon: "sync" });
 const ALL_PANES = NAV_GROUPS.flatMap(g => g.items);
+
+function QrPane() {
+  const [baseUrl, setBaseUrl] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => { window.HQ_API.request("/api/settings/qr-base-url").then(value => setBaseUrl(value.baseUrl)).catch(e => setError(e.message)); }, []);
+  const save = async () => { setSaved(false); setError(null); try { const value = await window.HQ_API.request("/api/settings/qr-base-url", { method: "PUT", body: { baseUrl } }); setBaseUrl(value.baseUrl); setSaved(true); } catch (e) { setError(e.message); } };
+  const t = window.I18N.t;
+  return <Section title={t("settings.qr.title", "QR links")} desc={t("settings.qr.help", "Base URL used by dynamic QR links.")}><Row label={t("settings.qr.baseUrl", "Public base URL")} desc={t("settings.qr.baseUrlHelp", "Public origin that receives /r/:code scans.")} last><input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} style={{ ...inputStyle, width: 300 }} /><button type="button" onClick={save}>{t("settings.qr.save", "Save")}</button></Row>{saved && <div role="status">{t("settings.saved", "Saved")}</div>}{error && <div role="alert">{error}</div>}</Section>;
+}
 
 // ── Primitives ────────────────────────────────────────────────────────────────
 function Section({ title, desc, children }) {
@@ -952,6 +963,7 @@ function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onReorderNav, 
     navigation: <NavigationPane {...paneProps} />,
     views:      <ViewsPane {...paneProps} />,
     sync:       <SyncPane />,
+    qr:         <QrPane />,
     backup:     <BackupPane />,
     about:      <AboutPane />,
   };

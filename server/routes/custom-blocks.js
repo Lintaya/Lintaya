@@ -32,8 +32,9 @@ function validateKind(kind) {
 function validateQrConfig(record) {
   const { payload, logo, style } = record;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("qr-payload-required");
-  if (payload.mode !== "manual") throw new Error("qr-payload-mode-not-supported");
-  if (typeof payload.value !== "string" || !payload.value.trim()) throw new Error("qr-payload-value-required");
+  if (!["manual", "dynamic"].includes(payload.mode)) throw new Error("qr-payload-mode-not-supported");
+  if (payload.mode === "manual" && (typeof payload.value !== "string" || !payload.value.trim())) throw new Error("qr-payload-value-required");
+  if (payload.mode === "dynamic" && (typeof payload.linkId !== "string" || !payload.linkId.trim())) throw new Error("qr-link-id-required");
   if (!logo || typeof logo !== "object" || !["brand", "upload", "none"].includes(logo.source)) throw new Error("invalid-qr-logo");
   if (logo.source === "brand" && typeof logo.variant !== "string") throw new Error("invalid-qr-logo");
   if (logo.source === "upload" && typeof logo.assetId !== "string") throw new Error("invalid-qr-logo");
@@ -90,7 +91,7 @@ function createCustomBlockRecord({ kvGet, kvSet }, { kind, connectorId, blockId,
   return block;
 }
 
-function registerCustomBlocksRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError }) {
+function registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError }) {
   app.get("/api/home/custom-blocks", requireAuth, (req, res) => {
     res.json(kvGet("custom-blocks")?.value || []);
   });
@@ -158,6 +159,9 @@ function registerCustomBlocksRoutes({ app, requireAuth, kvGet, kvSet, auditActiv
     const removed = all.find(b => b.id === req.params.id);
     if (!removed) return sendAppError(res, AppError.notFound("not-found"), req);
     kvSet("custom-blocks", all.filter(b => b.id !== req.params.id));
+    if (removed.kind === "qr" && removed.payload?.mode === "dynamic" && removed.payload.linkId && db) {
+      db.prepare("DELETE FROM qr_links WHERE code = ?").run(removed.payload.linkId);
+    }
     // Igual que al borrar una nota (home.js) — no dejar la referencia colgando
     // si el block llegó a agregarse al layout.
     const layout = kvGet("home-layout")?.value || { left: [], right: [] };

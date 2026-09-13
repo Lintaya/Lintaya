@@ -12,6 +12,11 @@
 // de POST al guardar (ver isNew).
 const { useState, useMemo, useEffect, useRef, useCallback } = React;
 const bbt = (key, fallback, vars) => window.I18N?.t(key, fallback, vars) || fallback;
+const QR_DYNAMIC_CODE_LENGTH = 22; // 16 random bytes encoded as base64url.
+const qrPreviewValue = ({ mode, destination, baseUrl, shortUrl = "" }) => mode === "dynamic"
+  ? (shortUrl || (baseUrl ? `${baseUrl.replace(/\/$/, "")}/r/${"0".repeat(QR_DYNAMIC_CODE_LENGTH)}` : ""))
+  : destination;
+window.QRPreviewValue = qrPreviewValue;
 
 const BB_CONNECTOR_NAME = { gitlab: "GitLab", github: "GitHub", plane: "Plane", outline: "Outline", qportal: "Qportal", vcenter: "vCenter" };
 const BB_ALL_SCOPE = "__all__";
@@ -748,6 +753,17 @@ function BlockBuilder({ onClose, editing }) {
   const [kind, setKind] = useState(() => ["content", "qr"].includes(editing?.kind) ? editing.kind : "connector");
   const [qrMode, setQrMode] = useState(() => editing?.payload?.mode === "dynamic" ? "dynamic" : "manual");
   const [qrValue, setQrValue] = useState(() => editing?.payload?.value || "");
+  const [qrShortUrl, setQrShortUrl] = useState("");
+  const [qrBaseUrl, setQrBaseUrl] = useState("");
+  useEffect(() => {
+    if (kind !== "qr") return;
+    window.HQ_API.request("/api/settings/qr-base-url").then(settings => setQrBaseUrl(settings.baseUrl || "")).catch(() => {});
+  }, [kind]);
+  useEffect(() => {
+    if (editing?.payload?.mode !== "dynamic" || !editing.payload.linkId) return;
+    Promise.all([window.HQ_API.request(`/api/qr-links/${editing.payload.linkId}`), window.HQ_API.request("/api/settings/qr-base-url")])
+      .then(([link, settings]) => { setQrValue(link.destination); setQrShortUrl(`${settings.baseUrl}/r/${link.code}`); }).catch(() => {});
+  }, [editing?.payload?.mode, editing?.payload?.linkId]);
   const [qrLogo, setQrLogo] = useState(() => editing?.logo?.source || "brand");
   const [qrLogoVariant, setQrLogoVariant] = useState(() => editing?.logo?.variant || "light");
   // El nivel de corrección ya no es un control: lo decide window.QRAutoEcLevel a
@@ -756,15 +772,16 @@ function BlockBuilder({ onClose, editing }) {
   // escanea). Sigue guardándose en style.ecLevel, solo que calculado, así que el
   // esquema y el hito 4 no cambian. Va después de qrLogo a propósito: leerlo
   // antes de su declaración es zona muerta temporal. Ver qr-block.jsx.
-  const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrValue, qrLogo === "brand") : (qrLogo === "brand" ? "H" : "M");
+  const qrPayloadForSizing = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
+  const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrPayloadForSizing, qrLogo === "brand") : (qrLogo === "brand" ? "H" : "M");
   // ¿Cabe el logo con este payload? No siempre: si el símbolo lleva un patrón
   // de alineación en el centro exacto, ningún tamaño centrado lo esquiva. Se
   // calcula acá para poder avisarlo en vez de generar el QR pelado en silencio.
   const qrLogoFits = (() => {
-    if (qrLogo !== "brand" || !qrValue.trim() || !window.qrcode || !window.QRLogoRect) return true;
+    if (qrLogo !== "brand" || !qrPayloadForSizing || !window.qrcode || !window.QRLogoRect) return true;
     try {
       const probe = window.qrcode(0, qrEc);
-      probe.addData(qrValue); probe.make();
+      probe.addData(qrPayloadForSizing); probe.make();
       return !!window.QRLogoRect(probe.getModuleCount(), 9, qrEc);
     } catch (error) { return true; }
   })();
@@ -912,7 +929,7 @@ function BlockBuilder({ onClose, editing }) {
 
   const connectorCanSave = step1Done && step2Done && step3Done;
   const contentCanSave = !!format && content.trim().length > 0;
-  const canSave = kind === "content" ? contentCanSave : kind === "qr" ? qrMode === "manual" && !!qrValue.trim() : connectorCanSave;
+  const canSave = kind === "content" ? contentCanSave : kind === "qr" ? !!qrValue.trim() : connectorCanSave;
 
   // Nombre por defecto, derivado de la selección — solo se usa como
   // placeholder/fallback; el campo "Nombre" en sí queda vacío hasta que el
@@ -957,6 +974,11 @@ function BlockBuilder({ onClose, editing }) {
   const saveBlock = async () => {
     setSaving(true);
     try {
+      let qrLinkId = editing?.payload?.linkId || null;
+      if (kind === "qr" && qrMode === "dynamic") {
+        const link = await window.HQ_API.request(qrLinkId ? `/api/qr-links/${qrLinkId}` : "/api/qr-links", { method: qrLinkId ? "PUT" : "POST", body: { destination: qrValue } });
+        qrLinkId = link.code;
+      }
       const body = kind === "content"
         ? { kind: "content", title: blockTitle, description: description.trim() || null, icon, active, tags, format, content, prompt: prompt.trim() || null, rules: (rules != null && rules.trim()) ? rules : null }
         : kind === "qr"
@@ -964,7 +986,7 @@ function BlockBuilder({ onClose, editing }) {
           // Poner el logo sube el default a Q (ver setQrLogo), pero elegir H
           // después para imprimir tiene que respetarse — antes se forzaba Q
           // acá y la selección se perdía en silencio.
-          ? { kind: "qr", title: blockTitle, description: description.trim() || null, icon, active, tags, payload: { mode: qrMode, value: qrValue }, logo: qrLogo === "brand" ? { source: "brand", variant: qrLogoVariant } : { source: "none" }, style: { ecLevel: qrEc, pattern: "square", corners: "square", fgColor: qrFg, bgColor: qrBg } }
+          ? { kind: "qr", title: blockTitle, description: description.trim() || null, icon, active, tags, payload: qrMode === "dynamic" ? { mode: "dynamic", linkId: qrLinkId } : { mode: "manual", value: qrValue }, logo: qrLogo === "brand" ? { source: "brand", variant: qrLogoVariant } : { source: "none" }, style: { ecLevel: qrEc, pattern: "square", corners: "square", fgColor: qrFg, bgColor: qrBg } }
         : {
             kind: "connector", connectorId: connector.id, blockId: dataType, title: blockTitle,
             description: description.trim() || null, icon, active, tags,
@@ -1072,11 +1094,11 @@ function BlockBuilder({ onClose, editing }) {
         <div>
           <div style={labelStyle}>{window.I18N.t("ui.blocks.mode", "Mode")}</div>
           <div role="group" aria-label={window.I18N.t("ui.blocks.mode", "Mode")} style={{ display: "flex", gap: 5 }}>
-            {[["manual", window.I18N.t("ui.blocks.static", "Static"), true], ["dynamic", window.I18N.t("ui.blocks.dynamic", "Dynamic"), false]].map(([m, l, ready]) => {
+             {[["manual", window.I18N.t("ui.blocks.static", "Static"), true], ["dynamic", window.I18N.t("ui.blocks.dynamic", "Dynamic"), true]].map(([m, l, ready]) => {
               const on = qrMode === m;
               return (
                 <button key={m} type="button" aria-pressed={on} disabled={!ready}
-                  title={ready ? undefined : window.I18N.t("ui.blocks.dynamicUnavailable", "Dynamic payloads arrive in a later milestone.")}
+                  title={undefined}
                   onClick={() => ready && setQrMode(m)} style={{
                     flex: 1, height: 30, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                     cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5,
@@ -1087,7 +1109,6 @@ function BlockBuilder({ onClose, editing }) {
               );
             })}
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 5 }}>{window.I18N.t("ui.blocks.dynamicUnavailable", "Dynamic payloads arrive in a later milestone.")}</div>
         </div>
       )}
 
@@ -1128,12 +1149,17 @@ function BlockBuilder({ onClose, editing }) {
   const configContent = kind === "qr" ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <label htmlFor="qr-payload" style={labelStyle}>{window.I18N.t("ui.blocks.qrPayload", "Destination")}</label>
+        <label htmlFor="qr-payload" style={labelStyle}>{qrMode === "dynamic" ? window.I18N.t("ui.blocks.qrDynamicDestination", "Destination (changes without reprinting)") : window.I18N.t("ui.blocks.qrPayload", "Destination")}</label>
         <textarea id="qr-payload" value={qrValue} onChange={e => setQrValue(e.target.value)} rows={3}
           placeholder="https://example.com" style={{
             width: "100%", padding: 10, border: "1px solid var(--border)", borderRadius: 6,
             font: "inherit", fontSize: 12, resize: "vertical",
           }} />
+        {qrMode === "dynamic" && qrShortUrl && (
+          <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 6 }}>
+            {window.I18N.t("ui.blocks.qrShortUrl", "Encoded short URL")}: <code>{qrShortUrl}</code>
+          </div>
+        )}
       </div>
 
       {/* Los dos colores comparten fila pero cada uno lleva su etiqueta arriba:
@@ -1293,7 +1319,8 @@ function BlockBuilder({ onClose, editing }) {
     </div>
   );
 
-  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrValue} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={{ source: qrLogo, variant: qrLogoVariant }} size={240} /></div> : kind === "content" ? (
+  const qrPreview = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
+  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrPreview} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={{ source: qrLogo, variant: qrLogoVariant }} size={240} />{qrMode === "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.4 }}>{window.I18N.t("ui.blocks.qrPreviewRepresentative", "Preview uses a representative short link; the final code is assigned when you save.")}</div>}</div> : kind === "content" ? (
     <>
       <div style={{ ...labelStyle, marginBottom: 8 }}>{window.I18N.t("tags.preview", "Preview")}</div>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>

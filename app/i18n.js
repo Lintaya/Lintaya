@@ -6,6 +6,7 @@
       "ui.logs.tab.ssh": "SSH",
       "ui.logs.tab.connectors": "Conectores",
       "ui.logs.tab.activity": "Actividad",
+      "settings.qr.title": "Enlaces QR", "settings.qr.help": "URL base usada por los enlaces QR dinámicos.", "settings.qr.baseUrl": "URL base pública", "settings.qr.baseUrlHelp": "Origen público que recibe los escaneos de /r/:code.", "settings.qr.save": "Guardar", "settings.saved": "Guardado",
       "ui.blocks.qrUnavailable": "Codificador QR no disponible", "ui.blocks.qrAria": "Código QR", "ui.blocks.downloadSvg": "Descargar SVG", "ui.blocks.downloadPng": "Descargar PNG", "ui.blocks.moduleColor": "Color de módulos", "ui.blocks.backgroundColor": "Fondo", "ui.blocks.logo": "Logo", "ui.blocks.logoOff": "Desactivado",
       "ui.blocks.pngDownloadFailed": "No se pudo descargar el PNG",
       "ui.blocks.logoDoesNotFit": "El logo no cabe en este contenido sin comprometer la lectura, así que el código se genera sin él. Acorta el destino o desactiva el logo.", "ui.blocks.qrTitle": "Código QR", "ui.blocks.qr": "QR", "ui.blocks.mode": "Modo", "ui.blocks.static": "Estático", "ui.blocks.dynamic": "Dinámico", "ui.blocks.qrPayload": "Contenido", "ui.blocks.dynamicUnavailable": "Los payloads dinámicos llegan en un hito posterior.", "ui.blocks.errorCorrection": "Corrección de errores",
@@ -777,6 +778,7 @@
       "ui.logs.tab.ssh": "SSH",
       "ui.logs.tab.connectors": "Connectors",
       "ui.logs.tab.activity": "Activity",
+      "settings.qr.title": "QR links", "settings.qr.help": "Base URL used by dynamic QR links.", "settings.qr.baseUrl": "Public base URL", "settings.qr.baseUrlHelp": "Public origin that receives /r/:code scans.", "settings.qr.save": "Save", "settings.saved": "Saved",
       "ui.blocks.qrUnavailable": "QR encoder unavailable", "ui.blocks.qrAria": "QR code", "ui.blocks.downloadSvg": "Download SVG", "ui.blocks.downloadPng": "Download PNG", "ui.blocks.moduleColor": "Module color", "ui.blocks.backgroundColor": "Background", "ui.blocks.logo": "Logo", "ui.blocks.logoOff": "Off",
       "ui.blocks.pngDownloadFailed": "PNG download failed",
       "ui.blocks.logoDoesNotFit": "The logo does not fit this content without hurting readability, so the code is generated without it. Shorten the destination or turn the logo off.", "ui.blocks.qrTitle": "QR code", "ui.blocks.qr": "QR", "ui.blocks.mode": "Mode", "ui.blocks.static": "Static", "ui.blocks.dynamic": "Dynamic", "ui.blocks.qrPayload": "Payload", "ui.blocks.dynamicUnavailable": "Dynamic payloads arrive in a later milestone.", "ui.blocks.errorCorrection": "Error correction",
@@ -1670,5 +1672,13 @@
   const tSchemaEnumLabel = (connectorId, fieldKey, optValue, rawLabel) =>
     SCHEMA_ENUM_OVERRIDES[`${connectorId}.${fieldKey}`]?.[locale()]?.[String(optValue)] || rawLabel;
   const tSchemaGroupTitle = (connectorId, rawTitle) => SCHEMA_GROUP_OVERRIDES[connectorId]?.[rawTitle]?.[locale()] || rawTitle;
+  STRINGS.es["settings.pane.qr"] = "Enlaces QR";
+  STRINGS.en["settings.pane.qr"] = "QR links";
+  STRINGS.es["ui.blocks.qrDynamicDestination"] = "Destino (cambia sin volver a imprimir)";
+  STRINGS.en["ui.blocks.qrDynamicDestination"] = "Destination (changes without reprinting)";
+  STRINGS.es["ui.blocks.qrShortUrl"] = "URL corta codificada";
+  STRINGS.en["ui.blocks.qrShortUrl"] = "Encoded short URL";
+  STRINGS.es["ui.blocks.qrPreviewRepresentative"] = "La vista previa usa un enlace corto representativo; el código final se asigna al guardar.";
+  STRINGS.en["ui.blocks.qrPreviewRepresentative"] = "Preview uses a representative short link; the final code is assigned when you save.";
   window.I18N = { t: (key, fallback, vars) => format(t(key, fallback), vars), setLocale, getLocale: locale, useLocale, tModuleLabel, tBlockTitle, dateLocale, tSchemaText, tSchemaEnumLabel, tSchemaGroupTitle, strings: STRINGS };
 })();

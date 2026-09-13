@@ -117,7 +117,13 @@
   }
 
   function QRBlockPanel({ block, panelProps = {} }) {
-    const Panel = window.Panel; const payload = block?.payload?.value || "";
+    const Panel = window.Panel;
+    const [dynamicUrl, setDynamicUrl] = React.useState("");
+    React.useEffect(() => {
+      if (block?.payload?.mode !== "dynamic") { setDynamicUrl(""); return; }
+      Promise.all([window.HQ_API.request(`/api/qr-links/${block.payload.linkId}`), window.HQ_API.request("/api/settings/qr-base-url")]).then(([link, settings]) => setDynamicUrl(`${settings.baseUrl}/r/${link.code}`)).catch(() => setDynamicUrl(""));
+    }, [block?.payload?.mode, block?.payload?.linkId]);
+    const payload = block?.payload?.mode === "dynamic" ? dynamicUrl : (block?.payload?.value || "");
     const download = type => {
       const svg = document.querySelector(`[data-qr-block="${block.id}"] svg`); if (!svg) return;
       const source = new XMLSerializer().serializeToString(svg); const name = block.title || "qr";

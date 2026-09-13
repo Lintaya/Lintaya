@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const Database = require("better-sqlite3");
 const { createApp, requireAuth } = require("../app");
 const { AppError, sendAppError } = require("../core/errors");
 const { request } = require("./test-http-harness");
@@ -7,6 +8,7 @@ const { registerWorkspacePackageRoutes } = require("./workspace-packages");
 
 function setup() {
   const store = new Map();
+  const db = new Database(":memory:"); db.exec("CREATE TABLE qr_links (code TEXT PRIMARY KEY, destination TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, scan_count INTEGER NOT NULL DEFAULT 0, last_scanned_at TEXT)");
   const kvGet = key => store.has(key) ? { value: store.get(key) } : null;
   const app = createApp({ token: "test-token" });
   const auditLog = [];
@@ -16,12 +18,12 @@ function setup() {
     next();
   };
   registerWorkspacePackageRoutes({
-    app, requireAuth, kvGet, kvSet: (key, value) => store.set(key, value), auditActivity, AppError, sendAppError,
+    app, db, requireAuth, kvGet, kvSet: (key, value) => store.set(key, value), auditActivity, AppError, sendAppError,
     resolveConnectorType: id => id === "gitlab2" ? "gitlab" : id,
     connectionAlias: id => id === "gitlab2" ? "Production" : id,
     connectionCandidates: type => type === "gitlab" ? [{ id: "gitlab2", name: "Production" }] : [],
   });
-  return { app, store, auditLog, headers: { authorization: "Bearer test-token" } };
+  return { app, db, store, auditLog, headers: { authorization: "Bearer test-token" } };
 }
 
 test("exports a Dashboard, its Boards, authored Blocks, and connector requirements", async () => {
@@ -109,4 +111,23 @@ test("requires a selection and fails closed for missing or unresolved resources"
   assert.equal((await request(app, "POST", "/api/workspace-packages/export", { headers, body: { boardIds: ["missing"] } })).status, 404);
   store.set("module-pages", [{ id: "page-a", title: "Broken", tree: { t: "z", blocks: ["unknown"] } }]);
   assert.equal((await request(app, "POST", "/api/workspace-packages/export", { headers, body: { boardIds: ["page-a"] } })).status, 400);
+});
+
+test("dynamic QR export snapshots the destination and imports as static", async () => {
+  const { app, db, store, headers } = setup();
+  db.prepare("INSERT INTO qr_links (code, destination, created_at, updated_at) VALUES (?, ?, ?, ?)").run("dynamic-code", "https://current.example", "2026-01-01", "2026-01-01");
+  store.set("custom-blocks", [{ id: "qr", kind: "qr", title: "Dynamic", payload: { mode: "dynamic", linkId: "dynamic-code" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } }]);
+  store.set("module-pages", [{ id: "page", title: "Board", tree: { t: "z", k: "z", blocks: ["qr"] } }]);
+  const exported = await request(app, "POST", "/api/workspace-packages/export", { headers, body: { boardIds: ["page"] } });
+  assert.equal(exported.status, 200); assert.deepEqual(exported.json().package.resources.blocks[0].payload, { mode: "manual", value: "https://current.example" });
+  const imported = await request(app, "POST", "/api/workspace-packages/import", { headers, body: { package: exported.json().package, names: { "block:qr-1": "Imported QR", "board:item-1": "Imported Board" } } });
+  assert.equal(imported.status, 200);
+  assert.deepEqual(store.get("custom-blocks").find(block => block.title === "Imported QR").payload, { mode: "manual", value: "https://current.example" });
+});
+
+test("dynamic QR export fails closed when its local link is missing", async () => {
+  const { app, store, headers } = setup();
+  store.set("custom-blocks", [{ id: "qr", kind: "qr", title: "Broken", payload: { mode: "dynamic", linkId: "missing" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } }]);
+  store.set("module-pages", [{ id: "page", title: "Board", tree: { t: "z", k: "z", blocks: ["qr"] } }]);
+  assert.equal((await request(app, "POST", "/api/workspace-packages/export", { headers, body: { boardIds: ["page"] } })).status, 400);
 });

@@ -97,7 +97,7 @@ test("openDatabase applies and versions the main schema", () => {
   });
 
   assert.equal(db.filename, "main-test.db");
-  assert.equal(db.version, 3);
+  assert.equal(db.version, 4);
   assert.ok(db.statements.some((statement) => statement.includes("CREATE TABLE IF NOT EXISTS kv")));
   assert.ok(db.connectorColumns.includes("connector_type_id"));
 });
@@ -157,7 +157,7 @@ test("connector_type_id migration + backfill resolves a legacy instance like git
     //    the column, purely additively, on an installation that already has
     //    rows.
     const migrated = openDatabase({ filename: file, migrations: MAIN_MIGRATIONS, DatabaseClass: RealDatabase });
-    assert.equal(migrated.pragma("user_version", { simple: true }), 3);
+      assert.equal(migrated.pragma("user_version", { simple: true }), 4);
     const beforeBackfill = migrated.prepare("SELECT id, connector_type_id FROM connectors ORDER BY id").all();
     assert.deepEqual(beforeBackfill, [
       { id: "gitlab", connector_type_id: null },

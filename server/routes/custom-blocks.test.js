@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const Database = require("better-sqlite3");
 
 const { createApp, requireAuth } = require("../app");
 const { AppError, sendAppError } = require("../core/errors");
@@ -8,6 +9,8 @@ const { request } = require("./test-http-harness");
 
 function setup(overrides = {}) {
   const store = new Map();
+  const db = new Database(":memory:");
+  db.exec("CREATE TABLE qr_links (code TEXT PRIMARY KEY)");
   const kvGet = (key) => (store.has(key) ? { value: store.get(key) } : null);
   const kvSet = (key, value) => store.set(key, value);
   const auditLog = [];
@@ -18,9 +21,9 @@ function setup(overrides = {}) {
   };
 
   const app = createApp({ token: "test-token" });
-  registerCustomBlocksRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError, ...overrides });
+  registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError, ...overrides });
   const headers = { authorization: "Bearer test-token" };
-  return { app, store, auditLog, headers };
+  return { app, store, auditLog, headers, db };
 }
 
 test("GET /api/home/custom-blocks is empty when nothing was created", async () => {
@@ -251,6 +254,15 @@ test("DELETE also drops the block's id from home-layout if it was added there", 
   await request(app, "DELETE", `/api/home/custom-blocks/${block.id}`, { headers });
 
   assert.deepEqual(store.get("home-layout"), { left: [], right: ["plane"] });
+});
+
+test("DELETE removes the qr_links row owned by a dynamic QR block", async () => {
+  const { app, db, store, headers } = setup();
+  db.prepare("INSERT INTO qr_links (code) VALUES (?)").run("owned-code");
+  store.set("custom-blocks", [{ id: "qr-1", kind: "qr", title: "Dynamic", payload: { mode: "dynamic", linkId: "owned-code" } }]);
+  const deleted = await request(app, "DELETE", "/api/home/custom-blocks/qr-1", { headers });
+  assert.equal(deleted.status, 200);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM qr_links WHERE code = ?").get("owned-code").count, 0);
 });
 
 test("QR blocks round-trip, reject unknown kinds, and reject incomplete QR PUTs", async () => {

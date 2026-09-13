@@ -49,6 +49,7 @@ const { serviceWorkerVersion, injectServiceWorkerVersion } = require("./core/ser
 // routers propios (ver el roadmap interno, Fase 1).
 const { registerHomeRoutes } = require("./routes/home");
 const { registerCustomBlocksRoutes } = require("./routes/custom-blocks");
+const { registerQrLinksRoutes } = require("./routes/qr-links");
 const { registerModulePagesRoutes } = require("./routes/module-pages");
 const { registerDashboardsRoutes } = require("./routes/dashboards");
 const { registerWorkspacePackageRoutes } = require("./routes/workspace-packages");
@@ -475,9 +476,10 @@ const activityLog = (domain, level, msg, meta) => {
 const auditActivity = (options) => auditConnectorWrite(activityLog, options);
 
 // Fase 1 del roadmap open source — routers por dominio (ver require()s arriba).
-const ROUTE_CONTEXT = { app, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError, rootDir: ROOT };
+const ROUTE_CONTEXT = { app, requireAuth, kvGet, kvSet, auditActivity, AppError, sendAppError, rootDir: ROOT, db, log };
 registerHomeRoutes({ ...ROUTE_CONTEXT, getConnectorInstances, stmtConnGet });
 registerCustomBlocksRoutes(ROUTE_CONTEXT);
+registerQrLinksRoutes(ROUTE_CONTEXT);
 registerModulePagesRoutes(ROUTE_CONTEXT);
 registerDashboardsRoutes(ROUTE_CONTEXT);
 registerWorkspacePackageRoutes({

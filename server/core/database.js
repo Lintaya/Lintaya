@@ -92,6 +92,23 @@ const MAIN_MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 4,
+    apply(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS qr_links (
+          code TEXT PRIMARY KEY,
+          destination TEXT NOT NULL,
+          active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          scan_count INTEGER NOT NULL DEFAULT 0,
+          last_scanned_at TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS qr_links_code ON qr_links(code);
+      `);
+    },
+  },
 ];
 
 const REPOSITORY_MIGRATIONS = [

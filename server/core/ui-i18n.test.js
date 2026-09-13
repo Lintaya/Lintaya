@@ -57,6 +57,14 @@ test("Plane board blocks reuse task controls and read the selected connection", 
   assert.ok(requests.includes("/api/connectors/plane-team/issues?mine=true&limit=10"));
   assert.ok(requests.every(url => url.startsWith("/api/connectors/plane-team/")));
 });
+
+test("dynamic QR builder previews a representative short link, not its destination", () => {
+  const context = runtime();
+  vm.runInContext(`(() => { ${babel.transform(read("block-builder.jsx"), { presets: ["react"] }).code} })()`, context);
+  const preview = context.window.QRPreviewValue({ mode: "dynamic", destination: "https://lintaya.com/destino-real", baseUrl: "http://host" });
+  assert.equal(preview, `http://host/r/${"0".repeat(22)}`);
+  assert.notEqual(preview, "https://lintaya.com/destino-real");
+});
 function renderedText(node) {
   if (node == null || typeof node === "boolean") return "";
   if (Array.isArray(node)) return node.map(renderedText).join(" ");
