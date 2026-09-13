@@ -31,7 +31,7 @@ test("portainer.status fetches a token then the endpoint list", async () => {
     fetch: async (cfg, path, authToken) => { assert.equal(authToken, "token-for-https://portainer.example"); assert.equal(path, "/api/endpoints"); return [{ id: 1 }, { id: 2 }]; },
   });
   const result = await executeAction({ connectionId: "portainer", actionId: "status", input: {} });
-  assert.deepEqual(result.result, { status: "ok", latency: "0ms", endpoints: 2 });
+  assert.deepEqual(result.result, { status: "ok", latency: "0ms", endpoints: 2, userCode: "connectors.portainer.endpointsAccessible", userParams: { count: 2 } });
 });
 
 test("portainer.sync writes connector-data/connector-status", async () => {

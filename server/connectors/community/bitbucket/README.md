@@ -11,10 +11,15 @@ logging.
 - Lifecycle: `beta`
 - License: `Apache-2.0`
 
-Cloud mode uses a username plus API token/app password and may be limited to a
-workspace. Server mode uses a Personal Access Token and requires an explicit
-base URL. Pagination URLs are accepted only when they stay on the configured
-origin and API path, preventing credentials from being forwarded elsewhere.
+Cloud mode uses the Atlassian account email plus a Bitbucket-scoped Atlassian
+API token. The required scopes are `read:user:bitbucket`,
+`read:workspace:bitbucket`, `read:repository:bitbucket`, and
+`read:pullrequest:bitbucket`. Workspace is optional: an empty value discovers
+all account workspaces through `/user/workspaces`; a value is the slug in
+`bitbucket.org/<workspace>`. App passwords no longer work. Server mode uses a
+Personal Access Token and requires an explicit base URL. Pagination URLs are
+accepted only when they stay on the configured origin and API path, preventing
+credentials from being forwarded elsewhere.
 
 Server mode temporarily preserves the legacy behavior of accepting private or
 self-signed TLS certificates. This compatibility setting must become explicit

@@ -13,6 +13,8 @@ const STATUS_OUTPUT_SCHEMA = {
     status: { type: "string" },
     latency: { type: "string" },
     endpoints: { type: "integer", minimum: 0 },
+    userCode: { type: ["string", "null"] },
+    userParams: { type: "object" },
   },
 };
 
@@ -48,7 +50,8 @@ function registerPortainerActions({
       const authToken = await token(cfg);
       const endpoints = await fetch(cfg, "/api/endpoints", authToken);
       const latency = `${Math.max(0, now() - startedAt)}ms`;
-      return { status: "ok", latency, endpoints: Array.isArray(endpoints) ? endpoints.length : 0 };
+      const count = Array.isArray(endpoints) ? endpoints.length : 0;
+      return { status: "ok", latency, endpoints: count, userCode: "connectors.portainer.endpointsAccessible", userParams: { count } };
     },
   });
 

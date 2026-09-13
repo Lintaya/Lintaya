@@ -32,19 +32,19 @@ test("bitbucket.status (Cloud, with workspace) hits /repositories/:workspace and
   });
   const result = await executeAction({ connectionId: "bitbucket", actionId: "status", input: {} });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.result, { status: "ok", latency: "0ms", user: "3 repo(s) accesibles" });
+  assert.deepEqual(result.result, { status: "ok", latency: "0ms", user: "3 repositories accessible", userCode: "connectors.bitbucket.repositoriesAccessible", userParams: { count: 3 } });
   assert.equal(calledWith.path, "/repositories/lintaya?pagelen=1");
 });
 
-test("bitbucket.status (Cloud, no workspace) falls back to /user/permissions/repositories", async () => {
+test("bitbucket.status (Cloud, no workspace) discovers /user/workspaces", async () => {
   let calledPath = null;
   const { executeAction } = setup({
     seed: { "connector-config-bitbucket": { type: "cloud", username: "u", workspace: null, token: "t" } },
-    request: async (cfg, path) => { calledPath = path; return { size: 5 }; },
+    request: async (cfg, path) => { calledPath = path; return { values: [] }; },
   });
   const result = await executeAction({ connectionId: "bitbucket", actionId: "status", input: {} });
-  assert.equal(calledPath, "/user/permissions/repositories?pagelen=1");
-  assert.equal(result.result.user, "5 repo(s) accesibles");
+  assert.equal(calledPath, "/user/workspaces?pagelen=1");
+  assert.equal(result.result.user, "Bitbucket Cloud");
 });
 
 test("bitbucket.status (Server) hits /rest/api/1.0/application-properties and labels by displayName", async () => {

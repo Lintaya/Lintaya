@@ -1,5 +1,13 @@
 // Conectores — estado de cada integración (vCenter, UCS, GitLab, Jira, etc.)
 const { useState, useMemo, useEffect, useCallback, useRef } = React;
+function connectorErrorText(status, t) {
+  return status?.lastErrorCode ? t(status.lastErrorCode, status.lastError || "", status.lastErrorParams || {}) : status?.lastError;
+}
+function connectorResponseText(response, fallback = "") {
+  return response?.userCode
+    ? window.I18N.t(response.userCode, response.user || fallback, response.userParams || {})
+    : (response?.user || fallback);
+}
 
 // Logos de marca reales para GitLab/GitHub, en vez del monograma de 2 letras que
 // usan el resto de conectores — se insertan donde antes iba {conn.icon}/{ct.icon}.
@@ -221,7 +229,7 @@ window.STATUS_META = STATUS_META;
 const SIMPLE_ONPULSE = {
   gitlab: {
     displayName: "GitLab",
-    test: r => ({ fields: { user: r.user }, detail: r.user }),
+    test: r => ({ fields: { user: r.user }, detail: connectorResponseText(r, r.user) }),
     sync: r => ({
       fields: { projects: r.projects, deployments: r.deployments },
       detail: `${r.projectCount} repos, ${r.deploymentCount} despliegues, ${r.commitCount} commits`,
@@ -239,7 +247,7 @@ const SIMPLE_ONPULSE = {
   },
   bitbucket: {
     displayName: "Bitbucket",
-    test: r => ({ fields: { user: r.user }, detail: r.user }),
+    test: r => ({ fields: { user: r.user }, detail: connectorResponseText(r, r.user) }),
     sync: r => ({
       fields: { projects: r.projects, deployments: r.deployments },
       detail: `${r.projectCount} repos, ${r.commitCount} commits`,
@@ -257,7 +265,7 @@ const SIMPLE_ONPULSE = {
   },
   portainer: {
     displayName: "Portainer",
-    test: r => ({ fields: {}, detail: `${r.endpoints} endpoints` }),
+    test: r => ({ fields: {}, detail: connectorResponseText(r, `${r.endpoints} endpoints`) }),
     sync: r => ({
       fields: { endpointCount: r.endpoints },
       detail: `${r.endpoints} endpoints, ${r.containers} contenedores`,
@@ -1164,6 +1172,7 @@ function BitbucketConfigPanel({ onSaved, id = "bitbucket" }) {
     if (!values.token) { setErr(t("connectors.bitbucket.tokenRequired")); return; }
     if (type === "server" && !values.baseUrl) { setErr(t("connectors.bitbucket.baseUrlRequired")); return; }
     if (type === "cloud" && !values.username) { setErr(t("connectors.bitbucket.usernameRequired")); return; }
+    if (type === "cloud" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.username.trim())) { setErr(t("connectors.bitbucket.usernameEmailInvalid")); return; }
     setSaving(true); setErr("");
     try {
       await window.HQ_API.request(`/api/connectors/${id}/config`, {
@@ -1209,7 +1218,6 @@ function BitbucketConfigPanel({ onSaved, id = "bitbucket" }) {
             <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
               {t("connectors.bitbucket.createToken")}
             </a> {t("connectors.bitbucket.useScopes")} <b>"Create API token with scopes"</b> {t("connectors.bitbucket.notClassic")} <b>Bitbucket</b> {t("connectors.bitbucket.markMin")} <b>Repository: Read</b> ({t("connectors.github.scopeMid")} <b>User: Read</b> {t("connectors.bitbucket.andIfEmpty")} {t("connectors.bitbucket.classicTokenError")} <i>"API Token provided has no Bitbucket scopes"</i>.
-            {" "}{t("connectors.bitbucket.appPasswordsGone")}
           </>
         )}
       </div>
@@ -1514,7 +1522,7 @@ function ConnectorCard({ conn, liveStatus, account, onSelect, onPulse, busy }) {
           background: "color-mix(in srgb, var(--err) 8%, white)",
           color: "var(--err)", border: "1px solid color-mix(in srgb, var(--err) 25%, var(--border))",
         }}>
-          <b>{t("connectors.card.lastError")}</b> {liveStatus.lastError}
+          <b>{t("connectors.card.lastError")}</b> {connectorErrorText(liveStatus, t)}
         </div>
       )}
 
@@ -2207,7 +2215,7 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
               background: "color-mix(in srgb, var(--err) 8%, white)",
               color: "var(--err)", border: "1px solid color-mix(in srgb, var(--err) 25%, var(--border))",
             }}>
-              <b>{t("connectors.detail.lastError")}</b><br />{liveStatus.lastError}
+              <b>{t("connectors.detail.lastError")}</b><br />{connectorErrorText(liveStatus, t)}
             </div>
           )}
 
@@ -3668,7 +3676,7 @@ function ConnectorsView() {
         }
       } catch (e) {
         const msg = e.message || t("connectors.pulse.unknownError");
-        setLiveStatuses(s => ({ ...s, [id]: { ...s[id], status: "error", lastError: msg } }));
+          setLiveStatuses(s => ({ ...s, [id]: { ...s[id], status: "error", lastError: msg, lastErrorCode: r?.errorCode, lastErrorParams: r?.errorParams } }));
         addLog(id, "err", t("connectors.pulse.errorLog", "", { message: msg }));
         window.dispatchEvent(new CustomEvent("toast", { detail: { msg: t("connectors.pulse.errorToast", "", { label: conn.name, message: msg }), kind: "error" } }));
       } finally {
@@ -3755,7 +3763,7 @@ function ConnectorsView() {
           const r = await window.HQ_API.request(`/api/connectors/${id}/test`, { method: "POST" });
           const { fields, detail } = r.ok ? spec.test(r) : { fields: {}, detail: "" };
           const detailPart = detail ? ` · ${detail}` : "";
-          setLiveStatuses(s => ({ ...s, [id]: { ...s[id], status: r.ok ? "ok" : "error", lastError: r.ok ? null : r.error, latency: r.latency, configured: true, ...fields } }));
+          setLiveStatuses(s => ({ ...s, [id]: { ...s[id], status: r.ok ? "ok" : "error", lastError: r.ok ? null : r.error, lastErrorCode: r.ok ? null : r.errorCode, lastErrorParams: r.ok ? null : r.errorParams, latency: r.latency, configured: true, ...fields } }));
           addLog(id, r.ok ? "ok" : "err", r.ok ? t("connectors.pulse.simple.testOkLog", "", { detail: detailPart, latency: r.latency }) : t("connectors.pulse.simple.testFailLog", "", { error: r.error }));
           window.dispatchEvent(new CustomEvent("toast", { detail: { msg: r.ok ? t("connectors.pulse.simple.testOkToast", "", { label, detail: detailPart, latency: r.latency }) : t("connectors.pulse.errorToast", "", { label, message: r.error }), kind: r.ok ? "ok" : "error" } }));
         } else if (action === "sync") {

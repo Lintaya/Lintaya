@@ -19,6 +19,12 @@ const {
 
 const SECRET_FIELDS = ["apiKey", "password"];
 
+function portainerErrorDetails(error) {
+  if (error.status === 401) return { code: "connectors.portainer.credentialsRejected", params: {}, message: "Portainer connection test failed: API key or username/password was rejected." };
+  if (error.status === 403) return { code: "connectors.portainer.permissionDenied", params: {}, message: "Portainer connection test failed: credentials were accepted but the account lacks permission for the requested endpoint." };
+  return { code: null, params: {}, message: error.message };
+}
+
 function registerPortainerRoutes(options) {
   const {
     app,
@@ -93,18 +99,17 @@ function registerPortainerRoutes(options) {
       const endpoints = await fetch(cfg, "/api/endpoints", authToken);
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const count = Array.isArray(endpoints) ? endpoints.length : 0;
-      store.setStatus({ status: "ok", latency, lastTest: isoNow(), lastError: null });
+      store.setStatus({ status: "ok", latency, lastTest: isoNow(), lastError: null, userCode: "connectors.portainer.endpointsAccessible", userParams: { count } });
       log("ok", `Test OK · ${count} endpoints · ${latency}`);
-      return res.json({ ok: true, latency, endpoints: count });
+      return res.json({ ok: true, latency, endpoints: count, userCode: "connectors.portainer.endpointsAccessible", userParams: { count } });
     } catch (error) {
       const latency = `${Math.max(0, now() - startedAt)}ms`;
-      const rawMessage = [401, 403].includes(error.status)
-        ? "Credenciales inválidas — revisa la API key o el usuario/contraseña"
-        : error.message;
+      const details = portainerErrorDetails(error);
+      const rawMessage = details.message;
       const message = redactText(rawMessage, secretsOf(cfg));
-      store.setStatus({ status: "error", latency, lastTest: isoNow(), lastError: message });
+      store.setStatus({ status: "error", latency, lastTest: isoNow(), lastError: message, lastErrorCode: details.code, lastErrorParams: details.params });
       log("err", `Test FAIL · ${message}`);
-      return res.status(502).json({ ok: false, error: message, latency });
+      return res.status(502).json({ ok: false, error: message, errorCode: details.code, errorParams: details.params, latency });
     }
   }));
 
@@ -123,10 +128,11 @@ function registerPortainerRoutes(options) {
       return res.json({ ok: true, latency, syncedAt, endpoints: endpoints.length, containers: total });
     } catch (error) {
       const latency = `${Math.max(0, now() - startedAt)}ms`;
-      const message = redactText(error.message, secretsOf(cfg));
-      store.setStatus({ status: "error", latency, lastSync: isoNow(), lastError: message });
+      const details = portainerErrorDetails(error);
+      const message = redactText(details.message, secretsOf(cfg));
+      store.setStatus({ status: "error", latency, lastSync: isoNow(), lastError: message, lastErrorCode: details.code, lastErrorParams: details.params });
       log("err", `Sync FAIL · ${message}`);
-      return res.status(502).json({ ok: false, error: message, latency });
+      return res.status(502).json({ ok: false, error: message, errorCode: details.code, errorParams: details.params, latency });
     }
   }));
 }

@@ -76,7 +76,35 @@ test("test reports the endpoint count and records status", async () => {
   const response = await harness.invoke("POST", "/api/connectors/portainer/test");
   assert.equal(response.body.ok, true);
   assert.equal(response.body.endpoints, 1);
+  assert.equal(response.body.userCode, "connectors.portainer.endpointsAccessible");
+  assert.deepEqual(response.body.userParams, { count: 1 });
+  assert.equal(harness.values.get("connector-status-portainer").userCode, "connectors.portainer.endpointsAccessible");
+  assert.deepEqual(harness.values.get("connector-status-portainer").userParams, { count: 1 });
   assert.equal(harness.values.get("connector-status-portainer").status, "ok");
+});
+
+test("test distinguishes Portainer 401 and 403 with exact codes and params", async () => {
+  for (const [status, code] of [[401, "connectors.portainer.credentialsRejected"], [403, "connectors.portainer.permissionDenied"]]) {
+    const harness = createHarness({ fetch: async () => { const error = new Error("provider failure"); error.status = status; throw error; } });
+    harness.values.set("connector-config-portainer", { baseUrl: "https://p.test", apiKey: "api-secret" });
+    const response = await harness.invoke("POST", "/api/connectors/portainer/test");
+    assert.equal(response.body.errorCode, code);
+    assert.deepEqual(response.body.errorParams, {});
+    assert.equal(harness.values.get("connector-status-portainer").lastErrorCode, code);
+    assert.deepEqual(harness.values.get("connector-status-portainer").lastErrorParams, {});
+  }
+});
+
+test("sync persists coded Portainer auth failures for both 401 and 403", async () => {
+  for (const [status, code] of [[401, "connectors.portainer.credentialsRejected"], [403, "connectors.portainer.permissionDenied"]]) {
+    const harness = createHarness({ sync: async () => { const error = new Error("sync auth failure"); error.status = status; throw error; } });
+    harness.values.set("connector-config-portainer", { baseUrl: "https://p.test", username: "ana", password: "pass" });
+    const response = await harness.invoke("POST", "/api/connectors/portainer/sync");
+    assert.equal(response.body.errorCode, code);
+    assert.deepEqual(response.body.errorParams, {});
+    assert.equal(harness.values.get("connector-status-portainer").lastErrorCode, code);
+    assert.deepEqual(harness.values.get("connector-status-portainer").lastErrorParams, {});
+  }
 });
 
 test("test maps a 401 to a credential hint rather than the raw HTTP error", async () => {
@@ -87,7 +115,8 @@ test("test maps a 401 to a credential hint rather than the raw HTTP error", asyn
 
   const response = await harness.invoke("POST", "/api/connectors/portainer/test");
   assert.equal(response.status, 502);
-  assert.match(response.body.error, /Credenciales inválidas/);
+  assert.equal(response.body.errorCode, "connectors.portainer.credentialsRejected");
+  assert.deepEqual(response.body.errorParams, {});
 });
 
 test("sync stores endpoints and reports the container count", async () => {
@@ -122,6 +151,43 @@ test("failures redact the stored credentials from the error", async () => {
   assert.equal(response.body.error.includes("ptr-secret-key"), false);
   assert.equal(response.body.error.includes("hunter2"), false);
   assert.equal(harness.values.get("connector-status-portainer").lastError.includes("ptr-secret-key"), false);
+});
+
+test("Portainer redacts secrets from every coded auth failure in both auth modes", async () => {
+  for (const config of [
+    { baseUrl: "https://p.test", apiKey: "api-secret" },
+    { baseUrl: "https://p.test", username: "ana", password: "password-secret" },
+  ]) {
+    const secret = config.apiKey || config.password;
+    const harness = createHarness({ fetch: async () => { const error = new Error(`provider echoed ${secret}`); error.status = 401; throw error; } });
+    harness.values.set("connector-config-portainer", config);
+    const response = await harness.invoke("POST", "/api/connectors/portainer/test");
+    const status = harness.values.get("connector-status-portainer");
+    assert.equal(response.body.errorCode, "connectors.portainer.credentialsRejected");
+    assert.equal(JSON.stringify(response.body).includes(secret), false);
+    assert.equal(JSON.stringify(status).includes(secret), false);
+    assert.equal(JSON.stringify(harness.logs).includes(secret), false);
+  }
+});
+
+test("Bitbucket and Portainer emitted codes have bilingual translations and matching parameters", () => {
+  const source = require("node:fs").readFileSync(require("node:path").resolve(__dirname, "../../../../app/i18n.js"), "utf8");
+  const codes = {
+    "connectors.bitbucket.credentialsRejected": [],
+    "connectors.bitbucket.missingScope": ["scope"],
+    "connectors.bitbucket.workspaceNotFound": ["workspace"],
+    "connectors.bitbucket.repositoriesAccessible": ["count"],
+    "connectors.bitbucket.usernameEmailInvalid": [],
+    "connectors.portainer.credentialsRejected": [],
+    "connectors.portainer.permissionDenied": [],
+    "connectors.portainer.endpointsAccessible": ["count"],
+  };
+  for (const [code, params] of Object.entries(codes)) {
+    assert.ok(source.split(code).length - 1 >= 2, `${code} must have es and en entries`);
+    const occurrences = source.split(code).slice(0, -1).join(code);
+    for (const param of params) assert.ok(source.includes(`{${param}}`), `${code} missing {${param}}`);
+    assert.ok(occurrences.length > 0);
+  }
 });
 
 test("test and sync refuse to run before the connector is configured", async () => {

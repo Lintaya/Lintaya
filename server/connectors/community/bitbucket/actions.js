@@ -23,6 +23,8 @@ const STATUS_OUTPUT_SCHEMA = {
     // different meaning underneath (matches the legacy /test route's own
     // `user: label` field).
     user: { type: ["string", "null"] },
+    userCode: { type: ["string", "null"] },
+    userParams: { type: "object" },
   },
 };
 
@@ -59,12 +61,12 @@ function registerBitbucketActions({
         ? await request(cfg, "/rest/api/1.0/application-properties")
         : cfg.workspace
           ? await request(cfg, `/repositories/${encodeURIComponent(cfg.workspace)}?pagelen=1`)
-          : await request(cfg, "/user/permissions/repositories?pagelen=1");
+          : await request(cfg, "/user/workspaces?pagelen=1");
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const label = cfg.type === "server"
         ? (result?.displayName || "Bitbucket Server")
-        : (result?.size != null ? `${result.size} repo(s) accesibles` : "Bitbucket Cloud");
-      return { status: "ok", latency, user: label };
+        : (result?.size != null ? `${result.size} repositories accessible` : "Bitbucket Cloud");
+      return { status: "ok", latency, user: label, userCode: result?.size != null ? "connectors.bitbucket.repositoriesAccessible" : null, userParams: result?.size != null ? { count: result.size } : {} };
     },
   });
 

@@ -61,8 +61,12 @@ prefix now survives. Instances configured with a bare host are unaffected.
 | --- | --- |
 | `GET /api/connectors/portainer/config` | Current configuration; never returns the API key or password |
 | `POST /api/connectors/portainer/config` | Requires `baseUrl` plus either `apiKey` or `username`+`password` |
-| `POST /api/connectors/portainer/test` | Lists endpoints; maps 401/403 to a credential hint |
-| `POST /api/connectors/portainer/sync` | Stores endpoints and their containers |
+| `POST /api/connectors/portainer/test` | Lists endpoints; returns localized `errorCode`/`errorParams` for rejected credentials or insufficient permissions |
+| `POST /api/connectors/portainer/sync` | Stores endpoints and their containers; uses the same coded auth errors |
+
+Successful tests return `userCode=connectors.portainer.endpointsAccessible` with
+`userParams.count`. The UI translates these codes at render time, so status
+messages follow the selected Lintaya language.
 
 The `GET /config` response keeps the legacy shape (`auth`, `username`,
 `hasApiKey`) because `connectors.jsx` reads those fields directly.

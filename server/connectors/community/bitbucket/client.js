@@ -9,6 +9,24 @@ const CLOUD_BASE_URL = "https://api.bitbucket.org/2.0";
 const MAX_PAGES = 10;
 const PROJECT_CONCURRENCY = 6;
 
+// Atlassian does not document the response shape of /user/workspaces. These
+// two locations are the shapes observed in Cloud responses and are accepted
+// defensively until the API contract is published.
+function workspaceSlug(value) {
+  return value?.workspace?.slug || value?.slug || null;
+}
+
+async function listBitbucketWorkspaces(cfg, request) {
+  const result = await collectPages({
+    maxPages: MAX_PAGES,
+    initialCursor: "/user/workspaces?pagelen=100",
+    fetchPage: next => request(cfg, next),
+    getItems: data => (Array.isArray(data?.values) ? data.values : []).map(workspaceSlug).filter(Boolean),
+    getNext: data => data?.next || null,
+  });
+  return [...new Set(result.items)];
+}
+
 function bitbucketApiBase(cfg) {
   return cfg?.type === "server" ? cfg.baseUrl : CLOUD_BASE_URL;
 }
@@ -138,13 +156,15 @@ async function listBitbucketRepositories(cfg, request, options = {}) {
       getNext: data => data?.next || null,
     });
   } else {
-    result = await collectPages({
+    const workspaces = await listBitbucketWorkspaces(cfg, request);
+    const workspaceResults = await Promise.all(workspaces.map(workspace => collectPages({
       maxPages: MAX_PAGES,
-      initialCursor: "/user/permissions/repositories?pagelen=100",
+      initialCursor: `/repositories/${encodeURIComponent(workspace)}?role=member&pagelen=100`,
       fetchPage: next => request(cfg, next),
-      getItems: data => (Array.isArray(data?.values) ? data.values : []).map(value => value.repository).filter(Boolean),
+      getItems: data => Array.isArray(data?.values) ? data.values : [],
       getNext: data => data?.next || null,
-    });
+    })));
+    result = { items: workspaceResults.flatMap(page => page.items), pageCount: workspaceResults.reduce((sum, page) => sum + page.pageCount, 0), truncated: workspaceResults.some(page => page.truncated) };
   }
 
   const repositories = result.items;
@@ -304,6 +324,7 @@ module.exports = {
   bitbucketRequest,
   bitbucketServerPathToString,
   listBitbucketRepositories,
+  listBitbucketWorkspaces,
   mapWithConcurrency,
   resolveBitbucketRequestTarget,
   splitBitbucketId,

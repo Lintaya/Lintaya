@@ -19,6 +19,22 @@ const {
   status: STATUS_KEY,
 } = connectorKeys("bitbucket");
 
+function bitbucketErrorDetails(error, cfg) {
+  if (error.status === 401) return {
+    code: "connectors.bitbucket.credentialsRejected", params: {},
+    message: "Bitbucket connection test failed: credentials rejected; use the Atlassian account email and a Bitbucket-scoped API token.",
+  };
+  if (error.status === 403) {
+    const scope = cfg.workspace ? "read:repository:bitbucket" : "read:workspace:bitbucket";
+    return { code: "connectors.bitbucket.missingScope", params: { scope }, message: `Bitbucket connection test failed: credentials accepted but required scope is missing (${scope}).` };
+  }
+  if (error.status === 404 && cfg.workspace) return {
+    code: "connectors.bitbucket.workspaceNotFound", params: { workspace: cfg.workspace },
+    message: `Bitbucket connection test failed: workspace "${cfg.workspace}" was not found or is inaccessible.`,
+  };
+  return { code: null, params: {}, message: error.message };
+}
+
 function registerBitbucketRoutes(options) {
   const {
     app,
@@ -65,6 +81,10 @@ function registerBitbucketRoutes(options) {
       log("err", "Config save failed: username is required for Bitbucket Cloud");
       return res.status(400).json({ error: "username is required for Bitbucket Cloud" });
     }
+    if (normalizedType === "cloud" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(username).trim())) {
+      log("err", "Config save failed: Cloud username must be an Atlassian account email");
+      return res.status(400).json({ error: "Cloud username must be an Atlassian account email", errorCode: "connectors.bitbucket.usernameEmailInvalid", errorParams: {} });
+    }
 
     const normalizedBaseUrl = normalizedType === "server"
       ? String(baseUrl).trim().replace(/\/+$/, "")
@@ -100,34 +120,36 @@ function registerBitbucketRoutes(options) {
         ? await request(cfg, "/rest/api/1.0/application-properties")
         : cfg.workspace
           ? await request(cfg, `/repositories/${encodeURIComponent(cfg.workspace)}?pagelen=1`)
-          : await request(cfg, "/user/permissions/repositories?pagelen=1");
+          : await request(cfg, "/user/workspaces?pagelen=1");
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const label = cfg.type === "server"
         ? (result?.displayName || "Bitbucket Server")
-        : (result?.size != null ? `${result.size} repo(s) accesibles` : "Bitbucket Cloud");
+        : (result?.size != null ? `${result.size} repositories accessible` : "Bitbucket Cloud");
+      const userCode = result?.size != null ? "connectors.bitbucket.repositoriesAccessible" : null;
+      const userParams = result?.size != null ? { count: result.size } : {};
       store.setStatus({
         status: "ok",
         latency,
         lastTest: isoNow(),
         lastError: null,
-        user: label,
+        user: label, userCode, userParams,
       });
       log("ok", `Test OK · ${label} · ${latency}`);
-      return res.json({ ok: true, latency, user: label });
+      return res.json({ ok: true, latency, user: label, userCode, userParams });
     } catch (error) {
       const latency = `${Math.max(0, now() - startedAt)}ms`;
-      const rawMessage = [401, 403].includes(error.status)
-        ? "Credenciales inválidas — revisa token, usuario y scopes"
-        : error.message;
-      const message = redactText(rawMessage, [cfg.token]);
+      const details = bitbucketErrorDetails(error, cfg);
+      const message = redactText(details.message, [cfg.token]);
       store.setStatus({
         status: "error",
         latency,
         lastTest: isoNow(),
         lastError: message,
+        lastErrorCode: details.code,
+        lastErrorParams: details.params,
       });
       log("err", `Test FAIL · ${message}`);
-      return res.status(502).json({ ok: false, error: message, latency });
+      return res.status(502).json({ ok: false, error: message, errorCode: details.code, errorParams: details.params, latency });
     }
   }));
 
@@ -166,15 +188,16 @@ function registerBitbucketRoutes(options) {
       });
     } catch (error) {
       const latency = `${Math.max(0, now() - startedAt)}ms`;
-      const message = redactText(error.message, [cfg.token]);
+      const details = bitbucketErrorDetails(error, cfg);
+      const message = redactText(details.message, [cfg.token]);
       store.setStatus({
         status: "error",
         latency,
         lastSync: isoNow(),
-        lastError: message,
+        lastError: message, lastErrorCode: details.code, lastErrorParams: details.params,
       });
       log("err", `Sync FAIL · ${message}`);
-      return res.status(502).json({ error: message });
+      return res.status(502).json({ error: message, errorCode: details.code, errorParams: details.params });
     }
   }));
 }

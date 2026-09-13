@@ -1549,9 +1549,9 @@
     },
     bitbucket: {
       baseUrl: { es: "Obligatorio para Bitbucket Server o Data Center." },
-      username: { es: "Usuario de Bitbucket Cloud." },
-      workspace: { es: "Alcance de workspace opcional de Bitbucket Cloud." },
-      token: { es: "Token de API/app password de Cloud o Personal Access Token de Server." },
+      username: { es: "Email de la cuenta Atlassian para Bitbucket Cloud (no el usuario de Bitbucket)." },
+      workspace: { es: "Workspace opcional: slug de bitbucket.org/<workspace>; vacío descubre todos los workspaces de la cuenta." },
+      token: { es: "Token de API de Atlassian con scopes de Bitbucket para Cloud: read:user:bitbucket, read:workspace:bitbucket, read:repository:bitbucket y read:pullrequest:bitbucket; o Personal Access Token de Server." },
     },
     bw: {
       "$root": { es: "Apunta la CLI de bw a un servidor y opcionalmente guarda una API key para login desatendido. Leer secretos igual necesita la bóveda desbloqueada con la contraseña maestra, que nunca se guarda." },
@@ -1680,5 +1680,23 @@
   STRINGS.en["ui.blocks.qrShortUrl"] = "Encoded short URL";
   STRINGS.es["ui.blocks.qrPreviewRepresentative"] = "La vista previa usa un enlace corto representativo; el código final se asigna al guardar.";
   STRINGS.en["ui.blocks.qrPreviewRepresentative"] = "Preview uses a representative short link; the final code is assigned when you save.";
+  STRINGS.es["connectors.bitbucket.usernameEmailInvalid"] = "Para Bitbucket Cloud, usa el email de tu cuenta Atlassian, no el usuario de Bitbucket.";
+  STRINGS.en["connectors.bitbucket.usernameEmailInvalid"] = "For Bitbucket Cloud, use your Atlassian account email, not your Bitbucket username.";
+  STRINGS.es["connectors.bitbucket.credentialsRejected"] = "Bitbucket rechazó las credenciales: usa el email de tu cuenta Atlassian y un token de API con scopes de Bitbucket.";
+  STRINGS.en["connectors.bitbucket.credentialsRejected"] = "Bitbucket rejected the credentials: use your Atlassian account email and a Bitbucket-scoped API token.";
+  STRINGS.es["connectors.bitbucket.repositoriesAccessible"] = "{count} repositorio(s) accesible(s)";
+  STRINGS.en["connectors.bitbucket.repositoriesAccessible"] = "{count} accessible repository/repositories";
+  STRINGS.es["connectors.portainer.credentialsRejected"] = "Portainer rechazó las credenciales: la API key o el usuario/contraseña fueron rechazados.";
+  STRINGS.en["connectors.portainer.credentialsRejected"] = "Portainer rejected the credentials: the API key or username/password was rejected.";
+  STRINGS.es["connectors.portainer.permissionDenied"] = "Portainer aceptó las credenciales, pero la cuenta no tiene permiso para el endpoint solicitado.";
+  STRINGS.en["connectors.portainer.permissionDenied"] = "Portainer accepted the credentials, but the account lacks permission for the requested endpoint.";
+  STRINGS.es["connectors.portainer.endpointsAccessible"] = "{count} endpoint(s) accesible(s)";
+  STRINGS.en["connectors.portainer.endpointsAccessible"] = "{count} accessible endpoint(s)";
+  STRINGS.es["connectors.bitbucket.missingScope"] = "Las credenciales son válidas, pero falta el scope requerido de Bitbucket: {scope}.";
+  STRINGS.en["connectors.bitbucket.missingScope"] = "The credentials are valid, but the required Bitbucket scope is missing: {scope}.";
+  STRINGS.es["connectors.bitbucket.workspaceNotFound"] = "El workspace {workspace} no existe o la cuenta no tiene acceso.";
+  STRINGS.en["connectors.bitbucket.workspaceNotFound"] = "Workspace {workspace} does not exist or the account cannot access it.";
+  STRINGS.es["connectors.bitbucket.tokenRequired"] = "El token de API con scopes de Bitbucket es obligatorio.";
+  STRINGS.en["connectors.bitbucket.tokenRequired"] = "A Bitbucket-scoped API token is required.";
   window.I18N = { t: (key, fallback, vars) => format(t(key, fallback), vars), setLocale, getLocale: locale, useLocale, tModuleLabel, tBlockTitle, dateLocale, tSchemaText, tSchemaEnumLabel, tSchemaGroupTitle, strings: STRINGS };
 })();

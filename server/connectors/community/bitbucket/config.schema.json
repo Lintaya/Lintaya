@@ -18,19 +18,20 @@
     "username": {
       "type": "string",
       "minLength": 1,
-      "description": "Bitbucket Cloud username."
+      "format": "email",
+      "description": "Atlassian account email for Bitbucket Cloud (not the Bitbucket username)."
     },
     "workspace": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional Bitbucket Cloud workspace scope."
+      "description": "Optional Bitbucket Cloud workspace slug from bitbucket.org/<workspace>. Empty discovers all workspaces in the account."
     },
     "token": {
       "type": "string",
       "minLength": 1,
       "writeOnly": true,
       "x-lintaya-secret": true,
-      "description": "Cloud API token/app password or Server Personal Access Token."
+      "description": "Bitbucket-scoped Atlassian API token for Cloud, or Personal Access Token for Server/Data Center. Cloud scopes: read:user:bitbucket, read:workspace:bitbucket, read:repository:bitbucket, read:pullrequest:bitbucket."
     }
   },
   "allOf": [

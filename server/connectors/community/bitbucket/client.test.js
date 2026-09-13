@@ -6,6 +6,7 @@ const {
   bitbucketAuthHeader,
   bitbucketServerPathToString,
   mapWithConcurrency,
+  listBitbucketRepositories,
   resolveBitbucketRequestTarget,
   splitBitbucketId,
   syncBitbucket,
@@ -147,6 +148,21 @@ test("sync maps and deduplicates Bitbucket Cloud repositories", async () => {
   assert.equal(result.commits.length, 1);
   assert.equal(paths.some((path) => /^https:\/\//.test(path)), true);
   assert.deepEqual(result.pagination.projects, { pages: 2, truncated: false });
+});
+
+test("Cloud without a workspace discovers both workspace response shapes and paginates repositories", async () => {
+  const paths = [];
+  const request = async (cfg, path) => {
+    paths.push(path);
+    if (path === "/user/workspaces?pagelen=100") return { values: [{ workspace: { slug: "alpha" } }, { slug: "beta" }], next: "https://api.bitbucket.org/2.0/user/workspaces?pagelen=100&page=2" };
+    if (path.includes("/user/workspaces?pagelen=100&page=2")) return { values: [{ slug: "alpha" }], next: null };
+    if (path.startsWith("/repositories/alpha?")) return { values: [{ full_name: "alpha/one", slug: "one", name: "one", workspace: { slug: "alpha" } }], next: null };
+    if (path.startsWith("/repositories/beta?")) return { values: [{ full_name: "beta/two", slug: "two", name: "two", workspace: { slug: "beta" } }], next: null };
+    throw new Error(`Unexpected path ${path}`);
+  };
+  const repositories = await listBitbucketRepositories({ type: "cloud", username: "user@example.com", token: "secret" }, request);
+  assert.deepEqual(repositories.map(repository => repository.full_name), ["alpha/one", "beta/two"]);
+  assert.equal(paths.some(path => path.includes("user/permissions/repositories")), false);
 });
 
 test("sync maps Bitbucket Server repositories", async () => {
