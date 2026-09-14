@@ -26,24 +26,12 @@ const FONT_OPTIONS = [
   { value: "systemui", label: "System UI", preview: "system-ui / ui-monospace" },
 ];
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const svg = (d, extra) => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    {d}{extra}
-  </svg>
-);
-const ICONS = {
-  profile:   svg(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" /></>),
-  ai:        svg(<><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 9h6M9 13h4" /></>),
-  appearance: svg(<><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 000 18z" /></>),
-  language:   svg(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></>),
-  navigation: svg(<><rect x="3" y="4" width="7" height="16" rx="1.5" /><path d="M13 8h8M13 12h8M13 16h5" /></>),
-  views:     svg(<><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="14" width="18" height="6" rx="1.5" /></>),
-  sync:      svg(<><path d="M4 12a8 8 0 0113.7-5.7L20 8" /><path d="M20 4v4h-4" /><path d="M20 12a8 8 0 01-13.7 5.7L4 16" /><path d="M4 20v-4h4" /></>),
-  backup:    svg(<><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14a2 2 0 0 0 2-2v-3" /><path d="M3 16v3a2 2 0 0 0 2 2" /></>),
-  about:     svg(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7h.01" /></>),
-};
+// El rail de navegación no lleva iconos. Aquí vivía un `const ICONS` propio que
+// nunca llegó a pintarse: todos los scripts text/babel comparten el ámbito
+// global, y app.jsx —que carga después— declara otro `ICONS` con los iconos del
+// menú lateral. Esa segunda declaración ganaba, así que ICONS[item.icon] solo
+// encontraba claves que existían allí (como "builder") y el resto salía vacío.
+// No volver a declarar un nombre global que ya use otro módulo.
 
 // Mirrors the grouped rail of the desktop settings modal.
 const NAV_GROUPS = [
@@ -56,6 +44,7 @@ const NAV_GROUPS = [
     { id: "language",   label: "Idioma / Language", icon: "language" },
     { id: "navigation", label: "Navegación",   icon: "navigation" },
     { id: "views",      label: "Vistas",       icon: "views" },
+    { id: "builder",    label: "Builder",      icon: "builder" },
   ] },
   { id: "system", title: "Sistema",    items: [
     { id: "sync",       label: "Sincronización", icon: "sync" },
@@ -65,17 +54,18 @@ const NAV_GROUPS = [
 
 // Keep version/build information separate from editable application settings.
 NAV_GROUPS.push({ id: "info", title: "Info", items: [{ id: "about", label: "Acerca de", icon: "about" }] });
-NAV_GROUPS.find(group => group.id === "system")?.items.push({ id: "qr", label: "QR links", icon: "sync" });
 const ALL_PANES = NAV_GROUPS.flatMap(g => g.items);
 
-function QrPane() {
+function BuilderPane() {
+  const [dynamicEnabled, setDynamicEnabled] = useState(false);
   const [baseUrl, setBaseUrl] = useState("");
+  const [reachability, setReachability] = useState("public");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
-  useEffect(() => { window.HQ_API.request("/api/settings/qr-base-url").then(value => setBaseUrl(value.baseUrl)).catch(e => setError(e.message)); }, []);
-  const save = async () => { setSaved(false); setError(null); try { const value = await window.HQ_API.request("/api/settings/qr-base-url", { method: "PUT", body: { baseUrl } }); setBaseUrl(value.baseUrl); setSaved(true); } catch (e) { setError(e.message); } };
+  useEffect(() => { Promise.all([window.HQ_API.request("/api/settings/builder"), window.HQ_API.request("/api/settings/qr-base-url")]).then(([builder, qr]) => { setDynamicEnabled(builder.qr?.dynamicEnabled === true); setBaseUrl(qr.baseUrl); setReachability(qr.baseUrlReachability); }).catch(e => setError(e.message)); }, []);
+  const save = async () => { setSaved(false); setError(null); try { const builder = await window.HQ_API.request("/api/settings/builder", { method: "PUT", body: { qr: { dynamicEnabled } } }); const value = await window.HQ_API.request("/api/settings/qr-base-url", { method: "PUT", body: { baseUrl } }); setDynamicEnabled(builder.qr.dynamicEnabled); setBaseUrl(value.baseUrl); setReachability(value.baseUrlReachability); setSaved(true); } catch (e) { setError(e.message); } };
   const t = window.I18N.t;
-  return <Section title={t("settings.qr.title", "QR links")} desc={t("settings.qr.help", "Base URL used by dynamic QR links.")}><Row label={t("settings.qr.baseUrl", "Public base URL")} desc={t("settings.qr.baseUrlHelp", "Public origin that receives /r/:code scans.")} last><input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} style={{ ...inputStyle, width: 300 }} /><button type="button" onClick={save}>{t("settings.qr.save", "Save")}</button></Row>{saved && <div role="status">{t("settings.saved", "Saved")}</div>}{error && <div role="alert">{error}</div>}</Section>;
+  return <Section title={t("settings.builder.qrTitle", "QR options")} desc={t("settings.builder.qrDescription", "Control whether new QR blocks may use dynamic links and where those links point.")}><Row label={t("settings.builder.dynamicQr", "Allow dynamic QR codes")} desc={t("settings.builder.dynamicQrHelp", "When off, new QR blocks use static payloads only.")}><Toggle checked={dynamicEnabled} onChange={setDynamicEnabled} label={t("settings.builder.dynamicQr", "Allow dynamic QR codes")} /></Row><Row label={t("settings.qr.baseUrl", "Public base URL")} desc={t("settings.qr.baseUrlHelp", "Public origin that receives /r/:code scans.")} last><input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} style={{ ...inputStyle, width: 300 }} /></Row>{dynamicEnabled && reachability === "private" && <div role="alert" style={{ padding: "10px 16px", color: "var(--warn)" }}>{t("settings.builder.localWarning", "This base URL points to localhost or a private network address. Printed codes will point there, so a phone elsewhere cannot open them. Use a public base URL.")}</div>}<Row label={t("settings.builder.actions", "Actions")} last><button type="button" onClick={save} style={{ height: 30, padding: "0 14px", borderRadius: 6, border: 0, cursor: "pointer", background: "var(--accent)", color: "white", fontSize: 12, fontWeight: 600, fontFamily: "inherit" }}>{t("settings.qr.save", "Save")}</button>{saved && <span role="status" style={{ marginLeft: 8 }}>{t("settings.saved", "Saved")}</span>}{error && <div role="alert">{error}</div>}</Row></Section>;
 }
 
 // ── Primitives ────────────────────────────────────────────────────────────────
@@ -963,7 +953,7 @@ function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onReorderNav, 
     navigation: <NavigationPane {...paneProps} />,
     views:      <ViewsPane {...paneProps} />,
     sync:       <SyncPane />,
-    qr:         <QrPane />,
+    builder:    <BuilderPane />,
     backup:     <BackupPane />,
     about:      <AboutPane />,
   };
@@ -1007,7 +997,6 @@ function SettingsView({ hiddenRoutes, onToggleRoute, navOrderIds, onReorderNav, 
                     cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                   }}
                 >
-                  <span style={{ display: "inline-flex", flexShrink: 0 }}>{ICONS[item.icon]}</span>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
                 </button>
               );

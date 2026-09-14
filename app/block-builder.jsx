@@ -752,6 +752,8 @@ function BlockBuilder({ onClose, editing }) {
   // cualquier Board igual que uno conectado a datos reales.
   const [kind, setKind] = useState(() => ["content", "qr"].includes(editing?.kind) ? editing.kind : "connector");
   const [qrMode, setQrMode] = useState(() => editing?.payload?.mode === "dynamic" ? "dynamic" : "manual");
+  const [dynamicEnabled, setDynamicEnabled] = useState(() => editing?.payload?.mode === "dynamic");
+  useEffect(() => { window.HQ_API.request("/api/settings/builder").then(settings => setDynamicEnabled(settings.qr?.dynamicEnabled === true || editing?.payload?.mode === "dynamic")).catch(() => {}); }, []);
   const [qrValue, setQrValue] = useState(() => editing?.payload?.value || "");
   const [qrShortUrl, setQrShortUrl] = useState("");
   const [qrBaseUrl, setQrBaseUrl] = useState("");
@@ -1094,7 +1096,7 @@ function BlockBuilder({ onClose, editing }) {
         <div>
           <div style={labelStyle}>{window.I18N.t("ui.blocks.mode", "Mode")}</div>
           <div role="group" aria-label={window.I18N.t("ui.blocks.mode", "Mode")} style={{ display: "flex", gap: 5 }}>
-             {[["manual", window.I18N.t("ui.blocks.static", "Static"), true], ["dynamic", window.I18N.t("ui.blocks.dynamic", "Dynamic"), true]].map(([m, l, ready]) => {
+             {[["manual", window.I18N.t("ui.blocks.static", "Static"), true], ["dynamic", window.I18N.t("ui.blocks.dynamic", "Dynamic"), dynamicEnabled || qrMode === "dynamic"]].map(([m, l, ready]) => {
               const on = qrMode === m;
               return (
                 <button key={m} type="button" aria-pressed={on} disabled={!ready}
@@ -1109,6 +1111,7 @@ function BlockBuilder({ onClose, editing }) {
               );
             })}
           </div>
+          {!dynamicEnabled && qrMode !== "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 6 }}>{window.I18N.t("ui.blocks.dynamicQrSettingsHint", "Enable dynamic QR codes in Settings > Builder.")}</div>}
         </div>
       )}
 

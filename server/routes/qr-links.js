@@ -38,6 +38,10 @@ function isBlockedHost(hostname) {
   return host === "localhost" || INTERNAL_SUFFIXES.some(suffix => host.endsWith(suffix));
 }
 
+function baseUrlReachability(baseUrl) {
+  try { return isBlockedHost(new URL(baseUrl).hostname) ? "private" : "public"; } catch { return "invalid"; }
+}
+
 function validateDestination(value) {
   if (typeof value !== "string" || !value.trim() || value.length > MAX_DESTINATION_LENGTH || /[\u0000-\u001f\u007f]/.test(value)) throw new Error("invalid-destination");
   let url;
@@ -64,9 +68,17 @@ function registerQrLinksRoutes({ app, db, kvGet, kvSet, requireAuth, auditActivi
 
   app.get("/api/qr-links", requireAuth, (req, res) => res.json(list.all().map(rowShape)));
   app.get("/api/qr-links/:code", requireAuth, (req, res) => { const row = get.get(req.params.code); if (!row) return sendAppError(res, AppError.notFound("not-found"), req); res.json(rowShape(row)); });
-  app.get("/api/settings/qr-base-url", requireAuth, (req, res) => res.json({ baseUrl: kvGet("qr-base-url")?.value || `${req.protocol}://${req.get("host")}` }));
+  app.get("/api/settings/qr-base-url", requireAuth, (req, res) => { const baseUrl = kvGet("qr-base-url")?.value || `${req.protocol}://${req.get("host")}`; res.json({ baseUrl, baseUrlReachability: baseUrlReachability(baseUrl) }); });
   app.put("/api/settings/qr-base-url", requireAuth, auditActivity({ provider: "settings", action: "Cambiar base URL de QR" }), (req, res) => {
     try { const value = new URL(String(req.body?.baseUrl || "")); if (!['http:', 'https:'].includes(value.protocol) || value.username || value.password || value.pathname !== "/" || value.search || value.hash) throw new Error("invalid-base-url"); const baseUrl = value.origin; kvSet("qr-base-url", baseUrl); res.locals.auditMessage = "Cambiar base URL de QR"; res.json({ baseUrl }); } catch (error) { return sendAppError(res, AppError.badRequest(error.message), req); }
+  });
+  app.get("/api/settings/builder", requireAuth, (req, res) => res.json(kvGet("builder-settings")?.value || { qr: { dynamicEnabled: false } }));
+  app.put("/api/settings/builder", requireAuth, auditActivity({ provider: "settings", action: "Cambiar configuración del Builder" }), (req, res) => {
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => key !== "qr") || !body.qr || typeof body.qr !== "object" || Array.isArray(body.qr) || Object.keys(body.qr).some(key => key !== "dynamicEnabled") || typeof body.qr.dynamicEnabled !== "boolean") return sendAppError(res, AppError.badRequest("invalid-builder-settings"), req);
+    kvSet("builder-settings", { qr: { dynamicEnabled: body.qr.dynamicEnabled } });
+    res.locals.auditMessage = "Cambiar configuración del Builder";
+    res.json({ qr: { dynamicEnabled: body.qr.dynamicEnabled } });
   });
   app.post("/api/qr-links", requireAuth, auditActivity({ provider: "qr-links", action: "Crear enlace QR" }), (req, res) => {
     try {
@@ -92,4 +104,4 @@ function registerQrLinksRoutes({ app, db, kvGet, kvSet, requireAuth, auditActivi
   return { validateDestination, rateStateSize: () => hits.size };
 }
 
-module.exports = { registerQrLinksRoutes, validateDestination, generateCode };
+module.exports = { baseUrlReachability, registerQrLinksRoutes, validateDestination, generateCode, isBlockedHost };

@@ -55,6 +55,7 @@ function validateCompleteBlock(record) {
 // (server/core/assistant-tools.js) creen un Block exactamente igual.
 function createCustomBlockRecord({ kvGet, kvSet }, { kind, connectorId, blockId, title, scope, limit, description, icon, active, format, content, prompt, rules, tags, payload, logo, style }) {
   const blockKind = validateKind(kind);
+  if (blockKind === "qr" && payload?.mode === "dynamic" && kvGet("builder-settings")?.value?.qr?.dynamicEnabled !== true) throw new Error("builder-dynamic-qr-disabled");
   validateCompleteBlock({ kind: blockKind, title, connectorId, blockId, content, payload, logo, style });
   // Etiquetar es opcional; solo se rechaza lo que no es una lista de ids.
   const assigned = normalizeAssignedTags(tags);
@@ -101,6 +102,7 @@ function registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditA
     try {
       block = createCustomBlockRecord({ kvGet, kvSet }, req.body || {});
     } catch (err) {
+      if (err.message === "builder-dynamic-qr-disabled") return res.status(400).json({ error: err.message, errorCode: "builder.dynamicQrDisabled", errorParams: {} });
       return sendAppError(res, AppError.badRequest(err.message), req);
     }
     res.locals.auditMessage = `Crear block "${block.title}"${block.kind === "connector" ? ` (${block.connectorId}.${block.blockId})` : " (contenido)"}`;
@@ -144,6 +146,9 @@ function registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditA
     } else if (updated.kind === "connector") {
       delete updated.content; delete updated.format; delete updated.prompt; delete updated.rules;
       delete updated.payload; delete updated.logo; delete updated.style;
+    }
+    if (existing.kind === "qr" && existing.payload?.mode !== "dynamic" && updated.kind === "qr" && updated.payload?.mode === "dynamic" && kvGet("builder-settings")?.value?.qr?.dynamicEnabled !== true) {
+      return res.status(400).json({ error: "builder-dynamic-qr-disabled", errorCode: "builder.dynamicQrDisabled", errorParams: {} });
     }
     try { validateCompleteBlock(updated); } catch (err) { return sendAppError(res, AppError.badRequest(err.message), req); }
     const assigned = normalizeAssignedTags(tags);

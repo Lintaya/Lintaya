@@ -9,6 +9,7 @@ const { request } = require("./test-http-harness");
 
 function setup(overrides = {}) {
   const store = new Map();
+  store.set("builder-settings", { qr: { dynamicEnabled: true } });
   const db = new Database(":memory:");
   db.exec("CREATE TABLE qr_links (code TEXT PRIMARY KEY)");
   const kvGet = (key) => (store.has(key) ? { value: store.get(key) } : null);
@@ -263,6 +264,35 @@ test("DELETE removes the qr_links row owned by a dynamic QR block", async () => 
   const deleted = await request(app, "DELETE", "/api/home/custom-blocks/qr-1", { headers });
   assert.equal(deleted.status, 200);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM qr_links WHERE code = ?").get("owned-code").count, 0);
+});
+
+test("dynamic QR creation is rejected when the builder setting is missing", async () => {
+  const { app, store, headers } = setup();
+  store.delete("builder-settings");
+  const response = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { kind: "qr", title: "Dynamic", payload: { mode: "dynamic", linkId: "code" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } } });
+  assert.equal(response.status, 400);
+  assert.equal(response.json().errorCode, "builder.dynamicQrDisabled");
+});
+
+test("dynamic QR creation is accepted when enabled and editing remains allowed when disabled", async () => {
+  const { app, store, headers } = setup();
+  const body = { kind: "qr", title: "Dynamic", payload: { mode: "dynamic", linkId: "code" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } };
+  const created = await request(app, "POST", "/api/home/custom-blocks", { headers, body });
+  assert.equal(created.status, 200);
+  store.set("builder-settings", { qr: { dynamicEnabled: false } });
+  const edited = await request(app, "PUT", `/api/home/custom-blocks/${created.json().id}`, { headers, body: { title: "Still dynamic" } });
+  assert.equal(edited.status, 200);
+  assert.equal(edited.json().payload.mode, "dynamic");
+});
+
+test("static QR cannot be converted to dynamic while disabled", async () => {
+  const { app, store, headers } = setup();
+  const body = { kind: "qr", title: "Static", payload: { mode: "manual", value: "https://example.com" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } };
+  const created = await request(app, "POST", "/api/home/custom-blocks", { headers, body });
+  store.set("builder-settings", { qr: { dynamicEnabled: false } });
+  const response = await request(app, "PUT", `/api/home/custom-blocks/${created.json().id}`, { headers, body: { payload: { mode: "dynamic", linkId: "code" } } });
+  assert.equal(response.status, 400);
+  assert.equal(response.json().errorCode, "builder.dynamicQrDisabled");
 });
 
 test("QR blocks round-trip, reject unknown kinds, and reject incomplete QR PUTs", async () => {

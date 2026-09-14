@@ -27,6 +27,22 @@ test("QR links enforce auth, validate destinations, retry collisions, and resolv
   assert.equal((await request(app, "GET", "/r/unknown-code")).status, 404);
 });
 
+test("builder settings default off, validate strictly, and classify QR base URL reachability", async () => {
+  const { app, headers } = setup();
+  assert.deepEqual((await request(app, "GET", "/api/settings/builder", { headers })).json(), { qr: { dynamicEnabled: false } });
+  assert.equal((await request(app, "PUT", "/api/settings/builder", { headers, body: { qr: { dynamicEnabled: true }, extra: true } })).status, 400);
+  assert.deepEqual((await request(app, "PUT", "/api/settings/builder", { headers, body: { qr: { dynamicEnabled: true } } })).json(), { qr: { dynamicEnabled: true } });
+  const local = await request(app, "GET", "/api/settings/qr-base-url", { headers });
+  assert.equal(local.json().baseUrlReachability, "public");
+  await request(app, "PUT", "/api/settings/qr-base-url", { headers, body: { baseUrl: "http://127.0.0.1:3000" } });
+  assert.equal((await request(app, "GET", "/api/settings/qr-base-url", { headers })).json().baseUrlReachability, "private");
+  await request(app, "PUT", "/api/settings/qr-base-url", { headers, body: { baseUrl: "https://example.com" } });
+  assert.equal((await request(app, "GET", "/api/settings/qr-base-url", { headers })).json().baseUrlReachability, "public");
+  const link = await request(app, "POST", "/api/qr-links", { headers, body: { destination: "https://destination.example" } });
+  await request(app, "PUT", "/api/settings/builder", { headers, body: { qr: { dynamicEnabled: false } } });
+  assert.equal((await request(app, "GET", `/r/${link.json().code}`)).status, 302);
+});
+
 test("QR links audit destination changes, disable distinctly, and rate-limit scans", async () => {
   const { app, db, headers, audit } = setup({ rateLimit: 2 });
   const created = await request(app, "POST", "/api/qr-links", { headers, body: { destination: "https://one.example" } }); const code = created.json().code;
