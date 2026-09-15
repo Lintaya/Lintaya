@@ -1993,6 +1993,7 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
   const [showConfig, setShowConfig] = useState(false);
   const [showInterval, setShowInterval] = useState(false);
   const [showAIContext, setShowAIContext] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
   const [showAddInstance, setShowAddInstance] = useState(false);
   const [showReadme, setShowReadme] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -2003,6 +2004,18 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
   // every connector to carry an explicit `enabled: true`.
   const [enabled, setEnabled] = useState(conn?.enabled !== false);
   const [enabledBusy, setEnabledBusy] = useState(false);
+  // Blocks come from the connector type's manifest, not /api/home/blocks:
+  // that catalog only lists configured connectors, so a connector you're
+  // still setting up would wrongly show none. null = still loading.
+  const [availableBlocks, setAvailableBlocks] = useState(null);
+  useEffect(() => {
+    if (!conn?.id) return;
+    const typeId = conn.type || conn.id;
+    setAvailableBlocks(null);
+    window.HQ_API.request("/api/connectors")
+      .then(list => setAvailableBlocks((Array.isArray(list) ? list : []).find(c => c.id === typeId)?.blocks || []))
+      .catch(() => setAvailableBlocks([]));
+  }, [conn?.id, conn?.type]);
   // Zone 1/3 widths are draggable; zone 2 (data & AI context) takes whatever
   // space is left. Called unconditionally, before the `!conn` early return,
   // same as every other hook here — React's rules of hooks apply even though
@@ -2640,97 +2653,42 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
             </div>
           )}
 
-          {/* Data feeds */}
+          {/* Activity log toggle — zone 3 stays hidden until opened here. */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={sectionLabel}>{t("connectors.detail.dataFeeds")}</div>
-              {isVMware && liveStatus?.feeds?.syncedAt && (
-                <span style={{ fontSize: 10, color: "var(--muted-fg)", fontFamily: "var(--font-mono)" }}>
-                  {t("connectors.detail.syncedAt", "", { time: new Date(liveStatus.feeds.syncedAt).toLocaleTimeString() })}
-                </span>
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {(isVMware && liveStatus?.feeds) ? (
-                // Real feed counts from vCenter sync
-                <>
-                  {[
-                    { label: t("connectors.detail.virtualMachines"), count: liveStatus.feeds.vms,        icon: "🖥" },
-                    { label: "ESXi Hosts",        count: liveStatus.feeds.hosts,      icon: "🔲" },
-                    { label: "Datastores",        count: liveStatus.feeds.datastores, icon: "💾" },
-                  ].map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", background: "var(--muted)", borderRadius: 5, justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ color: "var(--accent)" }}>→</span>
-                        <span>{f.label}</span>
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 13, color: "var(--fg)" }}>{f.count}</span>
-                    </div>
-                  ))}
-                  {/* Clusters — expanded with DRS/HA details */}
-                  <div style={{ background: "var(--muted)", borderRadius: 5, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ color: "var(--accent)" }}>→</span>
-                        <span>Clusters</span>
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 13, color: "var(--fg)" }}>{liveStatus.feeds.clusters}</span>
-                    </div>
-                    {(liveStatus.feeds.clusterDetails || []).length > 0 && (
-                      <div style={{ borderTop: "1px solid var(--border)", padding: "4px 0" }}>
-                        {(liveStatus.feeds.clusterDetails || []).map(cl => (
-                          <div key={cl.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 10px 4px 28px", fontSize: 12 }}>
-                            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, flex: 1, color: "var(--fg)" }}>{cl.name}</span>
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)",
-                              background: cl.drs_enabled ? "color-mix(in srgb, var(--ok) 14%, white)" : "var(--muted)",
-                              color: cl.drs_enabled ? "var(--ok)" : "var(--muted-fg)",
-                              border: `1px solid ${cl.drs_enabled ? "color-mix(in srgb, var(--ok) 30%, white)" : "var(--border)"}`,
-                            }}>DRS</span>
-                            <span style={{
-                              fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 3, fontFamily: "var(--font-mono)",
-                              background: cl.ha_enabled ? "color-mix(in srgb, #8b5cf6 14%, white)" : "var(--muted)",
-                              color: cl.ha_enabled ? "#8b5cf6" : "var(--muted-fg)",
-                              border: `1px solid ${cl.ha_enabled ? "color-mix(in srgb, #8b5cf6 30%, white)" : "var(--border)"}`,
-                            }}>HA</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                // Static fallback
-                conn.feeds.map((f, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 8px", background: "var(--muted)", borderRadius: 5 }}>
-                    <span style={{ color: "var(--accent)" }}>→</span>
-                    {f}
-                  </div>
-                ))
-              )}
+              <div style={sectionLabel}>{t("connectors.detail.activityLog")}</div>
+              <button onClick={() => setShowActivityLog(v => !v)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
+                {showActivityLog ? t("connectors.detail.hideActivityLog") : t("connectors.detail.showActivityLog", "", { total: liveLog?.length || 0 })}
+              </button>
             </div>
           </div>
 
-          {/* Sample endpoints */}
+          {/* Available Blocks */}
           <div>
-            <div style={sectionLabel}>{t("connectors.detail.sampleEndpoints")}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {conn.sampleEndpoints.map((e, i) => (
-                <code key={i} style={{
-                  fontSize: 11, fontFamily: "var(--font-mono)",
-                  padding: "5px 8px", background: "#1c1917", color: "#fafaf9", borderRadius: 4,
-                  whiteSpace: "pre-wrap", wordBreak: "break-all",
-                }}>{e}</code>
-              ))}
+            <div style={sectionLabel}>{t("connectors.detail.availableBlocks")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {availableBlocks === null ? null : availableBlocks.length ? availableBlocks.map(block => (
+                <div key={block.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", background: "var(--muted)", borderRadius: 5 }}>
+                  <span style={{ color: "var(--accent)" }}>→</span>
+                  {block.icon && <span aria-hidden="true">{block.icon}</span>}
+                  <span>{block.title || block.id}</span>
+                  {block.type && <span style={{ marginLeft: "auto", color: "var(--muted-fg)", fontSize: 11 }}>{block.type}</span>}
+                </div>
+              )) : <div style={{ color: "var(--muted-fg)", fontSize: 12.5 }}>{t("connectors.detail.noAvailableBlocks")}</div>}
             </div>
           </div>
         </ConnectorDetailZoneWrap>
-        {!mobile && <ConnectorsResizeHandle onMouseDown={e => onZone3HandleDown(e, -1)} />}
+        {showActivityLog && !mobile && <ConnectorsResizeHandle onMouseDown={e => onZone3HandleDown(e, -1)} />}
 
         {/* Zone 3 — activity log */}
+        {showActivityLog && (
         <ConnectorDetailZoneWrap mobile={mobile} tag="aside" ariaLabel={t("connectors.detail.activityLog")} style={{ ...zoneCol, width: zone3Width, flexShrink: 0 }}
           id="zone3" openSection={openSection} setOpenSection={setOpenSection} title={t("connectors.detail.activityLog")}>
-          <div style={zoneHeading}>{t("connectors.detail.activityLog")}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={zoneHeading}>{t("connectors.detail.activityLog")}</div>
+            <button onClick={() => setShowActivityLog(false)} aria-label={t("connectors.detail.hideActivityLog")} title={t("connectors.detail.hideActivityLog")}
+              style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
+          </div>
           {(() => {
             const LOG_PAGE_SIZE = 10;
             const liveCount   = liveLog?.length || 0;
@@ -2818,6 +2776,7 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
             );
           })()}
         </ConnectorDetailZoneWrap>
+        )}
       </div>
 
       {showAddInstance && (

@@ -312,3 +312,15 @@ test("PUT switching between kinds strips stale fields", async () => {
   const switched = await request(app, "PUT", `/api/home/custom-blocks/${created.json().id}`, { headers, body: { kind: "qr", payload: { mode: "manual", value: "https://example.com" }, logo: { source: "none" }, style: { ecLevel: "M", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } } });
   assert.equal(switched.status, 200); assert.equal(switched.json().connectorId, undefined); assert.equal(switched.json().blockId, undefined);
 });
+
+test("QR blocks accept an icon logo and reject a malformed icon key", async () => {
+  const { app, headers } = setup();
+  const base = { kind: "qr", title: "Menu", payload: { mode: "manual", value: "https://example.com/menu" }, style: { ecLevel: "H", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" } };
+  const created = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { ...base, logo: { source: "icon", icon: "restaurant" } } });
+  assert.equal(created.status, 200);
+  assert.deepEqual(created.json().logo, { source: "icon", icon: "restaurant" });
+  for (const icon of [undefined, "", "Heart", "<svg>", 5]) {
+    const bad = await request(app, "POST", "/api/home/custom-blocks", { headers, body: { ...base, logo: { source: "icon", icon } } });
+    assert.equal(bad.status, 400, `icon ${JSON.stringify(icon)} should be rejected`);
+  }
+});
