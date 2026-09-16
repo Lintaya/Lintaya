@@ -38,6 +38,12 @@ function registerHomeRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, App
     const isAvailable = (instanceId) =>
       !!kvGet(`connector-config-${instanceId}`)?.value && enabledMap[instanceId] !== false;
 
+    // A fixed block's name/icon comes from its manifest, but the user can
+    // rename it (PUT /api/home/blocks/:id/override). Applied here so Blocks,
+    // Home, Boards, the CLI and MCP all see the same name. defaultTitle/
+    // defaultIcon keep the manifest values so the UI can offer a reset.
+    const overrides = kvGet("block-overrides")?.value || {};
+
     const blocks = [];
     for (const template of listConnectorBlocks()) {
       const typeId = template.connectorId;
@@ -46,9 +52,12 @@ function registerHomeRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, App
         if (!isAvailable(instanceId)) continue;
         const isExtraInstance = instanceId !== typeId;
         const instanceName = nameMap[instanceId] || stmtConnGet?.get(instanceId)?.name || instanceId;
+        const id = isExtraInstance ? `${instanceId}.${template.blockId}` : template.id;
+        const defaultTitle = isExtraInstance ? `${template.title} · ${instanceName}` : template.title;
+        const override = overrides[id] || {};
         blocks.push({
           ...template,
-          id: isExtraInstance ? `${instanceId}.${template.blockId}` : template.id,
+          id,
           connectorId: instanceId,
           // The type stays around separately — the frontend's connector icon/
           // color lookup (block-catalog.jsx's BLOCK_CONNECTOR_STYLE) is keyed
@@ -56,11 +65,45 @@ function registerHomeRoutes({ app, requireAuth, kvGet, kvSet, auditActivity, App
           // its own to look up.
           connectorType: typeId,
           connectorName: instanceName,
-          title: isExtraInstance ? `${template.title} · ${instanceName}` : template.title,
+          title: override.title || defaultTitle,
+          icon: override.icon || template.icon,
+          defaultTitle,
+          defaultIcon: template.icon,
         });
       }
     }
     res.json(blocks);
+  });
+
+  // Rename (and re-icon) a fixed block. An empty title and icon drop the
+  // override, so the block goes back to its manifest name. The id must be a
+  // real `<instanceId>.<blockId>` for a declared block — otherwise a typo
+  // would silently store an override nothing ever reads.
+  app.put("/api/home/blocks/:id/override", requireAuth, auditActivity({ provider: "home", action: "Renombrar bloque" }), (req, res) => {
+    const { id } = req.params;
+    const dot = id.lastIndexOf(".");
+    const instanceId = id.slice(0, dot);
+    const blockId = id.slice(dot + 1);
+    const template = dot > 0 && listConnectorBlocks().find(b =>
+      b.blockId === blockId && (b.connectorId === instanceId || (getConnectorInstances?.(b.connectorId) || []).includes(instanceId)));
+    if (!template) return sendAppError(res, AppError.notFound("not-found"), req);
+
+    const { title, icon } = req.body || {};
+    if ((title != null && typeof title !== "string") || (icon != null && typeof icon !== "string")) {
+      return sendAppError(res, AppError.badRequest("title-and-icon-must-be-strings"), req);
+    }
+    const cleanTitle = (title || "").trim().slice(0, 120);
+    const cleanIcon = (icon || "").trim().slice(0, 16);
+
+    const overrides = { ...(kvGet("block-overrides")?.value || {}) };
+    if (cleanTitle || cleanIcon) {
+      overrides[id] = { ...(cleanTitle ? { title: cleanTitle } : {}), ...(cleanIcon ? { icon: cleanIcon } : {}) };
+    } else {
+      delete overrides[id];
+    }
+    kvSet("block-overrides", overrides);
+    res.locals.auditMessage = cleanTitle ? `Renombrar bloque ${id} a "${cleanTitle}"` : `Restaurar nombre del bloque ${id}`;
+    res.json({ id, override: overrides[id] || null });
   });
 
   app.post("/api/home/layout", requireAuth, (req, res) => {

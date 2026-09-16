@@ -148,3 +148,34 @@ test("GET /api/home/blocks omits an extra instance that isn't configured, even i
   assert.equal(gitlabBlocks.length, 1);
   assert.equal(gitlabBlocks[0].connectorId, "gitlab");
 });
+
+test("PUT /api/home/blocks/:id/override renames a fixed block and an empty title restores the manifest name", async () => {
+  const { app, store, headers, auditLog } = setup();
+  store.set("connector-config-gitlab", { baseUrl: "https://gitlab.example", token: "t" });
+
+  const put = await request(app, "PUT", "/api/home/blocks/gitlab.recent-commits/override", { headers, body: { title: "  Mis commits  ", icon: "⭐" } });
+  assert.equal(put.status, 200);
+  assert.deepEqual(put.json().override, { title: "Mis commits", icon: "⭐" });
+
+  const renamed = (await request(app, "GET", "/api/home/blocks", { headers })).json().find(b => b.id === "gitlab.recent-commits");
+  assert.equal(renamed.title, "Mis commits");
+  assert.equal(renamed.icon, "⭐");
+  assert.equal(renamed.defaultTitle, "GitLab — últimos commits");
+
+  await request(app, "PUT", "/api/home/blocks/gitlab.recent-commits/override", { headers, body: { title: "", icon: "" } });
+  const restored = (await request(app, "GET", "/api/home/blocks", { headers })).json().find(b => b.id === "gitlab.recent-commits");
+  assert.equal(restored.title, "GitLab — últimos commits");
+  assert.equal(restored.icon, restored.defaultIcon);
+  assert.deepEqual(store.get("block-overrides"), {});
+  assert.deepEqual(auditLog.map(e => e.action), ["Renombrar bloque", "Renombrar bloque"]);
+});
+
+test("PUT /api/home/blocks/:id/override accepts an extra instance and 404s for an undeclared block", async () => {
+  const { app, headers } = setup({ getConnectorInstances: (typeId) => (typeId === "gitlab" ? ["gitlab2"] : []) });
+  const extra = await request(app, "PUT", "/api/home/blocks/gitlab2.recent-commits/override", { headers, body: { title: "Work commits" } });
+  assert.equal(extra.status, 200);
+  const unknown = await request(app, "PUT", "/api/home/blocks/gitlab.nope/override", { headers, body: { title: "x" } });
+  assert.equal(unknown.status, 404);
+  const bad = await request(app, "PUT", "/api/home/blocks/gitlab.recent-commits/override", { headers, body: { title: 5 } });
+  assert.equal(bad.status, 400);
+});

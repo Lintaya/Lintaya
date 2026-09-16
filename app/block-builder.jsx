@@ -25,7 +25,27 @@ const BB_ALL_SCOPE = "__all__";
 // `${block.icon} ${block.title}`), así que tiene que seguir siendo un
 // carácter simple, no una clave de window.ICONS (esas son elementos SVG y no
 // sobreviven una concatenación de string).
-const BB_ICON_KEYS = ["🔧", "📄", "⚑", "📋", "🚨", "📊", "🔔", "🛡️", "📁", "⏰", "👥", "🌐"];
+//
+// Símbolos monocromos, no emojis de color: toman el color del texto donde se
+// pinten. El "︎" (selector de variación de texto) es lo que obliga a
+// Windows/Chrome a dibujar 🔔, ⏰, ☎… en blanco y negro en vez de su versión
+// emoji — sin él salen a color igual que antes.
+const BB_TEXT = "︎";
+const BB_ICONS = [
+  ["▦", "qr", "QR"], ["⚙" + BB_TEXT, "settings", "Settings"], ["☰", "list", "List"], ["⚑" + BB_TEXT, "flag", "Flag"],
+  ["☑" + BB_TEXT, "checklist", "Checklist"], ["⚠" + BB_TEXT, "alert", "Alert"], ["📊" + BB_TEXT, "chart", "Chart"], ["📈" + BB_TEXT, "trend", "Trend"],
+  ["🔔" + BB_TEXT, "bell", "Notifications"], ["⛨", "shield", "Security"], ["🔒" + BB_TEXT, "lock", "Lock"], ["📁" + BB_TEXT, "folder", "Folder"],
+  ["⏰" + BB_TEXT, "alarm", "Alarm"], ["🗓" + BB_TEXT, "calendar", "Calendar"], ["👥" + BB_TEXT, "people", "People"], ["🌐" + BB_TEXT, "globe", "Web"],
+  ["🔗" + BB_TEXT, "link", "Link"], ["📍" + BB_TEXT, "location", "Location"], ["⌂" + BB_TEXT, "home", "Home"], ["✉" + BB_TEXT, "mail", "Email"],
+  ["☎" + BB_TEXT, "phone", "Phone"], ["★" + BB_TEXT, "star", "Star"], ["♥" + BB_TEXT, "heart", "Heart"], ["☕" + BB_TEXT, "coffee", "Coffee"],
+  ["♫" + BB_TEXT, "music", "Music"], ["✈" + BB_TEXT, "travel", "Travel"], ["☁" + BB_TEXT, "cloud", "Cloud"], ["⚡" + BB_TEXT, "power", "Power"],
+  ["⌨" + BB_TEXT, "keyboard", "Keyboard"], ["⚒", "tools", "Tools"],
+];
+const BB_ICON_KEYS = BB_ICONS.map(([k]) => k);
+const bbIconLabel = (k) => {
+  const entry = BB_ICONS.find(([key]) => key === k);
+  return entry ? window.I18N.t(`ui.blocks.iconName.${entry[1]}`, entry[2]) : k;
+};
 
 // Reglas que se le mandan a Claude junto con el prompt del usuario al
 // "Generar" un block de tipo IA — distintas según el formato elegido, porque
@@ -681,7 +701,12 @@ function BlockBuilder({ onClose, editing }) {
   // arrancar con su conector/tipo de dato ya elegidos — un block fijo no
   // tiene registro propio que editar, así que guardar acá crea uno nuevo
   // (POST) en vez de tocar el fijo, que sigue existiendo tal cual.
-  const isNew = !editing?.id;
+  // `editing.fixedId` = editar el block fijo en sí (no una copia): conector y
+  // tipo de dato quedan bloqueados porque vienen del manifest, y guardar solo
+  // renombra/cambia el ícono vía PUT /api/home/blocks/:id/override.
+  const fixedId = editing?.fixedId || null;
+  const isFixed = !!fixedId;
+  const isNew = !editing?.id && !isFixed;
   // Catálogo real: los blocks que declaran los conectores configurados
   // (mismo endpoint que ya usa block-catalog.jsx) + los proyectos/colecciones
   // ya sincronizados de cada uno (mismo endpoint que usa Home/Connectors) para
@@ -768,6 +793,9 @@ function BlockBuilder({ onClose, editing }) {
   }, [editing?.payload?.mode, editing?.payload?.linkId]);
   const [qrLogo, setQrLogo] = useState(() => editing?.logo?.source || "brand");
   const [qrLogoVariant, setQrLogoVariant] = useState(() => editing?.logo?.variant || "light");
+  const [qrLogoIcon, setQrLogoIcon] = useState(() => editing?.logo?.icon || "heart");
+  const qrLogoValue = qrLogo === "brand" ? { source: "brand", variant: qrLogoVariant } : qrLogo === "icon" ? { source: "icon", icon: qrLogoIcon } : { source: "none" };
+  const qrHasLogo = window.QRHasLogo ? window.QRHasLogo(qrLogoValue) : qrLogo !== "none";
   // El nivel de corrección ya no es un control: lo decide window.QRAutoEcLevel a
   // partir del payload y de si hay logo. L/M/Q/H no significan nada para quien
   // no conoce el formato, y elegir mal rompe el código sin avisar (L con logo no
@@ -775,12 +803,12 @@ function BlockBuilder({ onClose, editing }) {
   // esquema y el hito 4 no cambian. Va después de qrLogo a propósito: leerlo
   // antes de su declaración es zona muerta temporal. Ver qr-block.jsx.
   const qrPayloadForSizing = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
-  const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrPayloadForSizing, qrLogo === "brand") : (qrLogo === "brand" ? "H" : "M");
+  const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrPayloadForSizing, qrHasLogo) : (qrHasLogo ? "H" : "M");
   // ¿Cabe el logo con este payload? No siempre: si el símbolo lleva un patrón
   // de alineación en el centro exacto, ningún tamaño centrado lo esquiva. Se
   // calcula acá para poder avisarlo en vez de generar el QR pelado en silencio.
   const qrLogoFits = (() => {
-    if (qrLogo !== "brand" || !qrPayloadForSizing || !window.qrcode || !window.QRLogoRect) return true;
+    if (!qrHasLogo || !qrPayloadForSizing || !window.qrcode || !window.QRLogoRect) return true;
     try {
       const probe = window.qrcode(0, qrEc);
       probe.addData(qrPayloadForSizing); probe.make();
@@ -973,7 +1001,30 @@ function BlockBuilder({ onClose, editing }) {
       .finally(() => setItemsLoading(false));
   }, [kind, canSave, connector, dataType, scope, count]);
 
+  const saveFixedOverride = async (next) => {
+    setSaving(true);
+    try {
+      await window.HQ_API.request(`/api/home/blocks/${encodeURIComponent(fixedId)}/override`, { method: "PUT", body: next });
+      window.dispatchEvent(new CustomEvent("hq:custom-blocks-changed"));
+      setSaved(true);
+      setTimeout(onClose, 600);
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent("toast", { detail: { msg: window.I18N.t("ui.saveFailed", "Could not save: {0}", { 0: e.message }), kind: "warn" } }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveBlock = async () => {
+    // Guardar lo mismo que trae el manifest se manda vacío: así no queda un
+    // override que "congele" el nombre si el conector lo cambia más adelante.
+    if (isFixed) {
+      const cleanTitle = title.trim();
+      return saveFixedOverride({
+        title: cleanTitle === editing.defaultTitle ? "" : cleanTitle,
+        icon: !icon || icon === editing.defaultIcon ? "" : icon,
+      });
+    }
     setSaving(true);
     try {
       let qrLinkId = editing?.payload?.linkId || null;
@@ -988,7 +1039,7 @@ function BlockBuilder({ onClose, editing }) {
           // Poner el logo sube el default a Q (ver setQrLogo), pero elegir H
           // después para imprimir tiene que respetarse — antes se forzaba Q
           // acá y la selección se perdía en silencio.
-          ? { kind: "qr", title: blockTitle, description: description.trim() || null, icon, active, tags, payload: qrMode === "dynamic" ? { mode: "dynamic", linkId: qrLinkId } : { mode: "manual", value: qrValue }, logo: qrLogo === "brand" ? { source: "brand", variant: qrLogoVariant } : { source: "none" }, style: { ecLevel: qrEc, pattern: "square", corners: "square", fgColor: qrFg, bgColor: qrBg } }
+          ? { kind: "qr", title: blockTitle, description: description.trim() || null, icon, active, tags, payload: qrMode === "dynamic" ? { mode: "dynamic", linkId: qrLinkId } : { mode: "manual", value: qrValue }, logo: qrLogoValue, style: { ecLevel: qrEc, pattern: "square", corners: "square", fgColor: qrFg, bgColor: qrBg } }
         : {
             kind: "connector", connectorId: connector.id, blockId: dataType, title: blockTitle,
             description: description.trim() || null, icon, active, tags,
@@ -1032,9 +1083,15 @@ function BlockBuilder({ onClose, editing }) {
           )}
         </div>
         <input id="block-builder-title" value={title} onChange={e => setTitle(e.target.value)}
-          placeholder={autoTitle || window.I18N.t("ui.blocks.nameHint", "Block name")} style={inputStyle} />
+          placeholder={(isFixed ? editing.defaultTitle : autoTitle) || window.I18N.t("ui.blocks.nameHint", "Block name")} style={inputStyle} />
+        {isFixed && (editing.title !== editing.defaultTitle || (editing.icon || "") !== (editing.defaultIcon || "")) && (
+          <button type="button" onClick={() => saveFixedOverride({ title: "", icon: "" })} disabled={saving} style={{
+            marginTop: 6, background: "none", border: 0, padding: 0, cursor: "pointer", color: "var(--accent)", fontSize: 11, fontFamily: "inherit",
+          }}>{window.I18N.t("ui.blocks.renameReset", "Restore original name")}</button>
+        )}
       </div>
 
+      {!isFixed && <>
       <div>
         <label htmlFor="block-builder-description" style={labelStyle}>{window.I18N.t("home.issue.description", "Description")}</label>
         <textarea id="block-builder-description" value={description} onChange={e => setDescription(e.target.value)} placeholder={window.I18N.t("ui.blocks.descriptionHint", "What does this block show?")}
@@ -1045,6 +1102,7 @@ function BlockBuilder({ onClose, editing }) {
         <div style={labelStyle}>{window.I18N.t("tags.optional", "Tags (optional)")}</div>
         {window.TagPicker && <window.TagPicker value={tags} onChange={setTags}/>}
       </div>
+      </>}
 
       <div>
         <div style={labelStyle}>{window.I18N.t("ui.icon", "Icon")}</div>
@@ -1055,11 +1113,11 @@ function BlockBuilder({ onClose, editing }) {
           {(icon ? [icon, ...BB_ICON_KEYS.filter(k => k !== icon)] : BB_ICON_KEYS).slice(0, 3).map(k => {
             const on = icon === k;
             return (
-              <button key={k} type="button" aria-label={`Use ${k} as block icon`} aria-pressed={on} onClick={() => setIcon(on ? null : k)} title={k} style={{
+              <button key={k} type="button" aria-label={bbIconLabel(k)} aria-pressed={on} onClick={() => setIcon(on ? null : k)} title={bbIconLabel(k)} style={{
                 flex: 1, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 15,
                 border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                 background: on ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "white",
-                borderRadius: 6, cursor: "pointer",
+                color: "var(--fg)", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
               }}>{k}</button>
             );
           })}
@@ -1070,7 +1128,7 @@ function BlockBuilder({ onClose, editing }) {
         </div>
       </div>
 
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+      {!isFixed && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
         <div style={labelStyle}>{window.I18N.t("boards.type", "Type")}</div>
         <div role="group" aria-label={bbt("blockBuilder.blockType", "Block type")} style={{ display: "flex", gap: 5 }}>
           {[["connector", window.I18N.t("boards.connector", "Connector")], ["content", "IA"], ["qr", window.I18N.t("ui.blocks.qr", "QR")]].map(([k, l]) => {
@@ -1085,7 +1143,7 @@ function BlockBuilder({ onClose, editing }) {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* Mismo patrón que el conector y el modo de contenido: el discriminante
           de origen vive acá, en la identidad; la configuración va al centro.
@@ -1122,7 +1180,7 @@ function BlockBuilder({ onClose, editing }) {
           ) : (
             <div>
               <div style={labelStyle}>{window.I18N.t("boards.connector", "Connector")}</div>
-              <StepConnector connectors={connectors} value={connectorId} onSelect={selectConnector} />
+              <StepConnector connectors={isFixed ? connectors.filter(c => c.id === connectorId) : connectors} value={connectorId} onSelect={isFixed ? () => {} : selectConnector} />
             </div>
           )}
         </div>
@@ -1181,16 +1239,35 @@ function BlockBuilder({ onClose, editing }) {
       </div>
 
       <div>
-        <label htmlFor="qr-logo" style={labelStyle}>{window.I18N.t("ui.blocks.logo", "Logo")}</label>
+        <div id="qr-logo-label" style={labelStyle}>{window.I18N.t("ui.blocks.logo", "Logo")}</div>
         {/* Cambiar el logo recalcula solo el nivel de corrección: qrEc se deriva
-            de qrLogo, así que no hay nada que sincronizar a mano acá. */}
-        <select id="qr-logo" value={qrLogo} onChange={e => setQrLogo(e.target.value)} style={{
-          width: "100%", height: 32, fontSize: 12, fontFamily: "inherit",
-          border: "1px solid var(--border)", borderRadius: 6, background: "white", color: "var(--fg)",
-        }}>
-          <option value="brand">Lintaya</option>
-          <option value="none">{window.I18N.t("ui.blocks.logoOff", "Off")}</option>
-        </select>
+            de qrLogo, así que no hay nada que sincronizar a mano acá. Galería en
+            vez de <select>: un ícono se reconoce viéndolo, no leyendo su nombre. */}
+        <div role="radiogroup" aria-labelledby="qr-logo-label" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(38px, 1fr))", gap: 5 }}>
+          {[
+            { id: "none", label: window.I18N.t("ui.blocks.logoOff", "Off"), glyph: <span style={{ fontSize: 10.5, fontWeight: 600 }}>{window.I18N.t("ui.blocks.logoOff", "Off")}</span> },
+            { id: "brand", label: "Lintaya", glyph: <img src="assets/brand/lintaya-mark-light.png" alt="" style={{ width: 20, height: 20 }} /> },
+            ...(window.QR_LOGO_ICONS || []).map(i => ({
+              id: `icon:${i.key}`, label: window.I18N.t(`ui.blocks.logoIcon.${i.key}`, i.label),
+              glyph: <window.QRLogoIconGlyph iconKey={i.key} size={18} />,
+            })),
+          ].map(opt => {
+            const on = (qrLogo === "icon" ? `icon:${qrLogoIcon}` : qrLogo) === opt.id;
+            return (
+              <button key={opt.id} type="button" role="radio" aria-checked={on} aria-label={opt.label} title={opt.label}
+                onClick={() => {
+                  if (opt.id.startsWith("icon:")) { setQrLogo("icon"); setQrLogoIcon(opt.id.slice(5)); }
+                  else setQrLogo(opt.id);
+                }}
+                style={{
+                  height: 38, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0,
+                  border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                  background: on ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "white",
+                  color: on ? "var(--accent)" : "var(--fg)", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+                }}>{opt.glyph}</button>
+            );
+          })}
+        </div>
         {/* Hay longitudes de payload en las que el logo no cabe: cuando el
             símbolo tiene un patrón de alineación justo en el centro, ningún
             tamaño centrado lo esquiva y logoRect devuelve null. Antes eso se
@@ -1312,18 +1389,19 @@ function BlockBuilder({ onClose, editing }) {
     <div style={{ maxWidth: mobile ? "none" : 420, display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <div style={labelStyle}>{window.I18N.t("ui.blocks.dataType", "Data type")}</div>
-        <StepDataType connector={connector} value={dataType} onSelect={setDataType} />
+        <StepDataType connector={isFixed ? { ...connector, dataTypes: connector.dataTypes.filter(d => d.id === dataType) } : connector} value={dataType} onSelect={isFixed ? () => {} : setDataType} />
+        {isFixed && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.5, marginTop: 8 }}>{window.I18N.t("ui.blocks.fixedSourceHelp", "This block comes from {0}: its data can't be changed, only its name and icon. To change the data, make a copy.", { 0: connector.name })}</div>}
       </div>
-      <div>
+      {!isFixed && <div>
         <div style={{ fontSize: 13.5, fontWeight: 600 }}>{window.I18N.t("ui.blocks.scopeSize", "Scope and size")}</div>
         <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.5, marginBottom: 10 }}>{window.I18N.t("ui.blocks.scopeHelp", "Choose the data this block will use and how many items to show.")} </div>
         <StepScope connector={connector} scope={scope} onScope={setScope} count={count} onCount={setCount} />
-      </div>
+      </div>}
     </div>
   );
 
   const qrPreview = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
-  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrPreview} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={{ source: qrLogo, variant: qrLogoVariant }} size={240} />{qrMode === "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.4 }}>{window.I18N.t("ui.blocks.qrPreviewRepresentative", "Preview uses a representative short link; the final code is assigned when you save.")}</div>}</div> : kind === "content" ? (
+  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrPreview} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={qrLogoValue} size={240} />{qrMode === "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.4 }}>{window.I18N.t("ui.blocks.qrPreviewRepresentative", "Preview uses a representative short link; the final code is assigned when you save.")}</div>}</div> : kind === "content" ? (
     <>
       <div style={{ ...labelStyle, marginBottom: 8 }}>{window.I18N.t("tags.preview", "Preview")}</div>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
@@ -1370,7 +1448,7 @@ function BlockBuilder({ onClose, editing }) {
           </h1>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" aria-pressed={active} onClick={() => setActive(a => !a)} title={active ? window.I18N.t("ui.blocks.visible", "Visible on Home") : window.I18N.t("ui.blocks.savedHidden", "Saved but hidden")} style={{
+        {!isFixed && <button type="button" aria-pressed={active} onClick={() => setActive(a => !a)} title={active ? window.I18N.t("ui.blocks.visible", "Visible on Home") : window.I18N.t("ui.blocks.savedHidden", "Saved but hidden")} style={{
           height: 28, padding: "0 10px", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "inherit", fontSize: 12, fontWeight: 600,
           border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
           background: active ? "color-mix(in srgb, var(--accent) 8%, transparent)" : "white",
@@ -1380,7 +1458,7 @@ function BlockBuilder({ onClose, editing }) {
             <span style={{ width: 10, height: 10, borderRadius: 99, background: "#fff", display: "block" }} />
           </span>
           {active ? window.I18N.t("ui.active", "Active") : window.I18N.t("ui.blocks.hidden", "Hidden")}
-        </button>
+        </button>}
         <button disabled={!canSave || saving} onClick={saveBlock} style={{
           height: 28, padding: "0 16px", border: 0, borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: canSave && !saving ? "pointer" : "default",
           background: canSave ? "var(--accent)" : "var(--muted)", color: canSave ? "#fff" : "var(--muted-fg)", opacity: saving ? 0.7 : 1,
@@ -1452,11 +1530,11 @@ function BlockBuilder({ onClose, editing }) {
               {BB_ICON_KEYS.map(k => {
                 const on = icon === k;
                 return (
-                  <button key={k} onClick={() => { setIcon(on ? null : k); setShowIconModal(false); }} title={k} style={{
+                  <button key={k} onClick={() => { setIcon(on ? null : k); setShowIconModal(false); }} title={bbIconLabel(k)} aria-label={bbIconLabel(k)} aria-pressed={on} style={{
                     height: 36, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 17,
                     border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                     background: on ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "white",
-                    borderRadius: 6, cursor: "pointer",
+                    color: "var(--fg)", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                   }}>{k}</button>
                 );
               })}

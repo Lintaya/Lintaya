@@ -103,17 +103,62 @@
     return data;
   }
 
+  // Íconos para el centro del QR (logo.source "icon"). Trazos propios en una
+  // grilla de 24, sin relleno: se dibujan en vector con el color de los
+  // módulos, así que no hay imagen que cargar, el SVG exportado sigue siendo
+  // autocontenido y combinan con cualquier color que se elija para el código.
+  // Solo formas genéricas — nada de marcas de terceros.
+  const QR_LOGO_ICONS = [
+    { key: "lighthouse", label: "Lighthouse",  d: "M9 21l1-11h4l1 11zM10.5 10V7h3v3M9.5 7L12 4l2.5 3M7 6.5L4 5.5M17 6.5l3-1M7 9.5H4M17 9.5h3M9.6 15h4.8M7 21h10" },
+    // Realidad aumentada: un cubo dentro de las esquinas de un visor.
+    { key: "ar",         label: "AR",          d: "M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M12 7l5 2.5v5L12 17l-5-2.5v-5zM7 9.5l5 2.5 5-2.5M12 12v5" },
+    { key: "heart",     label: "Heart",       d: "M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10z" },
+    { key: "restaurant", label: "Restaurant",  d: "M7 3v6a2 2 0 0 0 4 0V3M9 3v18M17 21V3c-2 1.5-3 4-3 7v3h3" },
+    { key: "coffee",     label: "Coffee",      d: "M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M8 3v3M12 3v3" },
+    { key: "menu",       label: "Menu",        d: "M6 3h9l4 4v14H6zM9 7h3M9 11h7M9 15h7" },
+    { key: "wifi",       label: "Wi-Fi",       d: "M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 20h.01" },
+    { key: "location",   label: "Location",    d: "M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
+    { key: "phone",      label: "Phone",       d: "M6 3h4l2 5-2.5 1.5a11 11 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z" },
+    { key: "mail",       label: "Email",       d: "M3 6h18v12H3zM3 6l9 7 9-7" },
+    { key: "link",       label: "Link",        d: "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" },
+    { key: "user",       label: "Contact",     d: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" },
+    { key: "shop",       label: "Shop",        d: "M3 4h2l2.5 11h11L21 7H6.5M9 20h.01M18 20h.01" },
+    { key: "star",       label: "Review",      d: "M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" },
+    { key: "calendar",   label: "Event",       d: "M4 5h16v15H4zM4 10h16M8 3v4M16 3v4" },
+    { key: "ticket",     label: "Ticket",      d: "M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4zM14 7v10" },
+    { key: "music",      label: "Music",       d: "M9 18V5l11-2v13M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3zM20 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3z" },
+    { key: "play",       label: "Video",       d: "M6 4l13 8-13 8z" },
+    { key: "gift",       label: "Gift",        d: "M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7c-2-4-6-3-5 0M12 7c2-4 6-3 5 0" },
+    { key: "home",       label: "Home",        d: "M3 11l9-8 9 8M5 9.5V21h14V9.5" },
+    { key: "info",       label: "Info",        d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01" },
+    { key: "payment",    label: "Payment",     d: "M3 6h18v12H3zM3 10h18M7 15h3" },
+  ];
+  const QR_LOGO_ICON_BY_KEY = Object.fromEntries(QR_LOGO_ICONS.map(icon => [icon.key, icon]));
+
+  // ¿Este logo tapa módulos? Un "icon" con una clave que ya no existe se
+  // trata como sin logo, para no recortar una placa vacía en el código.
+  function qrHasLogo(logo) {
+    return logo?.source === "brand" || (logo?.source === "icon" && !!QR_LOGO_ICON_BY_KEY[logo.icon]);
+  }
+
+  function QRLogoIconGlyph({ iconKey, color, size = 18 }) {
+    const icon = QR_LOGO_ICON_BY_KEY[iconKey];
+    if (!icon) return null;
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icon.d}/></svg>;
+  }
+
   function QRCodeSvg({ value, style = {}, logo = { source: "none" }, size = 220 }) {
     const encoder = window.qrcode;
     const logoVariant = logo.variant === "dark" ? "dark" : "light";
     const logoData = useLogoData(logoVariant, logo.source === "brand");
+    const logoIcon = logo.source === "icon" ? QR_LOGO_ICON_BY_KEY[logo.icon] : null;
     if (!encoder) return <div role="alert">{window.I18N.t("ui.blocks.qrUnavailable", "QR encoder unavailable")}</div>;
     const qr = encoder(0, style.ecLevel || "M"); qr.addData(String(value || "")); qr.make();
     const n = qr.getModuleCount(); const quiet = 4; const total = n + quiet * 2; const fg = style.fgColor || "#000000"; const bg = style.bgColor || "#ffffff";
     let path = "";
     for (let row = 0; row < n; row++) for (let col = 0; col < n; col++) if (qr.isDark(row, col)) path += `M${col + quiet} ${row + quiet}h1v1h-1z`;
-    const knockout = logo.source === "brand" ? logoRect(n, style.logoModules || 9, style.ecLevel || "M") : null;
-    return <svg role="img" aria-label={window.I18N.t("ui.blocks.qrAria", "QR code")} viewBox={`0 0 ${total} ${total}`} width={size} height={size} shapeRendering="crispEdges" style={{ background: bg, display: "block"}}><rect width={total} height={total} fill={bg}/><path d={path} fill={fg}/>{knockout && <><rect x={knockout.x + quiet - 1} y={knockout.y + quiet - 1} width={knockout.w + 2} height={knockout.h + 2} fill={bg}/>{logoData && <image href={logoData} x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h}/>}</>}</svg>;
+    const knockout = qrHasLogo(logo) ? logoRect(n, style.logoModules || 9, style.ecLevel || "M") : null;
+    return <svg role="img" aria-label={window.I18N.t("ui.blocks.qrAria", "QR code")} viewBox={`0 0 ${total} ${total}`} width={size} height={size} shapeRendering="crispEdges" style={{ background: bg, display: "block"}}><rect width={total} height={total} fill={bg}/><path d={path} fill={fg}/>{knockout && <><rect x={knockout.x + quiet - 1} y={knockout.y + quiet - 1} width={knockout.w + 2} height={knockout.h + 2} fill={bg}/>{logoData && <image href={logoData} x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h}/>}{logoIcon && <svg x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"><path d={logoIcon.d}/></svg>}</>}</svg>;
   }
 
   function QRBlockPanel({ block, panelProps = {} }) {
@@ -165,4 +210,5 @@
     );
   }
   window.QRCodeSvg = QRCodeSvg; window.QRBlockPanel = QRBlockPanel; window.QRLogoRect = logoRect; window.QRProtectedModule = protectedModule; window.QRAutoEcLevel = autoEcLevel;
+  window.QR_LOGO_ICONS = QR_LOGO_ICONS; window.QRHasLogo = qrHasLogo; window.QRLogoIconGlyph = QRLogoIconGlyph;
 })();

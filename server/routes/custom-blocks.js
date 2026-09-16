@@ -35,8 +35,11 @@ function validateQrConfig(record) {
   if (!["manual", "dynamic"].includes(payload.mode)) throw new Error("qr-payload-mode-not-supported");
   if (payload.mode === "manual" && (typeof payload.value !== "string" || !payload.value.trim())) throw new Error("qr-payload-value-required");
   if (payload.mode === "dynamic" && (typeof payload.linkId !== "string" || !payload.linkId.trim())) throw new Error("qr-link-id-required");
-  if (!logo || typeof logo !== "object" || !["brand", "upload", "none"].includes(logo.source)) throw new Error("invalid-qr-logo");
+  if (!logo || typeof logo !== "object" || !["brand", "icon", "upload", "none"].includes(logo.source)) throw new Error("invalid-qr-logo");
   if (logo.source === "brand" && typeof logo.variant !== "string") throw new Error("invalid-qr-logo");
+  // Solo el formato de la clave: el catálogo de íconos vive en el cliente
+  // (app/qr-block.jsx) y una clave desconocida ahí se dibuja como sin logo.
+  if (logo.source === "icon" && (typeof logo.icon !== "string" || !/^[a-z][a-z0-9-]{0,31}$/.test(logo.icon))) throw new Error("invalid-qr-logo");
   if (logo.source === "upload" && typeof logo.assetId !== "string") throw new Error("invalid-qr-logo");
   if (!style || typeof style !== "object" || !QR_EC_LEVELS.has(style.ecLevel) || style.pattern !== "square" || style.corners !== "square" || !HEX_COLOR.test(style.fgColor) || !HEX_COLOR.test(style.bgColor)) throw new Error("invalid-qr-style");
 }

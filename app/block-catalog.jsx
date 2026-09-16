@@ -96,9 +96,11 @@ function FilterChip({ label, value, options, onChange }) {
 // Scripts JSX are isolated (no bundler/imports), so this catalog keeps its
 // small action-button wrapper local and reads the shared line icons lazily
 // from app.jsx's window.ICONS when the table renders.
+const BLOCK_COPY_ICON = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+
 function BlockCatalogActionButton({ label, title = label, iconName, onClick, danger = false }) {
   const fallback = iconName === "edit" ? "✎" : iconName === "trash" ? "⌫" : "👁";
-  const icon = window.ICONS?.[iconName] || <span style={{ fontSize: 13 }}>{fallback}</span>;
+  const icon = window.ICONS?.[iconName] || (iconName === "copy" ? BLOCK_COPY_ICON : <span style={{ fontSize: 13 }}>{fallback}</span>);
   const restingColor = danger ? "var(--err)" : "var(--muted-fg)";
   return (
     <button type="button" aria-label={label} title={title}
@@ -367,8 +369,10 @@ function BlockCatalogView({ isMobile }) {
                       : <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "var(--muted)", color: "var(--muted-fg)" }}>{bct("blocks.noAdded", "Not added")}</span>}
                   </td>
                   <td className="blocks-catalog-actions" style={{ padding: "8px 12px", textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end", whiteSpace: "nowrap" }}>
-                    <BlockCatalogActionButton label={window.I18N.t("ui.blocks.createCopy", "Create an editable copy of {0}", { 0: b.title })} iconName="edit"
-                      title={window.I18N.t("ui.blocks.copyHelp", "A fixed Block cannot be edited: create a custom copy with the same connector and data type")}
+                    <BlockCatalogActionButton label={window.I18N.t("ui.editNamed", "Edit {0}", { 0: b.title })} iconName="edit"
+                      onClick={() => setBuilderTarget({ fixedId: b.id, connectorId: b.connectorId, blockId: b.blockId, title: b.title, icon: b.icon, defaultTitle: b.defaultTitle, defaultIcon: b.defaultIcon })} />
+                    <BlockCatalogActionButton label={window.I18N.t("ui.blocks.createCopy", "Create an editable copy of {0}", { 0: b.title })} iconName="copy"
+                      title={window.I18N.t("ui.blocks.copyHelp", "Create a custom copy with the same connector and data type")}
                       onClick={() => setBuilderTarget({ connectorId: b.connectorId, blockId: b.blockId, title: b.title, icon: b.icon })} />
                     <BlockCatalogActionButton label={bct("ui.blocks.previewNamed", "Preview {0}", { 0: b.title })} iconName="view"
                       onClick={() => setPreviewBlock(b)} />
