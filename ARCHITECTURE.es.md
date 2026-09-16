@@ -114,10 +114,12 @@ erDiagram
 La mayoría del estado del producto se guarda intencionalmente como valores
 JSON en `kv`, con prefijos estables como `connector-config-<id>`,
 `connector-data-<id>`, `dashboards`, `custom-blocks` o
-`activity-log-<domain>`. El diagrama muestra las tablas físicas; los registros
-lógicos dentro de `kv` están documentados por las rutas y servicios dueños de
-cada clave. Los secretos de conectores no se guardan en la configuración
-pública y deben manejarse mediante el Secret Store.
+`activity-log-<domain>`. La lista `custom-blocks` guarda registros de
+conector, contenido y QR; los registros QR contienen un payload estático y
+campos de logotipo y estilo. El diagrama muestra las tablas físicas; los
+registros lógicos dentro de `kv` están documentados por las rutas y servicios
+dueños de cada clave. Los secretos de conectores no se guardan en la
+configuración pública y deben manejarse mediante el Secret Store.
 
 No existe paso de build para el frontend. Lintaya.html carga app/*.jsx como
 scripts Babel en el navegador. Cada script tiene su propio scope y expone su
