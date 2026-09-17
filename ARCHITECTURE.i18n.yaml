@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write ARCHITECTURE.md
 
-ARCHITECTURE.md: 81adb744aa8a4dfb0a88f6ffad54fc1abe18d0d7
-ARCHITECTURE.es.md: 9dec99d5f41cd43e6b89325af6e7d6b6179f92b1
+ARCHITECTURE.md: eca0e58cb5ff8bdb191bbf7443036726e7d607b5
+ARCHITECTURE.es.md: 9e0c9eb652d4f4031bde38f9cdf4302e74bc64e2
