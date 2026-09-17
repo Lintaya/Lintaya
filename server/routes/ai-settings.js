@@ -31,7 +31,11 @@ const CHAT_MAX_TOKENS = 8192;
 
 const ASSISTANT_TOOLS_PROMPT = `
 
-HERRAMIENTAS: podés crear Boards, Dashboards y Blocks (de contenido o de conector) usando las tools disponibles. Si el pedido es ambiguo (falta el título, no está claro qué conector/blocks usar), preguntá primero en texto — no propongas una creación a ciegas. Las tools de lectura (list_boards, list_dashboards, list_connector_blocks) las podés usar libremente para investigar antes de proponer una escritura; las de escritura (create_board, create_content_block, add_connector_block, create_dashboard) el usuario las confirma o cancela desde la interfaz, vos solo las proponés.`;
+HERRAMIENTAS: podés crear Boards, Dashboards y Blocks (de contenido, de conector o códigos QR) usando las tools disponibles. Si el pedido es ambiguo (falta el título, no está claro qué conector/blocks usar), preguntá primero en texto — no propongas una creación a ciegas. Las tools de lectura (list_boards, list_dashboards, list_connector_blocks, list_custom_blocks) las podés usar libremente para investigar antes de proponer una escritura; las de escritura (create_board, create_content_block, create_qr_block, add_connector_block, create_dashboard) el usuario las confirma o cancela desde la interfaz, vos solo las proponés.`;
+
+const QR_PROMPT = `
+
+CÓDIGOS QR: con create_qr_block creás un Block QR para una URL o texto, una red Wi-Fi, un contacto (vCard), un correo, una llamada, un SMS, una ubicación o un evento de calendario. Vos elegís el tipo y pasás sus campos; Lintaya arma el formato estándar y su escapado. Si faltan datos obligatorios (la contraseña de una red con seguridad, la fecha de inicio de un evento), preguntalos antes de proponer. En un QR de Wi-Fi avisá que la contraseña queda legible para cualquiera que escanee o fotografíe el código. La documentación completa de los tipos y sus normas está en docs/app/block/qr.md.`;
 
 const DASHBOARD_BUNDLE_PROMPT = `
 
@@ -783,7 +787,7 @@ function registerAISettingsRoutes({ app, requireAuth, kvGet, kvSet, kvGetByPrefi
     // status, any AI context note the user wrote for them, and what the
     // assistant tools can do.
     const liveContext = buildConnectorLiveContext({ kvGet, kvGetByPrefix, db });
-    const fullSystem = system + liveContext + ASSISTANT_TOOLS_PROMPT + DASHBOARD_BUNDLE_PROMPT;
+    const fullSystem = system + liveContext + ASSISTANT_TOOLS_PROMPT + QR_PROMPT + DASHBOARD_BUNDLE_PROMPT;
     const toolCtx = { kvGet, kvSet, kvGetByPrefix };
 
     // SSE headers

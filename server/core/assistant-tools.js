@@ -22,6 +22,7 @@ const { createBoardRecord } = require("../routes/module-pages");
 const { createDashboardRecord } = require("../routes/dashboards");
 const { createCustomBlockRecord } = require("../routes/custom-blocks");
 const ZoneTree = require("../../app/zone-tree.js");
+const QRPayload = require("../../app/qr-payload.js");
 
 const TOOL_DEFS = [
   {
@@ -74,6 +75,34 @@ const TOOL_DEFS = [
         content: { type: "string", description: "El contenido en sí, ya redactado" },
       },
       required: ["title", "content"],
+    },
+  },
+  {
+    name: "create_qr_block",
+    kind: "write",
+    description: "Crea un Block QR estático. Elegí contentType y pasá solo los campos de ese tipo; Lintaya arma el texto estándar que leen las cámaras de iOS y Android (con su escapado), así que nunca escribas vos el payload WIFI:/vCard/VEVENT. Tipos: text (texto o URL), wifi (red Wi-Fi), contact (vCard 3.0), email (mailto:), phone (tel:), sms (SMSTO:), location (geo:), event (iCalendar VEVENT). Un QR de wifi lleva la contraseña legible dentro del código: avisale al usuario antes de proponerlo. Los QR dinámicos (enlace corto reapuntable) solo se crean desde Blocks → + New block.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título del Block" },
+        description: { type: "string", description: "Descripción opcional" },
+        contentType: { type: "string", enum: QRPayload.TYPES, description: "Qué hace el teléfono al escanearlo" },
+        fields: {
+          type: "object",
+          description: "Campos del contentType elegido. text: text. wifi: ssid, auth (WPA | WEP | nopass; por defecto WPA), password (obligatoria salvo nopass), hidden. contact: firstName, lastName, org (al menos uno), phone, email, url. email: to, subject, body. phone: number. sms: number, message. location: lat (-90 a 90), lng (-180 a 180). event: title, start y end como AAAA-MM-DDTHH:MM en hora local sin zona (end opcional, no anterior a start), location.",
+          properties: {
+            text: { type: "string" },
+            ssid: { type: "string" }, auth: { type: "string", enum: ["WPA", "WEP", "nopass"] }, password: { type: "string" }, hidden: { type: "boolean" },
+            firstName: { type: "string" }, lastName: { type: "string" }, org: { type: "string" }, phone: { type: "string" }, email: { type: "string" }, url: { type: "string" },
+            to: { type: "string" }, subject: { type: "string" }, body: { type: "string" },
+            number: { type: "string" }, message: { type: "string" },
+            lat: { type: "string" }, lng: { type: "string" },
+            start: { type: "string" }, end: { type: "string" }, location: { type: "string" },
+          },
+        },
+        logo: { type: "string", description: "brand (marca Lintaya, por defecto), none, o la clave de un ícono: wifi, user, mail, phone, location, calendar, link, lighthouse, heart, star…" },
+      },
+      required: ["title", "contentType", "fields"],
     },
   },
   {
@@ -194,6 +223,14 @@ function listConnectorBlockTemplates({ kvGet, kvGetByPrefix }) {
     .map(b => ({ id: b.id, connectorId: b.connectorId, blockId: b.blockId, title: b.title }));
 }
 
+// Qué QR es, sin devolver lo que codifica: un QR de Wi-Fi lleva la contraseña en
+// su payload, y este resultado viaja al proveedor del modelo. El tipo basta para
+// reutilizar el block; el contenido completo está en la interfaz.
+function qrSummary(payload) {
+  if (payload?.mode === "dynamic") return { mode: "dynamic" };
+  return { mode: "manual", contentType: QRPayload.parse(payload?.value || "").type };
+}
+
 function listCustomBlocksSummary({ kvGet }) {
   return (kvGet("custom-blocks")?.value || [])
     .filter(block => block.active !== false)
@@ -202,7 +239,7 @@ function listCustomBlocksSummary({ kvGet }) {
       title: block.title,
       kind: block.kind || "connector",
       ...(block.kind === "content" ? { format: block.format || "md" } : {}),
-      ...(block.kind === "qr" ? { payload: block.payload } : {}),
+      ...(block.kind === "qr" ? { qr: qrSummary(block.payload) } : {}),
     }));
 }
 
@@ -232,6 +269,36 @@ function runCreateContentBlock(ctx, args) {
     title: args?.title,
     format: args?.format === "html" ? "html" : "md",
     content: args?.content,
+  });
+}
+
+// Mismos formatos que el editor (app/qr-payload.js) y la misma validación que la
+// ruta REST (createCustomBlockRecord): el modelo solo elige tipo y campos.
+const QR_ICON_KEY = /^[a-z][a-z0-9-]{0,31}$/;
+
+function runCreateQrBlock(ctx, args) {
+  const contentType = String(args?.contentType || "");
+  if (!QRPayload.TYPES.includes(contentType)) throw new Error("qr-content-type-not-supported");
+  const given = args?.fields && typeof args.fields === "object" && !Array.isArray(args.fields) ? args.fields : {};
+  const fields = QRPayload.emptyFields(contentType);
+  for (const key of Object.keys(fields)) {
+    if (given[key] === undefined || given[key] === null) continue;
+    fields[key] = typeof fields[key] === "boolean" ? given[key] === true || given[key] === "true" : String(given[key]);
+  }
+  const problem = QRPayload.problem(contentType, fields);
+  if (problem) throw new Error(`qr-${contentType}-${problem === "required" ? "fields-required" : problem}`);
+  const logoArg = typeof args?.logo === "string" && args.logo.trim() ? args.logo.trim() : "brand";
+  if (logoArg !== "brand" && logoArg !== "none" && !QR_ICON_KEY.test(logoArg)) throw new Error("invalid-qr-logo");
+  const logo = logoArg === "brand" ? { source: "brand", variant: "light" } : logoArg === "none" ? { source: "none" } : { source: "icon", icon: logoArg };
+  return createCustomBlockRecord(ctx, {
+    kind: "qr",
+    title: args?.title,
+    description: args?.description,
+    payload: { mode: "manual", value: QRPayload.build(contentType, fields) },
+    logo,
+    // Con logo, H: el mismo criterio que QRAutoEcLevel en el editor, que al
+    // abrir el block lo recalcula igual.
+    style: { ecLevel: logo.source === "none" ? "M" : "H", pattern: "square", corners: "square", fgColor: "#000000", bgColor: "#ffffff" },
   });
 }
 
@@ -383,6 +450,7 @@ function runCreateDashboardBundle(ctx, args) {
 const WRITE_HANDLERS = {
   create_board: runCreateBoard,
   create_content_block: runCreateContentBlock,
+  create_qr_block: runCreateQrBlock,
   add_connector_block: runAddConnectorBlock,
   create_dashboard: runCreateDashboard,
   create_dashboard_bundle: runCreateDashboardBundle,
@@ -401,6 +469,8 @@ function describeToolCall(name, args = {}) {
       return `Crear Board "${args.title}"${args.blockIds?.length ? ` con ${args.blockIds.length} block(s)` : ""}`;
     case "create_content_block":
       return `Crear Block de contenido "${args.title}"`;
+    case "create_qr_block":
+      return `Crear Block QR "${args.title}" (${args.contentType})`;
     case "add_connector_block":
       return `Agregar Block "${args.title}" (${args.connectorId}.${args.blockId})`;
     case "create_dashboard":

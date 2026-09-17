@@ -19,6 +19,10 @@
   sincronización, caché, configuración y capacidades incluidos.
 - [Guía CLI](cli/README.es.md): perfiles, TUI, salida JSON, completion y límite
   de solo lectura.
+- [Códigos QR](docs/app/block/qr.es.md): los tipos de contenido QR que construye
+  Lintaya (URL, Wi-Fi, vCard, mailto, tel, SMS, geo, evento iCalendar), la norma
+  que sigue cada uno y la herramienta `create_qr_block` del Asistente, sujeta a
+  aprobación.
 
 ## Límites de agentes y API
 

@@ -23,6 +23,7 @@ const STATIC_ASSETS = [
   "./app/public-data.js",
   "./app/api.js",
   "./app/zone-tree.js",
+  "./app/qr-payload.js",
   "./app/i18n.js",
   "./app/app.jsx",
   "./app/home.jsx",

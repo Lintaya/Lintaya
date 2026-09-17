@@ -43,6 +43,16 @@ test("GET /api/ai-context remains public but exposes only safe ConnectorType dis
   assert.ok(body.endpoints.connectors.every(item => item.includes("(auth)")));
 });
 
+test("GET /api/ai-context tells an agent that Lintaya builds QR codes, and in which formats", async () => {
+  const { app } = setup();
+  const { features } = (await request(app, "GET", "/api/ai-context")).json();
+  assert.ok(features.blockKinds.includes("qr"));
+  assert.deepEqual(features.qrContentTypes, ["text", "wifi", "contact", "email", "phone", "sms", "location", "event"]);
+  assert.ok(features.documentation.includes("docs/app/block/qr.md"));
+  for (const doc of features.documentation) assert.ok(require("node:fs").existsSync(require("node:path").resolve(__dirname, "../..", doc)), `${doc} exists`);
+  assert.match(features.note, /create_qr_block/);
+});
+
 test("stored AI context requires authentication and uses RFC 9457", async () => {
   const { app } = setup();
   const res = await request(app, "GET", "/api/ai-context/stored");

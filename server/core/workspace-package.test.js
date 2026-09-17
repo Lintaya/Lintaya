@@ -154,6 +154,49 @@ test("QR logo knockout stays inside the usable error-correction budget", () => {
   assert.ok(((logoRect(n, 9, "Q").w + 2) ** 2) / (n * n) <= usable.Q, "con tope debe quedar dentro");
 });
 
+// De la versión 7 a la 13 el centro es un patrón de alineación y ninguna placa
+// centrada cabe, por pequeña que sea. Antes eso dejaba el QR sin logo; ahora
+// sube a la primera versión con el centro libre, con el mismo contenido.
+test("a logo that cannot sit on a centred alignment pattern moves the code to a denser version", () => {
+  const context = vm.createContext({ window: {}, console, React: { useState: initial => [typeof initial === "function" ? initial() : initial, () => {}], useEffect() {}, createElement: () => ({}) }, fetch: () => Promise.reject(new Error("offline")) });
+  vm.runInContext(fs.readFileSync(require("node:path").join(__dirname, "../../vendor/qrcode-generator.js"), "utf8"), context);
+  context.window.qrcode = context.qrcode; context.window.I18N = { t: (_, fallback) => fallback };
+  vm.runInContext(babel.transform(fs.readFileSync(require("node:path").join(__dirname, "../../app/qr-block.jsx"), "utf8"), { presets: ["react"] }).code, context);
+  const { QRLayout: layout, QRProtectedModule: protectedModule, QRLogoRect: logoRect } = context.window;
+  const versionOf = modules => (modules - 17) / 4;
+  // Un evento de calendario real: unos 106 bytes, versión 10 con corrección H.
+  const event = ["BEGIN:VEVENT", "SUMMARY:fiesta", "DTSTART:20260918T194800", "DTEND:20260923T204600", "LOCATION:condesa", "END:VEVENT"].join("\r\n");
+  const plain = layout(event, "H", false);
+  assert.equal(versionOf(plain.modules), 10);
+  assert.equal(logoRect(plain.modules, 9, "H"), null, "el centro de la v10 es un patrón de alineación");
+
+  const withLogo = layout(event, "H", true);
+  assert.equal(withLogo.bumped, true);
+  assert.equal(versionOf(withLogo.modules), 14, "primera versión con el centro libre");
+  assert.equal(withLogo.qr.getModuleCount(), withLogo.modules);
+  const n = withLogo.modules; const rect = withLogo.knockout;
+  for (let row = rect.y; row < rect.y + rect.h; row++) for (let col = rect.x; col < rect.x + rect.w; col++) assert.equal(protectedModule(row, col, n), false);
+
+  // Un contenido que ya dejaba sitio no cambia de versión.
+  const url = layout("https://lintaya.com", "H", true);
+  assert.equal(url.bumped, false);
+  assert.ok(url.knockout);
+  assert.equal(url.modules, layout("https://lintaya.com", "H", false).modules);
+
+  // Qué versiones tienen el centro ocupado y a cuál suben: calculado a mano a
+  // partir de la tabla de alineación, para no heredar la implementación. La 40
+  // es la única sin salida y se queda sin logo.
+  const expected = { 7: 14, 8: 14, 9: 14, 10: 14, 11: 14, 12: 14, 13: 14, 21: 28, 22: 28, 23: 28, 24: 28, 25: 28, 26: 28, 27: 28, 35: 36, 37: 39, 38: 39, 40: null };
+  const actual = {};
+  for (let version = 1; version <= 40; version++) {
+    if (logoRect(17 + version * 4, 9, "H")) continue;
+    let target = null;
+    for (let next = version + 1; next <= 40 && !target; next++) if (logoRect(17 + next * 4, 9, "H")) target = next;
+    actual[version] = target;
+  }
+  assert.deepEqual(actual, expected);
+});
+
 test("previews conflicts and connector mappings without performing writes", () => {
   const value = sample();
   const preview = previewWorkspaceImport(value, {

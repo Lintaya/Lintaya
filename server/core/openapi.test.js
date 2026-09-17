@@ -34,6 +34,11 @@ test("OpenAPI gives public AI context a closed schema and describes the token as
   assert.deepEqual(operationSchema, { $ref: "#/components/schemas/PublicAIContext" });
   assert.equal(spec.components.schemas.PublicAIContext.additionalProperties, false);
   assert.equal(spec.components.schemas.ConnectorTypeDiscovery.additionalProperties, false);
+  // El esquema cerrado tiene que admitir todo lo que el generador devuelve.
+  const context = require("./ai-context").generateAIContext({ connectors: [] });
+  assert.deepEqual(Object.keys(context).sort(), Object.keys(spec.components.schemas.PublicAIContext.properties).sort());
+  assert.deepEqual(Object.keys(context.features).sort(), Object.keys(spec.components.schemas.PublicFeatureHints.properties).sort());
+  assert.deepEqual(spec.components.schemas.PublicFeatureHints.properties.qrContentTypes.items.enum, context.features.qrContentTypes);
   assert.equal(spec.components.securitySchemes.bearerAuth.bearerFormat, "LINTAYA_TOKEN");
   assert.doesNotMatch(spec.components.securitySchemes.bearerAuth.description, /start-dev|database|\.db|JWT/i);
   assert.deepEqual(spec.servers, [{ url: "/", description: "Current Lintaya origin" }]);

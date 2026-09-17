@@ -19,6 +19,9 @@
   synchronization, cache, configuration, and capabilities.
 - [CLI guide](cli/README.md): profiles, TUI, JSON output, completion, and the
   read-only boundary.
+- [QR codes](docs/app/block/qr.md): the QR content types Lintaya builds (URL,
+  Wi-Fi, vCard, mailto, tel, SMS, geo, iCalendar event), the standard each
+  follows, and the Assistant's approval-gated `create_qr_block` tool.
 
 ## Agent and API boundaries
 

@@ -1,4 +1,6 @@
 // OpenAPI 3.0 spec generator for Lintaya
+const QRPayload = require("../../app/qr-payload.js");
+
 function generateOpenAPISpec({ connectors = [] } = {}) {
   const paths = {
     // Health
@@ -735,13 +737,14 @@ function generateOpenAPISpec({ connectors = [] } = {}) {
         PublicAIContext: {
           type: "object",
           additionalProperties: false,
-          required: ["name", "description", "auth", "endpoints", "connectors", "tips", "generatedAt", "visibility"],
+          required: ["name", "description", "auth", "endpoints", "connectors", "features", "tips", "generatedAt", "visibility"],
           properties: {
             name: { type: "string", example: "Lintaya" },
             description: { type: "string" },
             auth: { $ref: "#/components/schemas/PublicAuthHint" },
             endpoints: { $ref: "#/components/schemas/PublicEndpointHints" },
             connectors: { type: "array", items: { $ref: "#/components/schemas/ConnectorTypeDiscovery" } },
+            features: { $ref: "#/components/schemas/PublicFeatureHints" },
             tips: { type: "array", items: { type: "string" } },
             generatedAt: { type: "string", format: "date-time" },
             visibility: { type: "string", enum: ["public-discovery"] },
@@ -765,6 +768,17 @@ function generateOpenAPISpec({ connectors = [] } = {}) {
           properties: {
             health: { type: "array", items: { type: "string" } },
             connectors: { type: "array", items: { type: "string" } },
+          },
+        },
+        PublicFeatureHints: {
+          type: "object",
+          additionalProperties: false,
+          required: ["blockKinds", "qrContentTypes", "documentation", "note"],
+          properties: {
+            blockKinds: { type: "array", items: { type: "string", enum: ["connector", "content", "qr"] } },
+            qrContentTypes: { type: "array", items: { type: "string", enum: [...QRPayload.TYPES] } },
+            documentation: { type: "array", items: { type: "string" } },
+            note: { type: "string" },
           },
         },
         ConnectorTypeDiscovery: {

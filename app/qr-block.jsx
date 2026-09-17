@@ -42,6 +42,34 @@
     return null;
   }
 
+  // Símbolo y placa del logo para un contenido. Achicar el logo no basta: en las
+  // versiones 7–13, 21–27, 35, 37, 38 y 40 el estándar pone un patrón de
+  // alineación en el centro, y cualquier placa centrada, por pequeña que sea, lo
+  // taparía — logoRect ya prueba de 9 módulos hasta 1. En vez de tirar el logo,
+  // se sube a la primera versión con el centro libre (14, 28, 36 o 39): el mismo
+  // contenido en una rejilla más densa, sin pisar ningún patrón y dentro del
+  // mismo presupuesto de corrección. Solo la versión 40, que no tiene a dónde
+  // subir, se genera sin logo. La versión sale del contenido, el nivel y el
+  // logo, así que la vista previa, el panel y las descargas dibujan siempre el
+  // mismo símbolo sin guardar nada nuevo en el block.
+  function qrLayout(value, ecLevel = "M", wantLogo = false, wanted = 9) {
+    const make = type => { const qr = window.qrcode(type, ecLevel); qr.addData(String(value || "")); qr.make(); return qr; };
+    const base = make(0);
+    const baseModules = base.getModuleCount();
+    const plain = { qr: base, knockout: null, baseModules, modules: baseModules, bumped: false };
+    if (!wantLogo) return plain;
+    const direct = logoRect(baseModules, wanted, ecLevel);
+    if (direct) return { ...plain, knockout: direct };
+    for (let version = (baseModules - 17) / 4 + 1; version <= 40; version++) {
+      const knockout = logoRect(17 + version * 4, wanted, ecLevel);
+      if (knockout) {
+        const qr = make(version);
+        return { qr, knockout, baseModules, modules: qr.getModuleCount(), bumped: true };
+      }
+    }
+    return plain;
+  }
+
   // El nivel de corrección lo decide la app, no el usuario. L/M/Q/H no le dicen
   // nada a nadie que no conozca el formato, y elegir mal rompe el código en
   // silencio (L con logo no escanea). La app tiene los datos para acertar:
@@ -155,11 +183,10 @@
     const logoData = useLogoData(logoVariant, logo.source === "brand");
     const logoIcon = logo.source === "icon" ? QR_LOGO_ICON_BY_KEY[logo.icon] : null;
     if (!encoder) return <div role="alert">{window.I18N.t("ui.blocks.qrUnavailable", "QR encoder unavailable")}</div>;
-    const qr = encoder(0, style.ecLevel || "M"); qr.addData(String(value || "")); qr.make();
+    const { qr, knockout } = qrLayout(value, style.ecLevel || "M", qrHasLogo(logo), style.logoModules || 9);
     const n = qr.getModuleCount(); const quiet = 4; const total = n + quiet * 2; const fg = style.fgColor || "#000000"; const bg = style.bgColor || "#ffffff";
     let path = "";
     for (let row = 0; row < n; row++) for (let col = 0; col < n; col++) if (qr.isDark(row, col)) path += `M${col + quiet} ${row + quiet}h1v1h-1z`;
-    const knockout = qrHasLogo(logo) ? logoRect(n, style.logoModules || 9, style.ecLevel || "M") : null;
     return <svg role="img" aria-label={window.I18N.t("ui.blocks.qrAria", "QR code")} viewBox={`0 0 ${total} ${total}`} width={size} height={size} shapeRendering="crispEdges" style={{ background: bg, display: "block"}}><rect width={total} height={total} fill={bg}/><path d={path} fill={fg}/>{knockout && <><rect x={knockout.x + quiet - 1} y={knockout.y + quiet - 1} width={knockout.w + 2} height={knockout.h + 2} fill={bg}/>{logoData && <image href={logoData} x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h}/>}{logoIcon && <svg x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"><path d={logoIcon.d}/></svg>}</>}</svg>;
   }
 
@@ -211,6 +238,6 @@
       </Panel>
     );
   }
-  window.QRCodeSvg = QRCodeSvg; window.QRBlockPanel = QRBlockPanel; window.QRLogoRect = logoRect; window.QRProtectedModule = protectedModule; window.QRAutoEcLevel = autoEcLevel;
+  window.QRCodeSvg = QRCodeSvg; window.QRBlockPanel = QRBlockPanel; window.QRLogoRect = logoRect; window.QRLayout = qrLayout; window.QRProtectedModule = protectedModule; window.QRAutoEcLevel = autoEcLevel;
   window.QR_LOGO_ICONS = QR_LOGO_ICONS; window.QRHasLogo = qrHasLogo; window.QRLogoIconGlyph = QRLogoIconGlyph;
 })();
