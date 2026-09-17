@@ -109,9 +109,9 @@
   // autocontenido y combinan con cualquier color que se elija para el código.
   // Solo formas genéricas — nada de marcas de terceros.
   const QR_LOGO_ICONS = [
-    // El faro del símbolo de carta náutica (U+26EF): el foco y sus rayos
-    // mandan, y la torre queda como un trazo fino que los sostiene.
-    { key: "lighthouse", label: "Lighthouse",  d: "M14 7a2 2 0 1 0-4 0 2 2 0 0 0 4 0M12 2.4v1.3M7.8 3.5l1 1.2M16.2 3.5l-1 1.2M5.6 6.4l1.4.4M18.4 6.4l-1.4.4M10.4 8.7L8.8 19M13.6 8.7L15.2 19M7.4 19h9.2" },
+    // El símbolo de faro de las cartas náuticas (U+26EF): un anillo con el foco
+    // en el centro y ocho rayos. Sin torre — así lo dibujan las fuentes.
+    { key: "lighthouse", label: "Lighthouse",  d: "M18 12a6 6 0 1 1-12 0 6 6 0 0 1 12 0M13 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.9 2.9M19.1 4.9l-2.9 2.9M4.9 19.1l2.9-2.9M19.1 19.1l-2.9-2.9" },
     // Realidad aumentada: un cubo dentro de las esquinas de un visor.
     { key: "ar",         label: "AR",          d: "M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M12 7l5 2.5v5L12 17l-5-2.5v-5zM7 9.5l5 2.5 5-2.5M12 12v5" },
     { key: "heart",     label: "Heart",       d: "M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10z" },
