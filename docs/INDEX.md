@@ -12,6 +12,7 @@ index also links to operational and contributor material in the repository.
 |---|---|
 | [Get started](app/get-started/introduccion.md) | Run a local server, enter the token, and configure a first connection. |
 | [Blocks](app/block/introduccion.md) | Create Markdown blocks and add connector blocks. |
+| [QR codes](app/block/qr.md) | Build QR codes for links, Wi-Fi, contacts, email, calls, SMS, locations, and events, and the standard each follows. |
 | [Boards](app/module/introduccion.md) | Build persistent layouts from zones and blocks. |
 | [Dashboards](app/dashboard/introduccion.md) | Group Boards as tabs, reorder them, and present them full screen. |
 | [SSH](app/ssh/introduccion.md) | Open terminals from VMs, Devices, and Containers; understand concurrent sessions, credentials, jump hosts, and transcripts. |

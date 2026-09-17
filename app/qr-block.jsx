@@ -42,6 +42,34 @@
     return null;
   }
 
+  // Símbolo y placa del logo para un contenido. Achicar el logo no basta: en las
+  // versiones 7–13, 21–27, 35, 37, 38 y 40 el estándar pone un patrón de
+  // alineación en el centro, y cualquier placa centrada, por pequeña que sea, lo
+  // taparía — logoRect ya prueba de 9 módulos hasta 1. En vez de tirar el logo,
+  // se sube a la primera versión con el centro libre (14, 28, 36 o 39): el mismo
+  // contenido en una rejilla más densa, sin pisar ningún patrón y dentro del
+  // mismo presupuesto de corrección. Solo la versión 40, que no tiene a dónde
+  // subir, se genera sin logo. La versión sale del contenido, el nivel y el
+  // logo, así que la vista previa, el panel y las descargas dibujan siempre el
+  // mismo símbolo sin guardar nada nuevo en el block.
+  function qrLayout(value, ecLevel = "M", wantLogo = false, wanted = 9) {
+    const make = type => { const qr = window.qrcode(type, ecLevel); qr.addData(String(value || "")); qr.make(); return qr; };
+    const base = make(0);
+    const baseModules = base.getModuleCount();
+    const plain = { qr: base, knockout: null, baseModules, modules: baseModules, bumped: false };
+    if (!wantLogo) return plain;
+    const direct = logoRect(baseModules, wanted, ecLevel);
+    if (direct) return { ...plain, knockout: direct };
+    for (let version = (baseModules - 17) / 4 + 1; version <= 40; version++) {
+      const knockout = logoRect(17 + version * 4, wanted, ecLevel);
+      if (knockout) {
+        const qr = make(version);
+        return { qr, knockout, baseModules, modules: qr.getModuleCount(), bumped: true };
+      }
+    }
+    return plain;
+  }
+
   // El nivel de corrección lo decide la app, no el usuario. L/M/Q/H no le dicen
   // nada a nadie que no conozca el formato, y elegir mal rompe el código en
   // silencio (L con logo no escanea). La app tiene los datos para acertar:
@@ -109,7 +137,9 @@
   // autocontenido y combinan con cualquier color que se elija para el código.
   // Solo formas genéricas — nada de marcas de terceros.
   const QR_LOGO_ICONS = [
-    { key: "lighthouse", label: "Lighthouse",  d: "M9 21l1-11h4l1 11zM10.5 10V7h3v3M9.5 7L12 4l2.5 3M7 6.5L4 5.5M17 6.5l3-1M7 9.5H4M17 9.5h3M9.6 15h4.8M7 21h10" },
+    // El símbolo de faro de las cartas náuticas (U+26EF): un anillo con el foco
+    // en el centro y ocho rayos. Sin torre — así lo dibujan las fuentes.
+    { key: "lighthouse", label: "Lighthouse",  d: "M18 12a6 6 0 1 1-12 0 6 6 0 0 1 12 0M13 12a1 1 0 1 1-2 0 1 1 0 0 1 2 0M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.9 2.9M19.1 4.9l-2.9 2.9M4.9 19.1l2.9-2.9M19.1 19.1l-2.9-2.9" },
     // Realidad aumentada: un cubo dentro de las esquinas de un visor.
     { key: "ar",         label: "AR",          d: "M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M12 7l5 2.5v5L12 17l-5-2.5v-5zM7 9.5l5 2.5 5-2.5M12 12v5" },
     { key: "heart",     label: "Heart",       d: "M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10z" },
@@ -153,11 +183,10 @@
     const logoData = useLogoData(logoVariant, logo.source === "brand");
     const logoIcon = logo.source === "icon" ? QR_LOGO_ICON_BY_KEY[logo.icon] : null;
     if (!encoder) return <div role="alert">{window.I18N.t("ui.blocks.qrUnavailable", "QR encoder unavailable")}</div>;
-    const qr = encoder(0, style.ecLevel || "M"); qr.addData(String(value || "")); qr.make();
+    const { qr, knockout } = qrLayout(value, style.ecLevel || "M", qrHasLogo(logo), style.logoModules || 9);
     const n = qr.getModuleCount(); const quiet = 4; const total = n + quiet * 2; const fg = style.fgColor || "#000000"; const bg = style.bgColor || "#ffffff";
     let path = "";
     for (let row = 0; row < n; row++) for (let col = 0; col < n; col++) if (qr.isDark(row, col)) path += `M${col + quiet} ${row + quiet}h1v1h-1z`;
-    const knockout = qrHasLogo(logo) ? logoRect(n, style.logoModules || 9, style.ecLevel || "M") : null;
     return <svg role="img" aria-label={window.I18N.t("ui.blocks.qrAria", "QR code")} viewBox={`0 0 ${total} ${total}`} width={size} height={size} shapeRendering="crispEdges" style={{ background: bg, display: "block"}}><rect width={total} height={total} fill={bg}/><path d={path} fill={fg}/>{knockout && <><rect x={knockout.x + quiet - 1} y={knockout.y + quiet - 1} width={knockout.w + 2} height={knockout.h + 2} fill={bg}/>{logoData && <image href={logoData} x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h}/>}{logoIcon && <svg x={knockout.x + quiet} y={knockout.y + quiet} width={knockout.w} height={knockout.h} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"><path d={logoIcon.d}/></svg>}</>}</svg>;
   }
 
@@ -209,6 +238,6 @@
       </Panel>
     );
   }
-  window.QRCodeSvg = QRCodeSvg; window.QRBlockPanel = QRBlockPanel; window.QRLogoRect = logoRect; window.QRProtectedModule = protectedModule; window.QRAutoEcLevel = autoEcLevel;
+  window.QRCodeSvg = QRCodeSvg; window.QRBlockPanel = QRBlockPanel; window.QRLogoRect = logoRect; window.QRLayout = qrLayout; window.QRProtectedModule = protectedModule; window.QRAutoEcLevel = autoEcLevel;
   window.QR_LOGO_ICONS = QR_LOGO_ICONS; window.QRHasLogo = qrHasLogo; window.QRLogoIconGlyph = QRLogoIconGlyph;
 })();

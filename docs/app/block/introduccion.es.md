@@ -73,10 +73,32 @@ que implementa ese conector. La sincronización requiere una conexión operativa
 1. Abre **Blocks → + New block** y elige **QR** en **Type**.
 2. Deja seleccionado **Static**; la opción **Dynamic**, desactivada, queda
    reservada para un hito posterior.
-3. Escribe la URL o el texto en el panel central. El logotipo de Lintaya viene
-   incluido por defecto; puedes desactivarlo.
+3. En el panel central, elige un **Tipo de contenido** y rellena sus campos, o
+   deja **Texto o URL** y escribe el contenido directamente. El logotipo de
+   Lintaya viene incluido por defecto; puedes desactivarlo.
 4. Revisa la vista previa y guarda. Los módulos QR son cuadrados; los patrones
    decorativos y los logotipos personalizados quedan para otro hito.
+
+Un block QR estático puede codificar los tipos de contenido que un teléfono sabe
+usar. El editor escribe el texto estándar de cada uno y guarda solo ese texto,
+así que al editar el block se reabre en el mismo formulario; un contenido
+guardado que no encaja exactamente en un tipo se abre como texto libre en vez de
+perder datos:
+
+- **Texto o URL**: texto libre, como hasta ahora.
+- **Wi-Fi**: un payload `WIFI:`, la convención de ZXing que también recoge WPA3.
+  La contraseña la puede leer cualquiera que escanee o fotografíe el código.
+- **Contacto**: vCard 3.0 (RFC 2426).
+- **Correo**: un enlace `mailto:` (RFC 6068).
+- **Llamada**: un enlace `tel:` (RFC 3966).
+- **SMS**: un payload `SMSTO:`, la convención de ZXing.
+- **Ubicación**: un enlace `geo:` (RFC 5870).
+- **Evento**: un `VEVENT` de iCalendar (RFC 5545); las horas no llevan zona
+  horaria, así que cada teléfono las lee en la suya.
+
+Un block QR dinámico siempre redirige a una URL, así que no tiene tipo de
+contenido. Consulta [Códigos QR](qr.es.md) para ver cada formato, la norma que
+sigue y cómo crearlo con el Asistente.
 
 Type y Static/Dynamic viven en la columna izquierda de identidad; el destino,
 los colores y el logotipo están en el panel central. El logotipo usa una placa

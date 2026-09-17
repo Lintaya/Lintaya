@@ -1,6 +1,8 @@
 // Public AI context generator. It intentionally uses registry metadata only:
 // user-editable context, connection status, sync timestamps, and configuration
 // belong to authenticated routes and must never leak through discovery.
+const QRPayload = require("../../app/qr-payload.js");
+
 function generateAIContext({ connectors = [] }) {
   // Build a safe list from registered ConnectorTypes, not configured instances.
   const connectorList = connectors.map(c => ({
@@ -40,6 +42,17 @@ function generateAIContext({ connectors = [] }) {
 
       // ConnectorTypes only: no configured connection status or local data.
       connectors: connectorList,
+
+      // What the product can build, not what this instance holds: fixed by the
+      // code, so it carries no user data. Tells an agent that QR codes exist and
+      // which formats Lintaya writes, instead of leaving it to guess or to
+      // hand-write a WIFI:/vCard payload.
+      features: {
+        blockKinds: ["connector", "content", "qr"],
+        qrContentTypes: [...QRPayload.TYPES],
+        documentation: ["docs/app/block/introduccion.md", "docs/app/block/qr.md"],
+        note: "Discovery only. Creating a block requires authentication; the built-in Assistant proposes QR blocks with create_qr_block and a human approves them in the Approval Center.",
+      },
       tips: [
         "Use /api/health to verify that the server is running.",
         "Read the OpenAPI contract before calling an authenticated route.",

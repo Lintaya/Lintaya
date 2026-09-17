@@ -71,10 +71,31 @@ a working connection.
 1. Open **Blocks → + New block** and choose **QR** under **Type**.
 2. Leave **Static** selected; the disabled **Dynamic** option is reserved for a
    later milestone.
-3. Enter the URL or text in the centre configuration panel. The Lintaya brand
-   mark is included by default; turn the logo off when needed.
+3. In the centre configuration panel, choose a **Content type** and fill in its
+   fields, or keep **Text or URL** and type the content directly. The Lintaya
+   brand mark is included by default; turn the logo off when needed.
 4. Review the preview and save. QR modules are square. Decorative patterns and
    custom logo uploads are reserved for a later milestone.
+
+Static QR blocks can encode the content types a phone acts on. The builder
+writes the standard text for each one and saves only that text, so a block
+reopens in the same form when edited; saved content that does not match a type
+exactly opens as free text instead of losing data:
+
+- **Text or URL**: free text, as before.
+- **Wi-Fi**: a `WIFI:` payload, the ZXing convention also referenced by WPA3.
+  The password is readable by anyone who scans or photographs the code.
+- **Contact**: vCard 3.0 (RFC 2426).
+- **Email**: a `mailto:` link (RFC 6068).
+- **Call**: a `tel:` link (RFC 3966).
+- **SMS**: an `SMSTO:` payload, the ZXing convention.
+- **Location**: a `geo:` link (RFC 5870).
+- **Event**: an iCalendar `VEVENT` (RFC 5545); times carry no time zone, so
+  each phone reads them in its own.
+
+A dynamic QR block always redirects to a URL, so it has no content type. See
+[QR codes](qr.md) for every format, the standard it follows, and how to create
+one with the Assistant.
 
 The builder keeps Type and the Static/Dynamic choice in the left identity column;
 the destination, colours and logo are in the centre configuration panel. The

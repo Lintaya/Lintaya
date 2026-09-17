@@ -13,6 +13,7 @@ repositorio.
 |---|---|
 | [Primeros pasos](app/get-started/introduccion.es.md) | Ejecutar un servidor local, ingresar el token y configurar una primera conexión. |
 | [Bloques](app/block/introduccion.es.md) | Crear bloques Markdown y agregar bloques de conector. |
+| [Códigos QR](app/block/qr.es.md) | Crear códigos QR para enlaces, Wi-Fi, contactos, correo, llamadas, SMS, ubicaciones y eventos, y la norma que sigue cada uno. |
 | [Tableros](app/module/introduccion.es.md) | Construir layouts persistentes desde zonas y bloques. |
 | [Dashboards](app/dashboard/introduccion.es.md) | Agrupar Boards como tabs, reordenarlos y presentarlos a pantalla completa. |
 | [SSH](app/ssh/introduccion.es.md) | Abrir terminales desde VMs, Dispositivos y Contenedores; entender sesiones concurrentes, credenciales, hosts de salto y transcripciones. |

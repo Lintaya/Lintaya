@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write docs/INDEX.md
 
-docs/INDEX.md: f02a952e91aae391d3faf5d4eee742764b5b842d
-docs/INDEX.es.md: 6116b3290d813657c24d321e44c87b6253c96ccd
+docs/INDEX.md: a5ff4bb59ee936758deecd82566931bad9a1667b
+docs/INDEX.es.md: b32ea1bc2e34200d9bee8125cf1c11dd4d8d520a

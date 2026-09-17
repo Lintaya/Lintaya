@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/app/block/qr.md).
+# After confirming both documents say the same thing, refresh with:
+# node scripts/verify-translation-pairing.mjs --write docs/app/block/qr.md
+
+docs/app/block/qr.md: 5d47542bc68d3f573ffbfb76a5924b74789838ff
+docs/app/block/qr.es.md: 40bd8a2ad42ec39b05b84dad15e04b7eb0aaaea8

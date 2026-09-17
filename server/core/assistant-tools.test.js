@@ -205,8 +205,58 @@ test("runWriteTool rejects an unknown tool name", () => {
 test("describeToolCall renders a short human summary for the confirm card", () => {
   assert.match(describeToolCall("create_board", { title: "Infra", blockIds: ["a", "b"] }), /Crear Board "Infra".*2 block/);
   assert.match(describeToolCall("create_dashboard", { title: "Semanal" }), /Crear Dashboard "Semanal"/);
+  assert.match(describeToolCall("create_qr_block", { title: "Wi-Fi oficina", contentType: "wifi" }), /Crear Block QR "Wi-Fi oficina" \(wifi\)/);
   assert.match(describeToolCall("add_connector_block", { title: "Commits", connectorId: "gitlab", blockId: "recent-commits" }), /gitlab\.recent-commits/);
   assert.match(describeToolCall("create_dashboard_bundle", {
     title: "Atlas", boards: [{ title: "Mascotas", blocks: [{ title: "Perro", content: "x" }] }],
   }), /Dashboard completo "Atlas".*1 Board.*1 Block/);
+});
+
+test("create_qr_block builds the standard payload from typed fields, never from model-written text", () => {
+  const ctx = memoryCtx();
+  const block = runWriteTool("create_qr_block", {
+    title: "Wi-Fi oficina", contentType: "wifi",
+    fields: { ssid: "Oficina;Norte", password: "a:b", hidden: "true", ignored: "x" },
+  }, ctx);
+  assert.equal(block.kind, "qr");
+  assert.deepEqual(block.payload, { mode: "manual", value: "WIFI:T:WPA;S:Oficina\\;Norte;P:a\\:b;H:true;;" });
+  assert.deepEqual(block.logo, { source: "brand", variant: "light" });
+  assert.equal(block.style.ecLevel, "H", "with a logo the code needs the highest correction");
+  assert.equal(ctx.kv.get("custom-blocks").length, 1);
+});
+
+test("create_qr_block rejects missing fields and unsupported types before writing", () => {
+  const ctx = memoryCtx();
+  assert.throws(() => runWriteTool("create_qr_block", { title: "Red", contentType: "wifi", fields: { ssid: "Casa" } }, ctx), /qr-wifi-fields-required/);
+  assert.throws(() => runWriteTool("create_qr_block", { title: "Fiesta", contentType: "event", fields: { title: "Fiesta", start: "2026-09-20T18:00", end: "2026-09-20T17:00" } }, ctx), /qr-event-endBeforeStart/);
+  assert.throws(() => runWriteTool("create_qr_block", { title: "Pago", contentType: "payment", fields: {} }, ctx), /qr-content-type-not-supported/);
+  assert.throws(() => runWriteTool("create_qr_block", { title: "Web", contentType: "text", fields: { text: "https://lintaya.com" }, logo: "<svg>" }, ctx), /invalid-qr-logo/);
+  assert.equal(ctx.kv.get("custom-blocks"), undefined);
+});
+
+test("create_qr_block without a logo keeps a lighter correction level, and accepts an icon key", () => {
+  const ctx = memoryCtx();
+  const plain = runWriteTool("create_qr_block", { title: "Web", contentType: "text", fields: { text: "https://lintaya.com" }, logo: "none" }, ctx);
+  assert.deepEqual(plain.logo, { source: "none" });
+  assert.equal(plain.style.ecLevel, "M");
+  const call = runWriteTool("create_qr_block", { title: "Soporte", contentType: "phone", fields: { number: "+52 55 1234 5678" }, logo: "phone" }, ctx);
+  assert.equal(call.payload.value, "tel:+525512345678");
+  assert.deepEqual(call.logo, { source: "icon", icon: "phone" });
+});
+
+test("list_custom_blocks tells the model what a QR is without sending what it encodes", () => {
+  const ctx = memoryCtx({
+    "custom-blocks": [
+      { id: "qr-wifi", title: "Wi-Fi", kind: "qr", payload: { mode: "manual", value: "WIFI:T:WPA;S:Casa;P:secreto-de-red;;" } },
+      { id: "qr-web", title: "Web", kind: "qr", payload: { mode: "manual", value: "https://lintaya.com" } },
+      { id: "qr-link", title: "Enlace", kind: "qr", payload: { mode: "dynamic", linkId: "link-1" } },
+    ],
+  });
+  const listed = runReadTool("list_custom_blocks", {}, ctx);
+  assert.deepEqual(listed, [
+    { id: "qr-wifi", title: "Wi-Fi", kind: "qr", qr: { mode: "manual", contentType: "wifi" } },
+    { id: "qr-web", title: "Web", kind: "qr", qr: { mode: "manual", contentType: "text" } },
+    { id: "qr-link", title: "Enlace", kind: "qr", qr: { mode: "dynamic" } },
+  ]);
+  assert.ok(!JSON.stringify(listed).includes("secreto-de-red"));
 });

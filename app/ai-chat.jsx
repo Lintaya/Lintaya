@@ -272,6 +272,7 @@ function AIChat({ open, onClose, isMobile, onOpenSettings }) {
   const HQ_CHANGE_EVENTS = {
     create_board: ["hq:module-pages-changed"],
     create_content_block: ["hq:custom-blocks-changed"],
+    create_qr_block: ["hq:custom-blocks-changed"],
     add_connector_block: ["hq:custom-blocks-changed"],
     create_dashboard: ["hq:dashboards-changed"],
     create_dashboard_bundle: ["hq:custom-blocks-changed", "hq:module-pages-changed", "hq:dashboards-changed"],

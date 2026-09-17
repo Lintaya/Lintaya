@@ -780,6 +780,32 @@ function BlockBuilder({ onClose, editing }) {
   const [dynamicEnabled, setDynamicEnabled] = useState(() => editing?.payload?.mode === "dynamic");
   useEffect(() => { window.HQ_API.request("/api/settings/builder").then(settings => setDynamicEnabled(settings.qr?.dynamicEnabled === true || editing?.payload?.mode === "dynamic")).catch(() => {}); }, []);
   const [qrValue, setQrValue] = useState(() => editing?.payload?.value || "");
+  // Tipo de contenido (Wi-Fi, contacto, evento…) solo en modo estático: un QR
+  // dinámico redirige a una URL. qrValue sigue siendo lo único que se guarda;
+  // el formulario lo arma con window.QRPayload y, al editar, lo reconstruye a
+  // partir del texto guardado — si no encaja, se abre como texto libre. Los
+  // campos de cada tipo se recuerdan al cambiar de uno a otro sin guardar.
+  const [qrType, setQrType] = useState(() => editing?.payload?.mode === "manual" && window.QRPayload ? window.QRPayload.parse(editing.payload.value || "").type : "text");
+  const [qrFields, setQrFields] = useState(() => editing?.payload?.mode === "manual" && window.QRPayload ? window.QRPayload.parse(editing.payload.value || "").fields : { text: "" });
+  const qrFieldsByType = useRef({});
+  const [qrShowPassword, setQrShowPassword] = useState(false);
+  const selectQrType = (next) => {
+    if (!window.QRPayload || next === qrType) return;
+    qrFieldsByType.current[qrType] = qrType === "text" ? { text: qrValue } : qrFields;
+    const fields = qrFieldsByType.current[next] || window.QRPayload.emptyFields(next);
+    setQrType(next); setQrFields(fields);
+    setQrValue(next === "text" ? (fields.text || "") : window.QRPayload.build(next, fields));
+  };
+  const updateQrField = (key, value) => {
+    const fields = { ...qrFields, [key]: value };
+    setQrFields(fields);
+    setQrValue(window.QRPayload.build(qrType, fields));
+  };
+  const selectQrMode = (next) => {
+    if (next === "dynamic" && qrType !== "text") selectQrType("text");
+    setQrMode(next);
+  };
+  const qrProblem = qrMode === "manual" && qrType !== "text" && window.QRPayload ? window.QRPayload.problem(qrType, qrFields) : null;
   const [qrShortUrl, setQrShortUrl] = useState("");
   const [qrBaseUrl, setQrBaseUrl] = useState("");
   useEffect(() => {
@@ -804,17 +830,17 @@ function BlockBuilder({ onClose, editing }) {
   // antes de su declaración es zona muerta temporal. Ver qr-block.jsx.
   const qrPayloadForSizing = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
   const qrEc = window.QRAutoEcLevel ? window.QRAutoEcLevel(qrPayloadForSizing, qrHasLogo) : (qrHasLogo ? "H" : "M");
-  // ¿Cabe el logo con este payload? No siempre: si el símbolo lleva un patrón
-  // de alineación en el centro exacto, ningún tamaño centrado lo esquiva. Se
-  // calcula acá para poder avisarlo en vez de generar el QR pelado en silencio.
-  const qrLogoFits = (() => {
-    if (!qrHasLogo || !qrPayloadForSizing || !window.qrcode || !window.QRLogoRect) return true;
-    try {
-      const probe = window.qrcode(0, qrEc);
-      probe.addData(qrPayloadForSizing); probe.make();
-      return !!window.QRLogoRect(probe.getModuleCount(), 9, qrEc);
-    } catch (error) { return true; }
+  // ¿Cómo queda el logo con este payload? El mismo cálculo que dibuja el QR
+  // (window.QRLayout): si el centro lleva un patrón de alineación, sube a una
+  // versión más densa en vez de tirar el logo. Se calcula acá para avisarlo —
+  // un código más denso pide imprimirse más grande — y para el caso raro en que
+  // ninguna versión deja el centro libre.
+  const qrLogoLayout = (() => {
+    if (!qrHasLogo || !qrPayloadForSizing || !window.qrcode || !window.QRLayout) return null;
+    try { return window.QRLayout(qrPayloadForSizing, qrEc, true, 9); } catch (error) { return null; }
   })();
+  const qrLogoFits = !qrLogoLayout || !!qrLogoLayout.knockout;
+  const qrLogoDensified = !!qrLogoLayout?.bumped;
   const [qrFg, setQrFg] = useState(() => editing?.style?.fgColor || "#000000");
   const [qrBg, setQrBg] = useState(() => editing?.style?.bgColor || "#ffffff");
   const [format, setFormat] = useState(() => (editing?.format === "html" ? "html" : "md"));
@@ -1159,7 +1185,7 @@ function BlockBuilder({ onClose, editing }) {
               return (
                 <button key={m} type="button" aria-pressed={on} disabled={!ready}
                   title={undefined}
-                  onClick={() => ready && setQrMode(m)} style={{
+                  onClick={() => ready && selectQrMode(m)} style={{
                     flex: 1, height: 30, fontSize: 12, fontWeight: 600, fontFamily: "inherit",
                     cursor: ready ? "pointer" : "not-allowed", opacity: ready ? 1 : 0.5,
                     border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
@@ -1207,8 +1233,166 @@ function BlockBuilder({ onClose, editing }) {
     </>
   );
 
+  // Iconos del selector de tipo: los mismos trazos que la galería de logos, para
+  // que "Wi-Fi" se vea igual en los dos sitios. El SMS no tiene logo propio.
+  const qrIconPath = key => (window.QR_LOGO_ICONS || []).find(icon => icon.key === key)?.d || "";
+  const qrTypeOptions = [
+    { type: "text", label: bbt("ui.blocks.qrType.text", "Text or URL"), d: qrIconPath("link") },
+    { type: "wifi", label: bbt("ui.blocks.qrType.wifi", "Wi-Fi"), d: qrIconPath("wifi") },
+    { type: "contact", label: bbt("ui.blocks.qrType.contact", "Contact"), d: qrIconPath("user") },
+    { type: "email", label: bbt("ui.blocks.qrType.email", "Email"), d: qrIconPath("mail") },
+    { type: "phone", label: bbt("ui.blocks.qrType.phone", "Call"), d: qrIconPath("phone") },
+    { type: "sms", label: bbt("ui.blocks.qrType.sms", "SMS"), d: "M4 5h16v11H10l-6 4z" },
+    { type: "location", label: bbt("ui.blocks.qrType.location", "Location"), d: qrIconPath("location") },
+    { type: "event", label: bbt("ui.blocks.qrType.event", "Event"), d: qrIconPath("calendar") },
+  ];
+  const qrInput = (key, label, props = {}) => (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <label htmlFor={`qr-field-${key}`} style={labelStyle}>{label}</label>
+      <input id={`qr-field-${key}`} value={qrFields[key] ?? ""} onChange={e => updateQrField(key, e.target.value)} style={inputStyle} {...props} />
+    </div>
+  );
+  const qrTextarea = (key, label) => (
+    <div>
+      <label htmlFor={`qr-field-${key}`} style={labelStyle}>{label}</label>
+      <textarea id={`qr-field-${key}`} value={qrFields[key] ?? ""} onChange={e => updateQrField(key, e.target.value)} rows={3}
+        style={{ width: "100%", padding: 10, border: "1px solid var(--border)", borderRadius: 6, font: "inherit", fontSize: 12, resize: "vertical" }} />
+    </div>
+  );
+  const qrNoteStyle = { fontSize: 11, color: "#b45309", lineHeight: 1.45 };
+  const qrStructured = qrMode === "manual" && qrType !== "text" && !!window.QRPayload;
+  const qrStructuredForm = !qrStructured ? null : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {qrType === "wifi" && (
+        <>
+          {qrInput("ssid", bbt("ui.blocks.qrWifiSsid", "Network name (SSID)"), { autoComplete: "off" })}
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <label htmlFor="qr-field-auth" style={labelStyle}>{bbt("ui.blocks.qrWifiAuth", "Security")}</label>
+              <select id="qr-field-auth" value={qrFields.auth} onChange={e => updateQrField("auth", e.target.value)} style={inputStyle}>
+                <option value="WPA">WPA / WPA2 / WPA3</option>
+                <option value="WEP">WEP</option>
+                <option value="nopass">{bbt("ui.blocks.qrWifiAuthNone", "No password")}</option>
+              </select>
+            </div>
+            {qrFields.auth !== "nopass" && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <label htmlFor="qr-field-password" style={labelStyle}>{bbt("ui.blocks.qrWifiPassword", "Password")}</label>
+                {/* Mismo campo que PasswordField de settings.jsx: input y botón
+                    unidos, con el ojo que usa la pantalla de acceso. */}
+                <div style={{ display: "flex" }}>
+                  <input id="qr-field-password" type={qrShowPassword ? "text" : "password"} autoComplete="off"
+                    value={qrFields.password ?? ""} onChange={e => updateQrField("password", e.target.value)}
+                    style={{ ...inputStyle, minWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: 0 }} />
+                  <button type="button" onClick={() => setQrShowPassword(v => !v)}
+                    aria-label={qrShowPassword ? bbt("settings.password.hide", "Hide password") : bbt("settings.password.show", "Show password")}
+                    aria-pressed={qrShowPassword}
+                    title={qrShowPassword ? bbt("settings.password.hide", "Hide password") : bbt("settings.password.show", "Show password")}
+                    style={{
+                      width: 34, height: 32, padding: 0, flexShrink: 0, border: "1px solid var(--border)", borderLeft: 0,
+                      borderTopRightRadius: 6, borderBottomRightRadius: 6, background: "white",
+                      color: "var(--muted-fg)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      {qrShowPassword
+                        ? <><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></>
+                        : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></>}
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <input type="checkbox" checked={!!qrFields.hidden} onChange={e => updateQrField("hidden", e.target.checked)} />
+            {bbt("ui.blocks.qrWifiHidden", "Hidden network")}
+          </label>
+          {/* El formato no admite otra cosa: la clave viaja legible dentro del
+              símbolo. Se dice aquí, antes de imprimirlo. */}
+          {qrFields.auth !== "nopass" && <div role="note" style={qrNoteStyle}>{bbt("ui.blocks.qrWifiPlainText", "The password is encoded in plain text: anyone who scans or photographs this code can read it.")}</div>}
+        </>
+      )}
+      {qrType === "contact" && (
+        <>
+          <div style={{ display: "flex", gap: 10 }}>
+            {qrInput("firstName", bbt("ui.blocks.qrFirstName", "First name"), { autoComplete: "off" })}
+            {qrInput("lastName", bbt("ui.blocks.qrLastName", "Last name"), { autoComplete: "off" })}
+          </div>
+          {qrInput("org", bbt("ui.blocks.qrOrg", "Company"), { autoComplete: "off" })}
+          <div style={{ display: "flex", gap: 10 }}>
+            {qrInput("phone", bbt("ui.blocks.qrPhone", "Phone"), { type: "tel", autoComplete: "off" })}
+            {qrInput("email", bbt("ui.blocks.qrEmail", "Email"), { type: "email", autoComplete: "off" })}
+          </div>
+          {qrInput("url", bbt("ui.blocks.qrWebsite", "Website"), { type: "url", placeholder: "https://example.com" })}
+        </>
+      )}
+      {qrType === "email" && (
+        <>
+          {qrInput("to", bbt("ui.blocks.qrEmailTo", "Recipient"), { type: "email", autoComplete: "off" })}
+          {qrInput("subject", bbt("ui.blocks.qrSubject", "Subject"))}
+          {qrTextarea("body", bbt("ui.blocks.qrMessage", "Message"))}
+        </>
+      )}
+      {qrType === "phone" && qrInput("number", bbt("ui.blocks.qrPhone", "Phone"), { type: "tel", autoComplete: "off", placeholder: "+52 55 1234 5678" })}
+      {qrType === "sms" && (
+        <>
+          {qrInput("number", bbt("ui.blocks.qrPhone", "Phone"), { type: "tel", autoComplete: "off", placeholder: "+52 55 1234 5678" })}
+          {qrTextarea("message", bbt("ui.blocks.qrMessage", "Message"))}
+        </>
+      )}
+      {qrType === "location" && (
+        <div style={{ display: "flex", gap: 10 }}>
+          {qrInput("lat", bbt("ui.blocks.qrLatitude", "Latitude"), { inputMode: "decimal", placeholder: "19.4326" })}
+          {qrInput("lng", bbt("ui.blocks.qrLongitude", "Longitude"), { inputMode: "decimal", placeholder: "-99.1332" })}
+        </div>
+      )}
+      {qrType === "event" && (
+        <>
+          {qrInput("title", bbt("ui.blocks.qrEventTitle", "Title"))}
+          <div style={{ display: "flex", gap: 10 }}>
+            {qrInput("start", bbt("ui.blocks.qrEventStart", "Starts"), { type: "datetime-local" })}
+            {qrInput("end", bbt("ui.blocks.qrEventEnd", "Ends"), { type: "datetime-local" })}
+          </div>
+          {qrInput("location", bbt("ui.blocks.qrEventLocation", "Place"))}
+          <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.45 }}>{bbt("ui.blocks.qrEventTimeHint", "Times are saved without a time zone: each phone reads them in its own.")}</div>
+        </>
+      )}
+      {qrProblem === "endBeforeStart" && <div role="status" style={qrNoteStyle}>{bbt("ui.blocks.qrEndBeforeStart", "The event ends before it starts.")}</div>}
+      {qrProblem === "invalidCoordinates" && <div role="status" style={qrNoteStyle}>{bbt("ui.blocks.qrInvalidCoordinates", "Latitude goes from -90 to 90 and longitude from -180 to 180.")}</div>}
+      {/* Cerrado por defecto: en un Wi-Fi mostraría la contraseña. */}
+      {qrValue && (
+        <details style={{ fontSize: 11, color: "var(--muted-fg)" }}>
+          <summary style={{ cursor: "pointer" }}>{bbt("ui.blocks.qrEncoded", "Encoded content")}</summary>
+          <pre style={{ margin: "6px 0 0", padding: 8, background: "var(--muted)", borderRadius: 6, fontFamily: "var(--font-mono)", fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "var(--fg)" }}>{qrValue}</pre>
+        </details>
+      )}
+    </div>
+  );
+
   const configContent = kind === "qr" ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {qrMode === "manual" && window.QRPayload && (
+        <div>
+          <div id="qr-type-label" style={labelStyle}>{bbt("ui.blocks.qrType", "Content type")}</div>
+          <div role="radiogroup" aria-labelledby="qr-type-label" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: 5 }}>
+            {qrTypeOptions.map(opt => {
+              const on = qrType === opt.type;
+              return (
+                <button key={opt.type} type="button" role="radio" aria-checked={on} onClick={() => selectQrType(opt.type)} style={{
+                  height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "0 8px", minWidth: 0,
+                  border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                  background: on ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "white",
+                  color: on ? "var(--accent)" : "var(--fg)", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", fontSize: 11.5, fontWeight: 600,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}><path d={opt.d} /></svg>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {qrStructured ? qrStructuredForm : (
       <div>
         <label htmlFor="qr-payload" style={labelStyle}>{qrMode === "dynamic" ? window.I18N.t("ui.blocks.qrDynamicDestination", "Destination (changes without reprinting)") : window.I18N.t("ui.blocks.qrPayload", "Destination")}</label>
         <textarea id="qr-payload" value={qrValue} onChange={e => setQrValue(e.target.value)} rows={3}
@@ -1222,6 +1406,7 @@ function BlockBuilder({ onClose, editing }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Los dos colores comparten fila pero cada uno lleva su etiqueta arriba:
           antes iban en línea y en un panel angosto las etiquetas se partían. */}
@@ -1275,6 +1460,11 @@ function BlockBuilder({ onClose, editing }) {
         {!qrLogoFits && (
           <div role="status" style={{ fontSize: 11, color: "#b45309", marginTop: 6, lineHeight: 1.45 }}>
             {window.I18N.t("ui.blocks.logoDoesNotFit", "The logo does not fit this content without hurting readability, so the code is generated without it. Shorten the destination or turn the logo off.")}
+          </div>
+        )}
+        {qrLogoFits && qrLogoDensified && (
+          <div role="status" style={{ fontSize: 11, color: "var(--muted-fg)", marginTop: 6, lineHeight: 1.45 }}>
+            {window.I18N.t("ui.blocks.logoDensified", "To keep the logo, the code uses a denser grid ({to}×{to} modules instead of {from}×{from}). Print it a little larger, or turn the logo off for a simpler code.", { from: qrLogoLayout.baseModules, to: qrLogoLayout.modules })}
           </div>
         )}
       </div>
