@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
   CLOUD_BASE_URL,
@@ -148,6 +150,42 @@ test("sync maps and deduplicates Bitbucket Cloud repositories", async () => {
   assert.equal(result.commits.length, 1);
   assert.equal(paths.some((path) => /^https:\/\//.test(path)), true);
   assert.deepEqual(result.pagination.projects, { pages: 2, truncated: false });
+});
+
+test("a Cloud issue-tracker 404 is skipped while pull requests and sync continue", async () => {
+  const request = async (cfg, requestPath) => {
+    if (requestPath.startsWith("/repositories/team?")) return { values: [{ full_name: "team/repo", slug: "repo", name: "repo", workspace: { slug: "team" } }], next: null };
+    if (requestPath.includes("/commits/")) return { values: [] };
+    if (requestPath.includes("/pullrequests")) return { values: [] };
+    if (requestPath.includes("/issues")) { const error = new Error("not found"); error.status = 404; throw error; }
+    if (requestPath.includes("/deployments")) return { values: [] };
+    if (requestPath.includes("/refs/tags")) return { values: [] };
+    throw new Error(`Unexpected path ${requestPath}`);
+  };
+  const result = await syncBitbucket({ type: "cloud", workspace: "team", token: "secret" }, { request });
+  assert.equal(result.projects.length, 1);
+  assert.deepEqual(result.issues, []);
+});
+
+test("Cloud issue sync sends the documented unresolved-state q filter", async () => {
+  const paths = [];
+  const request = async (cfg, requestPath) => {
+    paths.push(requestPath);
+    if (requestPath.startsWith("/repositories/team?")) return { values: [{ full_name: "team/repo", slug: "repo", name: "repo", workspace: { slug: "team" } }], next: null };
+    if (requestPath.includes("/issues?")) return { values: [] };
+    if (requestPath.includes("/commits/") || requestPath.includes("/pullrequests") || requestPath.includes("/refs/tags") || requestPath.includes("/deployments")) return { values: [] };
+    throw new Error(`Unexpected path ${requestPath}`);
+  };
+  await syncBitbucket({ type: "cloud", workspace: "team", token: "secret" }, { request });
+  assert.ok(paths.find(requestPath => requestPath.includes('/issues?'))?.includes('q=state%20IN%20(%22new%22%2C%20%22open%22%2C%20%22on%20hold%22)'));
+});
+
+test("Bitbucket manifest validates against the shipped schema", () => {
+  const Ajv = require("ajv/dist/2020");
+  const schema = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../manifest.schema.json"), "utf8"));
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "manifest.json"), "utf8"));
+  const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
+  assert.equal(validate(manifest), true, JSON.stringify(validate.errors));
 });
 
 test("Cloud without a workspace discovers both workspace response shapes and paginates repositories", async () => {

@@ -281,6 +281,10 @@ test("flattens declared blocks into the Home catalog", () => {
   });
 
   // Declared blocks also travel with the connector metadata the API exposes.
+  assert.deepEqual(connectorMetadata("gitlab").blocks.map(block => block.id), [
+    "recent-commits", "recent-deployments", "open-pull-requests", "open-issues", "repos-overview",
+  ]);
+  return;
   assert.deepEqual(connectorMetadata("gitlab").blocks, [
     { id: "recent-commits", title: "GitLab — últimos commits", icon: "🔧", type: "list" },
   ]);

@@ -6,6 +6,16 @@ const {
 
 const DEFAULT_BASE_URL = "https://gitlab.com";
 
+function deploymentStatus(deployment) {
+  const raw = deployment?.deployable?.status || deployment?.status || "";
+  const value = String(raw).toLowerCase().replace(/\s+/g, "_");
+  if (["success", "successful", "succeeded"].includes(value)) return "success";
+  if (["failed", "failure", "error"].includes(value)) return "failure";
+  if (["running", "in_progress"].includes(value)) return "in_progress";
+  if (["created", "pending", "blocked", "canceled", "cancelled"].includes(value)) return "pending";
+  return value || "pending";
+}
+
 function buildGitlabUrl(baseUrl, apiPath) {
   return buildHttpUrl(baseUrl || DEFAULT_BASE_URL, apiPath);
 }
@@ -47,6 +57,8 @@ async function syncGitlab(cfg, options = {}) {
 
   const allDeployments = [];
   const allCommits = [];
+  const allPullRequests = [];
+  const allIssues = [];
   const projects = await Promise.all(projectList.map(async (project) => {
     let deployments = [];
     let lastCommit = null;
@@ -64,7 +76,7 @@ async function syncGitlab(cfg, options = {}) {
           projectId: project.id,
           projectName: project.name,
           environment: deployment.environment?.name || "—",
-          status: deployment.status,
+          status: deploymentStatus(deployment),
           ref: deployment.ref,
           sha: (deployment.sha || "").slice(0, 8),
           user: deployment.user?.name || deployment.deployable?.user?.name || null,
@@ -125,12 +137,49 @@ async function syncGitlab(cfg, options = {}) {
 
     let openMRs = 0;
     try {
-      const mergeRequests = await request(
-        cfg.baseUrl,
-        cfg.token,
-        `/api/v4/projects/${project.id}/merge_requests?state=opened&per_page=100`,
-      );
-      openMRs = Array.isArray(mergeRequests) ? mergeRequests.length : 0;
+      const mergeRequestPages = await collectPages({
+        maxPages: 10,
+        initialCursor: 1,
+        fetchPage: page => request(cfg.baseUrl, cfg.token, `/api/v4/projects/${project.id}/merge_requests?state=opened&per_page=100&page=${page}`),
+        getItems: response => Array.isArray(response) ? response : [],
+        getNext: (_response, batch, page) => batch.length === 100 ? page + 1 : null,
+      });
+      openMRs = mergeRequestPages.items.length;
+      for (const mergeRequest of mergeRequestPages.items) allPullRequests.push({
+        id: `${project.id}!${mergeRequest.iid || mergeRequest.id}`,
+        number: mergeRequest.iid,
+        title: mergeRequest.title || "",
+        author: mergeRequest.author?.name || mergeRequest.author?.username || null,
+        projectId: project.id,
+        projectName: project.name,
+        sourceBranch: mergeRequest.source_branch || null,
+        targetBranch: mergeRequest.target_branch || null,
+        updatedAt: mergeRequest.updated_at || null,
+        webUrl: mergeRequest.web_url || null,
+        draft: !!(mergeRequest.draft || mergeRequest.work_in_progress),
+      });
+    } catch {}
+
+    try {
+      const issuePages = await collectPages({
+        maxPages: 10,
+        initialCursor: 1,
+        fetchPage: page => request(cfg.baseUrl, cfg.token, `/api/v4/projects/${project.id}/issues?state=opened&per_page=100&page=${page}`),
+        getItems: response => Array.isArray(response) ? response : [],
+        getNext: (_response, batch, page) => batch.length === 100 ? page + 1 : null,
+      });
+      for (const issue of issuePages.items) allIssues.push({
+        id: `${project.id}#${issue.iid || issue.id}`,
+        number: issue.iid,
+        title: issue.title || "",
+        author: issue.author?.name || issue.author?.username || null,
+        projectId: project.id,
+        projectName: project.name,
+        labels: issue.labels || [],
+        comments: issue.user_notes_count || 0,
+        updatedAt: issue.updated_at || null,
+        webUrl: issue.web_url || null,
+      });
     } catch {}
 
     // Most-recently-updated tag — a plain `git tag` reliably shows up here
@@ -170,10 +219,11 @@ async function syncGitlab(cfg, options = {}) {
     };
   }));
 
-  allDeployments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  allDeployments.sort((a, b) => new Date(b.finishedAt || b.createdAt || 0) - new Date(a.finishedAt || a.createdAt || 0));
   allCommits.sort((a, b) => new Date(b.date) - new Date(a.date));
   return {
     projects, deployments: allDeployments, commits: allCommits,
+    pullRequests: allPullRequests, issues: allIssues,
     pagination: { projects: { pages: projectPages.pageCount, truncated: projectPages.truncated } },
   };
 }
@@ -181,6 +231,7 @@ async function syncGitlab(cfg, options = {}) {
 module.exports = {
   DEFAULT_BASE_URL,
   buildGitlabUrl,
+  deploymentStatus,
   gitlabRequest,
   syncGitlab,
 };
