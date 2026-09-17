@@ -1992,8 +1992,10 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
   const t = window.I18N.t;
   const [showConfig, setShowConfig] = useState(false);
   const [showInterval, setShowInterval] = useState(false);
-  const [showAIContext, setShowAIContext] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
+  const [showAIContext, setShowAIContext] = useState(false);
+  const [showCommitIdentity, setShowCommitIdentity] = useState(false);
+  const [previewBlock, setPreviewBlock] = useState(null);
   const [showAddInstance, setShowAddInstance] = useState(false);
   const [showReadme, setShowReadme] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -2429,25 +2431,6 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
           id="zone2" openSection={openSection} setOpenSection={setOpenSection} title={t("connectors.detail.dataAiContext")}>
           <div style={zoneHeading}>{t("connectors.detail.dataAiContext")}</div>
 
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={sectionLabel}>{t("connectors.aiContext.title")}</div>
-              {!showAIContext && (
-                <button onClick={() => setShowAIContext(true)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
-                  {t("connectors.detail.showAiContext")}
-                </button>
-              )}
-            </div>
-            {showAIContext ? <AIContextControl id={conn.id} /> : (
-              <div style={{ fontSize: 11.5, color: "var(--muted-fg)" }}>
-                {t("connectors.detail.aiContextInactiveDesc")}
-              </div>
-            )}
-          </div>
-
-          {/* Git providers only — the committer identity has no meaning for a
-              connector that never produces local commits. */}
-          {(isGitlab || isGithub || isBitbucket) && <CommitIdentityControl id={conn.id} />}
 
           {/* Plane.so live data — projects list */}
           {isPlane && liveStatus?.projects?.length > 0 && (
@@ -2653,13 +2636,36 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
             </div>
           )}
 
-          {/* Activity log toggle — zone 3 stays hidden until opened here. */}
+          {/* Zona 3 sigue oculta hasta que se pide: cada botón abre la suya.
+              Tenerlas siempre desplegadas robá una columna entera a los datos. */}
           <div>
+            {/* Git providers only — la identidad de commits no significa nada
+                en un conector que nunca produce commits locales. */}
+            {(isGitlab || isGithub || isBitbucket) && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={sectionLabel}>{t("connectors.commitIdentity.title")}</div>
+                {!showCommitIdentity && (
+                  <button onClick={() => setShowCommitIdentity(true)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
+                    {t("connectors.detail.show")}
+                  </button>
+                )}
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={sectionLabel}>{t("connectors.aiContext.title")}</div>
+              {!showAIContext && (
+                <button onClick={() => setShowAIContext(true)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
+                  {t("connectors.detail.show")}
+                </button>
+              )}
+            </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <div style={sectionLabel}>{t("connectors.detail.activityLog")}</div>
-              <button onClick={() => setShowActivityLog(v => !v)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
-                {showActivityLog ? t("connectors.detail.hideActivityLog") : t("connectors.detail.showActivityLog", "", { total: liveLog?.length || 0 })}
-              </button>
+              {!showActivityLog && (
+                <button onClick={() => setShowActivityLog(true)} style={{ ...secondaryBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
+                  {t("connectors.detail.showActivityLog", "", { total: liveLog?.length || 0 })}
+                </button>
+              )}
             </div>
           </div>
 
@@ -2673,23 +2679,84 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
                   {block.icon && <span aria-hidden="true">{block.icon}</span>}
                   <span>{block.title || block.id}</span>
                   {block.type && <span style={{ marginLeft: "auto", color: "var(--muted-fg)", fontSize: 11 }}>{block.type}</span>}
+                  {/* El ojo abre el block en la zona 3 con datos reales: leer
+                      "list" no dice qué trae, verlo sí. */}
+                  <button onClick={() => setPreviewBlock(block)}
+                    aria-label={t("connectors.detail.previewBlock", "", { title: block.title || block.id })}
+                    title={t("connectors.detail.previewBlock", "", { title: block.title || block.id })}
+                    style={{
+                      marginLeft: block.type ? 0 : "auto", width: 22, height: 22, flexShrink: 0, padding: 0,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      border: "1px solid var(--border)", background: "white", borderRadius: 5,
+                      color: previewBlock?.id === block.id ? "var(--accent)" : "var(--muted-fg)", cursor: "pointer",
+                    }}>
+                    <span aria-hidden="true" style={{ display: "inline-flex" }}>{window.ICONS?.view || "\u{1F441}"}</span>
+                  </button>
                 </div>
               )) : <div style={{ color: "var(--muted-fg)", fontSize: 12.5 }}>{t("connectors.detail.noAvailableBlocks")}</div>}
             </div>
           </div>
         </ConnectorDetailZoneWrap>
-        {showActivityLog && !mobile && <ConnectorsResizeHandle onMouseDown={e => onZone3HandleDown(e, -1)} />}
+        {(showCommitIdentity || showAIContext || showActivityLog || previewBlock) && !mobile && <ConnectorsResizeHandle onMouseDown={e => onZone3HandleDown(e, -1)} />}
 
-        {/* Zone 3 — activity log */}
-        {showActivityLog && (
-        <ConnectorDetailZoneWrap mobile={mobile} tag="aside" ariaLabel={t("connectors.detail.activityLog")} style={{ ...zoneCol, width: zone3Width, flexShrink: 0 }}
-          id="zone3" openSection={openSection} setOpenSection={setOpenSection} title={t("connectors.detail.activityLog")}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={zoneHeading}>{t("connectors.detail.activityLog")}</div>
-            <button onClick={() => setShowActivityLog(false)} aria-label={t("connectors.detail.hideActivityLog")} title={t("connectors.detail.hideActivityLog")}
-              style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
-          </div>
-          {(() => {
+        {/* Zone 3 — el AI context (igual para cualquier conector: el endpoint
+            /api/connectors/:id/ai-context es genérico) y el log. Ninguno ocupa
+            sitio hasta que se abre desde la zona 2. */}
+        {(showCommitIdentity || showAIContext || showActivityLog || previewBlock) && (
+        <ConnectorDetailZoneWrap mobile={mobile} tag="aside" ariaLabel={t("connectors.detail.contextAndActivity")} style={{ ...zoneCol, width: zone3Width, flexShrink: 0 }}
+          id="zone3" openSection={openSection} setOpenSection={setOpenSection} title={t("connectors.detail.contextAndActivity")}>
+          {previewBlock && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={zoneHeading}>{t("connectors.detail.blockPreview")}</div>
+                <button onClick={() => setPreviewBlock(null)} aria-label={t("connectors.detail.hide")} title={t("connectors.detail.hide")}
+                  style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
+              </div>
+              {/* Mismo panel que dibuja Home, así que lo que se ve acá es
+                  exactamente lo que se vería al agregarlo a un Board. */}
+              {window.ConnectorBlockPanel && (
+                <window.ConnectorBlockPanel
+                  block={{
+                    id: `${conn.id}.${previewBlock.id}`,
+                    connectorId: conn.id,
+                    connectorType: conn.type || conn.id,
+                    blockId: previewBlock.id,
+                    title: previewBlock.title || previewBlock.id,
+                    icon: previewBlock.icon || null,
+                    limit: 5,
+                  }}
+                  panelProps={{ draggable: false }} />
+              )}
+            </>
+          )}
+          {showCommitIdentity && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...(previewBlock ? { borderTop: "1px solid var(--border)", paddingTop: 14 } : {}) }}>
+                <div style={zoneHeading}>{t("connectors.commitIdentity.title")}</div>
+                <button onClick={() => setShowCommitIdentity(false)} aria-label={t("connectors.detail.hide")} title={t("connectors.detail.hide")}
+                  style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
+              </div>
+              <CommitIdentityControl id={conn.id} />
+            </>
+          )}
+          {showAIContext && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...(previewBlock || showCommitIdentity ? { borderTop: "1px solid var(--border)", paddingTop: 14 } : {}) }}>
+                <div style={zoneHeading}>{t("connectors.aiContext.title")}</div>
+                <button onClick={() => setShowAIContext(false)} aria-label={t("connectors.detail.hide")} title={t("connectors.detail.hide")}
+                  style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
+              </div>
+              <AIContextControl id={conn.id} />
+            </>
+          )}
+          {showActivityLog && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...(previewBlock || showCommitIdentity || showAIContext ? { borderTop: "1px solid var(--border)", paddingTop: 14 } : {}) }}>
+              <div style={zoneHeading}>{t("connectors.detail.activityLog")}</div>
+              <button onClick={() => setShowActivityLog(false)} aria-label={t("connectors.detail.hideActivityLog")} title={t("connectors.detail.hideActivityLog")}
+                style={{ background: "none", border: 0, padding: "0 4px", fontSize: 18, lineHeight: 1, color: "var(--muted-fg)", cursor: "pointer", fontFamily: "inherit" }}>×</button>
+            </div>
+          )}
+          {showActivityLog && (() => {
             const LOG_PAGE_SIZE = 10;
             const liveCount   = liveLog?.length || 0;
             const allEntries  = liveLog || [];

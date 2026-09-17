@@ -116,6 +116,22 @@ function toIsoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function deploymentStatus(deployment) {
+  const raw = deployment?.state?.status?.name || deployment?.state?.name || "";
+  const value = String(raw).toLowerCase().replace(/\s+/g, "_");
+  if (["successful", "success", "succeeded"].includes(value)) return "success";
+  if (["failed", "failure", "error", "stopped"].includes(value)) return "failure";
+  if (["in_progress", "started", "running"].includes(value)) return "in_progress";
+  if (["pending", "queued", "paused"].includes(value)) return "pending";
+  return value || "pending";
+}
+
+function deploymentUser(deployment) {
+  const user = deployment?.state?.trigger?.actor || deployment?.state?.trigger?.user
+    || deployment?.release?.creator || deployment?.creator;
+  return user?.display_name || user?.nickname || user?.username || user?.name || null;
+}
+
 async function mapWithConcurrency(items, concurrency, mapper) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -183,6 +199,9 @@ async function syncBitbucket(cfg, options = {}) {
   const repositoryPagination = {};
   const rawRepositories = await listBitbucketRepositories(cfg, request, { pagination: repositoryPagination });
   const allCommits = [];
+  const allPullRequests = [];
+  const allIssues = [];
+  const allDeployments = [];
 
   const projects = await mapWithConcurrency(
     rawRepositories,
@@ -266,7 +285,7 @@ async function syncBitbucket(cfg, options = {}) {
 
       let openMRs = 0;
       try {
-        const pullRequests = isServer
+        const pullRequestPage = isServer
           ? await request(
             cfg,
             `/rest/api/1.0/projects/${encodeURIComponent(namespace)}/repos/${encodeURIComponent(slug)}/pull-requests?state=OPEN&limit=100`,
@@ -275,8 +294,36 @@ async function syncBitbucket(cfg, options = {}) {
             cfg,
             `/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(slug)}/pullrequests?state=OPEN&pagelen=100`,
           );
-        openMRs = (pullRequests?.values || []).length;
+        const pullRequests = pullRequestPage?.values || [];
+        openMRs = pullRequests.length;
+        for (const pullRequest of pullRequests) {
+          allPullRequests.push({
+            id: `${id}!${pullRequest.id}`,
+            number: pullRequest.id,
+            title: pullRequest.title || "",
+            author: isServer ? (pullRequest.author?.user?.displayName || pullRequest.author?.name || null) : (pullRequest.author?.display_name || null),
+            projectId: id,
+            projectName: repository.name,
+            sourceBranch: isServer ? pullRequest.fromRef?.displayId : pullRequest.source?.branch?.name,
+            targetBranch: isServer ? pullRequest.toRef?.displayId : pullRequest.destination?.branch?.name,
+            updatedAt: toIsoDate(isServer ? pullRequest.updatedDate : pullRequest.updated_on),
+            webUrl: isServer ? null : (pullRequest.links?.html?.href || null),
+            draft: !!pullRequest.draft,
+          });
+        }
       } catch {}
+
+      if (!isServer) {
+        try {
+          const issuesQuery = encodeURIComponent('state IN ("new", "open", "on hold")');
+          const issues = await request(cfg, `/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(slug)}/issues?q=${issuesQuery}&pagelen=100`);
+          for (const issue of issues?.values || []) allIssues.push({ id: `${id}#${issue.id}`, number: issue.id, title: issue.title || "", author: issue.reporter?.display_name || null, projectId: id, projectName: repository.name, labels: (issue.labels || []).map(label => label.name || label), comments: issue.comment_count || 0, updatedAt: toIsoDate(issue.updated_on), webUrl: issue.links?.html?.href || null });
+        } catch { /* El issue tracker puede estar desactivado por repositorio. */ }
+        try {
+          const deployments = await request(cfg, `/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(slug)}/deployments?pagelen=100`);
+          for (const deployment of deployments?.values || []) allDeployments.push({ id: deployment.uuid || deployment.key, projectId: id, projectName: repository.name, environment: deployment.environment?.name || "—", status: deploymentStatus(deployment), sha: deployment.release?.commit?.hash?.slice(0, 8) || deployment.commit?.hash?.slice(0, 8) || null, user: deploymentUser(deployment), createdAt: toIsoDate(deployment.release?.created_on || deployment.created_on), finishedAt: toIsoDate(deployment.state?.completion_date || deployment.state?.started_on), webUrl: deployment.links?.self?.href || repository.links?.html?.href || null });
+        } catch {}
+      }
 
       const webUrl = isServer
         ? (repository.links?.self?.[0]?.href || null)
@@ -312,7 +359,7 @@ async function syncBitbucket(cfg, options = {}) {
   );
 
   allCommits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-  return { projects, deployments: [], commits: allCommits, pagination: { projects: repositoryPagination } };
+  return { projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests, issues: allIssues, pagination: { projects: repositoryPagination } };
 }
 
 module.exports = {

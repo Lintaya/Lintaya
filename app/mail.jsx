@@ -49,7 +49,7 @@ function fmtWhen(iso) {
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
     ? d.toLocaleTimeString(window.I18N.dateLocale(), { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString(window.I18N.dateLocale(), { day: "numeric", month: "short" });
+    : window.I18N.formatWhen(d, { time: false });
 }
 function fmtFull(iso) {
   if (!iso) return "";

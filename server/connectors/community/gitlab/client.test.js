@@ -1,7 +1,37 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildGitlabUrl, syncGitlab } = require("./client");
+const { buildGitlabUrl, deploymentStatus, syncGitlab } = require("./client");
+
+test("normalizes GitLab deployment outcomes", () => {
+  assert.equal(deploymentStatus({ status: "success", deployable: { status: "failed" } }), "failure");
+  assert.equal(deploymentStatus({ status: "running" }), "in_progress");
+  assert.equal(deploymentStatus({ status: "mysterious" }), "mysterious");
+});
+
+test("disabled merge requests and issues do not fail the sync", async () => {
+  const request = async (baseUrl, token, path) => {
+    if (path.startsWith("/api/v4/projects?")) return [1, 2].map(id => ({ id, name: `p${id}`, path_with_namespace: `team/p${id}`, web_url: `https://gitlab/p${id}`, default_branch: "main" }));
+    if (path.includes("/merge_requests") || path.includes("/issues")) { const error = new Error("disabled"); error.status = path.includes("/merge_requests") ? 403 : 404; throw error; }
+    if (path.includes("/deployments") || path.includes("/repository/commits") || path.includes("/pipelines") || path.endsWith("/languages") || path.includes("/repository/tags")) return [];
+    throw new Error(`Unexpected path: ${path}`);
+  };
+  const result = await syncGitlab({ baseUrl: "https://gitlab", token: "secret" }, { request });
+  assert.equal(result.projects.length, 2);
+  assert.deepEqual(result.pullRequests, []);
+  assert.deepEqual(result.issues, []);
+});
+
+test("deployments sort by finishedAt or createdAt", async () => {
+  const request = async (baseUrl, token, path) => {
+    if (path.startsWith("/api/v4/projects?")) return [{ id: 1, name: "p", path_with_namespace: "p", web_url: "https://gitlab/p", default_branch: "main" }];
+    if (path.includes("/deployments")) return [{ id: "old", status: "success", created_at: "2026-01-01T00:00:00Z" }, { id: "new", status: "success", created_at: "2026-08-01T00:00:00Z" }];
+    if (path.includes("/repository/commits") || path.includes("/pipelines") || path.endsWith("/languages") || path.includes("/merge_requests") || path.includes("/issues") || path.includes("/repository/tags")) return [];
+    throw new Error(`Unexpected path: ${path}`);
+  };
+  const result = await syncGitlab({ baseUrl: "https://gitlab", token: "secret" }, { request });
+  assert.deepEqual(result.deployments.map(deployment => deployment.id), ["new", "old"]);
+});
 
 test("preserves a self-hosted GitLab base path", () => {
   assert.equal(

@@ -564,7 +564,7 @@ function PlaneTasksPanel({ connectionId = "plane", panelProps }) {
                                     · {new Date(issue.createdAt).toLocaleDateString(window.I18N.dateLocale(), { day:"2-digit", month:"short", year:"numeric" })}
                                   </span>
                                 )}
-                                {issue.dueDate && <span style={{ color: "#dc2626", marginLeft: 6 }}>· {t("home.plane.dueDate", "", { date: new Date(issue.dueDate).toLocaleDateString(window.I18N.dateLocale(), { day:"2-digit", month:"short" }) })}</span>}
+                                {issue.dueDate && <span style={{ color: "#dc2626", marginLeft: 6 }}>· {t("home.plane.dueDate", "", { date: window.I18N.formatWhen(issue.dueDate, { time: false }) })}</span>}
                               </div>
                             </div>
                             {stateLabel && <span style={{ fontSize: 10, color: "var(--muted-fg)", flexShrink: 0, background: "var(--muted)", padding: "1px 6px", borderRadius: 3, whiteSpace: "nowrap" }}>{stateLabel}</span>}
@@ -637,7 +637,7 @@ function GenericConnectorBlockPanel({ block, onItemClick, panelProps }) {
     }
   };
 
-  const fmtTs = ts => new Date(ts).toLocaleString(window.I18N.dateLocale(), { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const fmtTs = ts => window.I18N.formatWhen(ts);
   const itemBody = (item) => (
     <>
       <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>

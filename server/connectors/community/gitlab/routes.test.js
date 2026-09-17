@@ -177,3 +177,31 @@ test("Home block requires GitLab to be configured", async () => {
   assert.equal(response.status, 400);
   assert.equal(response.body.error, "connector-not-configured");
 });
+
+test("GitLab Home blocks read stored fields and honor scope/limit", async () => {
+  const harness = createEnvelopeHarness();
+  harness.values.set("connector-config-gitlab", { baseUrl: "https://gitlab.example.test", token: "secret" });
+  harness.values.set("connector-data-gitlab", {
+    syncedAt: "2026-08-16T12:00:00Z",
+    deployments: [{ id: "d1", projectId: 1, projectName: "app", environment: "prod", status: "failure", createdAt: "2026-08-15T00:00:00Z", webUrl: "https://gl/d1" }],
+    pullRequests: [{ id: "1!2", number: 2, title: "MR", author: "dev", projectId: 1, projectName: "app", sourceBranch: "feature", targetBranch: "main", updatedAt: "2026-08-14T00:00:00Z", webUrl: "https://gl/mr/2", draft: false }],
+    issues: [{ id: "1#3", number: 3, title: "Issue", author: "dev", projectId: 1, projectName: "app", labels: ["bug"], comments: 2, updatedAt: "2026-08-13T00:00:00Z", webUrl: "https://gl/i/3" }],
+    projects: [{ id: 1, name: "app", language: "JS", visibility: "private", pipelineStatus: "success", lastActivityAt: "2026-08-12T00:00:00Z", webUrl: "https://gl/app", openMRs: 1 }],
+  });
+  for (const blockId of ["recent-deployments", "open-pull-requests", "open-issues", "repos-overview"]) {
+    const response = await harness.invoke("GET", `/api/connectors/gitlab/blocks/${blockId}`, { query: { scope: "1", limit: "1" } });
+    assert.equal(response.status, 200, blockId);
+    assert.equal(response.body.items.length, 1, blockId);
+  }
+  const deployment = await harness.invoke("GET", "/api/connectors/gitlab/blocks/recent-deployments");
+  assert.equal(deployment.body.items[0].badge.color, "#dc2626");
+});
+
+test("all GitLab Home blocks require configuration", async () => {
+  const harness = createHarness();
+  for (const blockId of ["recent-commits", "recent-deployments", "open-pull-requests", "open-issues", "repos-overview"]) {
+    const response = await harness.invoke("GET", `/api/connectors/gitlab/blocks/${blockId}`);
+    assert.equal(response.status, 400, blockId);
+    assert.equal(response.body.error, "connector-not-configured", blockId);
+  }
+});

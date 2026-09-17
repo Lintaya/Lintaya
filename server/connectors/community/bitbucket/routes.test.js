@@ -7,6 +7,49 @@ const { registerBitbucketRoutes } = require("./routes");
 const { createRouteHarness } = require("../../sdk/test-harness");
 
 const createHarness = createRouteHarness(registerBitbucketRoutes);
+const createEnvelopeHarness = createRouteHarness(registerBitbucketRoutes, { mode: "envelope" });
+
+test("Bitbucket Home blocks read normalized sync fields and honor scope/limit", async () => {
+  const harness = createEnvelopeHarness();
+  harness.values.set("connector-config-bitbucket", { type: "cloud", token: "secret" });
+  harness.values.set("connector-data-bitbucket", {
+    syncedAt: "2026-08-16T12:00:00Z",
+    commits: [{ id: "c1", title: "fix", author: "dev", date: "2026-08-15T00:00:00Z", projectId: "team/r", projectName: "r", webUrl: "https://bb/c1" }],
+    deployments: [{ id: "d1", projectId: "team/r", projectName: "r", environment: "prod", status: "success", sha: "c1", user: "dev", finishedAt: "2026-08-14T00:00:00Z", webUrl: "https://bb/d1" }],
+    pullRequests: [{ id: "team/r!1", number: 1, title: "PR", author: "dev", projectId: "team/r", projectName: "r", sourceBranch: "feature", targetBranch: "main", updatedAt: "2026-08-13T00:00:00Z", webUrl: "https://bb/pr/1", draft: false }],
+    issues: [{ id: "team/r#2", number: 2, title: "Issue", author: "dev", projectId: "team/r", projectName: "r", updatedAt: "2026-08-12T00:00:00Z", webUrl: "https://bb/i/2", comments: 2 }],
+    projects: [{ id: "team/r", name: "r", language: "JS", visibility: "private", lastActivityAt: "2026-08-11T00:00:00Z", webUrl: "https://bb/r", openMRs: 1 }],
+  });
+  for (const blockId of ["recent-commits", "recent-deployments", "open-pull-requests", "open-issues", "repos-overview"]) {
+    const response = await harness.invoke("GET", `/api/connectors/bitbucket/blocks/${blockId}`, { query: { scope: "team/r", limit: "1" } });
+    assert.equal(response.status, 200, blockId);
+    assert.equal(response.body.items.length, 1, blockId);
+    assert.ok(response.body.items[0].id, blockId);
+  }
+});
+
+test("recent-deployments sorts by finishedAt/createdAt and maps outcome badges", async () => {
+  const harness = createEnvelopeHarness();
+  harness.values.set("connector-config-bitbucket", { type: "cloud", token: "secret" });
+  harness.values.set("connector-data-bitbucket", { syncedAt: "now", deployments: [
+    { id: "old", projectName: "r", environment: "prod", status: "success", createdAt: "2026-04-01T00:00:00Z" },
+    { id: "running", projectName: "r", environment: "prod", status: "in_progress", finishedAt: "2026-07-01T00:00:00Z" },
+    { id: "failed", projectName: "r", environment: "prod", status: "failure", finishedAt: "2026-08-01T00:00:00Z" },
+  ] });
+  const response = await harness.invoke("GET", "/api/connectors/bitbucket/blocks/recent-deployments");
+  assert.deepEqual(response.body.items.map(item => item.id), ["failed", "running", "old"]);
+  assert.equal(response.body.items[0].badge.color, "#dc2626");
+  assert.equal(response.body.items[1].badge.color, "#ca8a04");
+});
+
+test("Bitbucket Home blocks return connector-not-configured when absent", async () => {
+  const harness = createHarness();
+  for (const blockId of ["recent-commits", "recent-deployments", "open-pull-requests", "open-issues", "repos-overview"]) {
+    const response = await harness.invoke("GET", `/api/connectors/bitbucket/blocks/${blockId}`);
+    assert.equal(response.status, 400, blockId);
+    assert.equal(response.body.error, "connector-not-configured", blockId);
+  }
+});
 
 test("configuration never returns the stored Bitbucket token", async () => {
   const harness = createHarness();

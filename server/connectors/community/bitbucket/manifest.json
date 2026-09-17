@@ -2,13 +2,20 @@
   "manifestVersion": 1,
   "id": "bitbucket",
   "displayName": "Bitbucket",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "tier": "community",
   "lifecycle": "beta",
   "license": "Apache-2.0",
-  "capabilities": ["repositories.read", "repositories.clone", "pull-requests.read", "commits.read"],
+  "capabilities": ["repositories.read", "repositories.clone", "pull-requests.read", "deployments.read", "issues.read", "commits.read"],
   "implementation": { "mode": "package", "source": "server/connectors/community/bitbucket/index.js" },
   "instantiable": true,
+  "blocks": [
+    { "id": "recent-commits", "title": "Bitbucket — últimos commits", "icon": "🔧", "type": "list" },
+    { "id": "recent-deployments", "title": "Bitbucket — deployments recientes", "icon": "🚀", "type": "list" },
+    { "id": "open-pull-requests", "title": "Bitbucket — pull requests abiertos", "icon": "🔀", "type": "list" },
+    { "id": "open-issues", "title": "Bitbucket — issues abiertos", "icon": "🐞", "type": "list" },
+    { "id": "repos-overview", "title": "Bitbucket — mis repos", "icon": "📦", "type": "list" }
+  ],
   "modules": [
     { "id": "repositories", "label": "Repos {connectorName}", "icon": "repos", "component": "ReposView", "navOrder": 92 }
   ]
