@@ -1,0 +1,51 @@
+{
+  "manifestVersion": 1,
+  "id": "linkedin",
+  "displayName": "LinkedIn",
+  "version": "0.1.0",
+  "tier": "community",
+  "lifecycle": "beta",
+  "license": "Apache-2.0",
+  "capabilities": [
+    "profile.read",
+    "posts.create",
+    "posts.delete"
+  ],
+  "implementation": {
+    "mode": "package",
+    "source": "server/connectors/community/linkedin/index.js"
+  },
+  "instantiable": true,
+  "upstreamApi": {
+    "name": "LinkedIn Posts API",
+    "version": "202601",
+    "baseUrl": "https://api.linkedin.com/rest",
+    "docs": "https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api"
+  },
+  "blocks": [
+    {
+      "id": "account",
+      "title": "LinkedIn — mi cuenta",
+      "icon": "◉",
+      "type": "list"
+    },
+    {
+      "id": "pending",
+      "title": "LinkedIn — pendientes",
+      "icon": "✎",
+      "type": "list"
+    },
+    {
+      "id": "activity",
+      "title": "LinkedIn — actividad",
+      "icon": "▤",
+      "type": "list"
+    },
+    {
+      "id": "published",
+      "title": "LinkedIn — publicado",
+      "icon": "▲",
+      "type": "list"
+    }
+  ]
+}

@@ -121,6 +121,94 @@ function VisibilityBadge({ visibility }) {
   );
 }
 
+// Quién le dio estrella: la lista la pide el conector con su token, porque
+// GitHub ya no la sirve sin autenticar. Va en un portal a document.body para
+// que el overflow de la tarjeta no la recorte, y corta la propagación porque en
+// React los eventos de un portal siguen subiendo hasta la tarjeta, cuyo clic
+// abre el detalle del repo.
+function StargazersModal({ repo, onClose }) {
+  const t = window.I18N.t;
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    window.HQ_API.request(`/api/connectors/${repo.provider}/projects/${encodeURIComponent(repo.id)}/stargazers`)
+      .then(setData)
+      .catch(e => setError(e.message || String(e)));
+  }, [repo.provider, repo.id]);
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const modal = (
+    <div role="dialog" aria-modal="true" aria-label={t("ui.repos.stargazersTitle", "Stars on {name}", { name: repo.name })}
+      onClick={e => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, cursor: "default" }}>
+      <div style={{ width: "min(420px, 100%)", maxHeight: "min(560px, 90vh)", background: "white", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 50px rgba(0,0,0,.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>
+            ★ {t("ui.repos.stargazersTitle", "Stars on {name}", { name: repo.name })}
+          </div>
+          <button type="button" onClick={onClose} aria-label={t("ui.repos.closeStargazers", "Close")}
+            style={{ width: 26, height: 26, border: "1px solid var(--border)", background: "white", borderRadius: 6, cursor: "pointer", color: "var(--muted-fg)", fontSize: 15, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ overflowY: "auto", padding: "6px 0" }}>
+          {error ? (
+            <div role="alert" style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--err)" }}>{error}</div>
+          ) : !data ? (
+            <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--muted-fg)" }}>{t("ui.repos.loadingStargazers", "Loading…")}</div>
+          ) : data.stargazers.length === 0 ? (
+            <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--muted-fg)" }}>{t("ui.repos.noStargazers", "Nobody has starred this repository yet.")}</div>
+          ) : data.stargazers.map(user => (
+            <a key={user.login} href={user.url} target="_blank" rel="noreferrer"
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 16px", textDecoration: "none", color: "inherit" }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--muted)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt="" width={32} height={32} style={{ borderRadius: "50%", flexShrink: 0 }} />
+                : <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--muted)", flexShrink: 0 }} />}
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.login}</span>
+              <span style={{ fontSize: 11, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+                {user.starredAt ? window.I18N.formatWhen(user.starredAt, { time: false }) : ""}
+              </span>
+            </a>
+          ))}
+          {data?.truncated && (
+            <div style={{ padding: "8px 16px", fontSize: 11, color: "var(--muted-fg)" }}>{t("ui.repos.stargazersTruncated", "Showing the 1,000 most recent.")}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+  return window.ReactDOM?.createPortal ? window.ReactDOM.createPortal(modal, document.body) : modal;
+}
+
+// Solo en repos públicos: en uno privado las estrellas únicamente pueden venir
+// de quien ya tiene acceso, y no dicen nada del proyecto hacia fuera. Y solo
+// GitHub, que es el conector que sabe listar quién las dio.
+function StarsBadge({ repo }) {
+  const [open, setOpen] = useState(false);
+  if (repo.provider !== "github" || repo.visibility !== "public" || !Number.isFinite(repo.stars)) return null;
+  const t = window.I18N.t;
+  const label = t("ui.repos.stars", "{count} stars on GitHub — see who", { count: repo.stars });
+  return (
+    <>
+      <button type="button" title={label} aria-label={label}
+        onClick={e => { e.stopPropagation(); setOpen(true); }}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4, border: 0, cursor: "pointer",
+          fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+          padding: "2px 7px", borderRadius: 4,
+          background: "rgba(217, 119, 6, 0.12)", color: "#b45309", fontFamily: "var(--font-mono)",
+        }}>★ {repo.stars}</button>
+      {open && <StargazersModal repo={repo} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 function ForkBadge({ fork }) {
   if (!fork) return null;
   return (
@@ -491,6 +579,7 @@ function RepoCard({ repo, providerLabel, onSelect, onClone, onLinkExisting, clon
             }}>📌 Pinned</span>
           )}
           <VisibilityBadge visibility={repo.visibility} />
+          <StarsBadge repo={repo} />
           <ForkBadge fork={repo.fork} />
           <CloneBadge clone={repo.localClone} />
           <BranchBadge clone={repo.localClone} />
@@ -4067,3 +4156,6 @@ function FilterSelect({ label, value, options, onChange }) {
 
 window.ReposView = ReposView;
 window.ResizeHandle = ResizeHandle;
+
+// Home lo abre desde el block "GitHub — estrellas" sin alcance (ver app/home.jsx).
+window.StargazersModal = StargazersModal;

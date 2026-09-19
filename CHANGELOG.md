@@ -30,6 +30,36 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Added
 
+- A LinkedIn connector, entering as **beta 0.1.0**. A post is a Home block
+  created from the Block Builder like a QR block, and its preview is the feed
+  card itself: the same font stack, colours and "…see more" cut LinkedIn uses,
+  measured on the live feed rather than guessed. Publishing goes through the
+  Action Registry, and a post is never published twice: LinkedIn has no
+  idempotency key and no way to ask whether a post exists, so the intent is
+  recorded before the call and an interrupted attempt is left unconfirmed for
+  the member to check, never retried on its own. Deleting a post from Lintaya
+  goes through the Approval Center; one deleted by hand on LinkedIn can be
+  marked as such. The account, pending, activity and published blocks are
+  built from what Lintaya itself knows, because LinkedIn lets a personal
+  profile be written to but not read. The connector is instantiable, so a
+  Company Page can later live on its own app. Authorizing needs `localhost`
+  (LinkedIn only accepts `http://` there) and lasts 60 days without a refresh
+  token.
+- The connector detail shows each connector's state and version next to its
+  tier ("Beta · v0.1.0"), as the connector guide already required and nothing
+  displayed.
+- GitHub 0.4.0: a public repository shows its stars on its card, and clicking
+  them lists who starred it and when — a list GitHub no longer serves without
+  a token. A "GitHub — estrellas" block ranks your public repositories by
+  stars, or, scoped to one repository, lists the people who starred it. Forks
+  and private repositories are left out: stars on either say nothing about
+  your own public project. The sync stores the list, so drawing the block
+  never calls GitHub; it costs one request per public repository that has any
+  star.
+- A connector declared by its manifest alone can name the API it talks to in
+  `upstreamApi.baseUrl`, which its card shows as the endpoint.
+- A block can say why it is empty instead of the generic "no synced data — hit
+  Sync", which sent people to a sync that would change nothing.
 - An issue opens the same way a pull request does, showing its description and
   its conversation — which is where an issue is actually decided — alongside
   its state, milestone, assignees and dates. Until now only pull requests
@@ -274,6 +304,17 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ### Fixed
 
+- "Next" on paginated lists did nothing on the Blocks page. The page rebuilt its
+  filtered list on every render, and pagination went back to the first page
+  whenever the list's reference changed — in the same instant it had moved
+  forward. Pagination now resets only when the rows themselves change, which
+  fixes every list that shares it. The assistant button also sat on top of
+  "Next"; the bar now leaves room for it.
+- A connector known only from its manifest said "This connector has no
+  available blocks" while declaring several, and its card showed no endpoint,
+  last sync or item count.
+- The link field placeholder in the Block Builder showed a raw Unicode escape
+  code where an ellipsis belonged.
 - Home no longer announces "No connectors configured" while connectors are
   connected and syncing. The line was chosen by whether vCenter specifically
   was configured, so every install without that one connector was told it had

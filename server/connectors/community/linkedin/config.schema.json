@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lintaya.dev/schemas/connectors/linkedin-config-v1.json",
+  "title": "LinkedIn connector configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["clientId", "clientSecret"],
+  "properties": {
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Client ID of your app in the LinkedIn developer portal (Auth tab)."
+    },
+    "clientSecret": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true,
+      "x-lintaya-secret": true,
+      "description": "Primary Client Secret of the same app. Leave empty to keep the one already saved."
+    },
+    "headline": {
+      "type": "string",
+      "maxLength": 220,
+      "description": "Your LinkedIn headline, as it appears under your name. LinkedIn does not return it on sign-in; it is only used by the post preview."
+    }
+  }
+}

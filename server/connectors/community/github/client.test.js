@@ -39,6 +39,7 @@ test("sync maps GitHub responses to the normalized repository model", async () =
       topics: ["lintaya"],
       private: false,
       language: "JavaScript",
+      stargazers_count: 4,
     }];
     if (path.includes("/deployments")) return [{
       id: 10,
@@ -86,6 +87,7 @@ test("sync maps GitHub responses to the normalized repository model", async () =
     group: "lintaya",
     topics: ["lintaya"],
     visibility: "public",
+    stars: 4,
     pipelineStatus: "success",
     language: "JavaScript",
     openMRs: 2,
@@ -226,4 +228,33 @@ test("a blank name is rejected before any request is made", async () => {
     /name is required/,
   );
   assert.equal(calls.length, 0);
+});
+
+test("sync collects stargazers only for own public starred repos, and a failure there does not break the sync", async () => {
+  const { syncGithub } = require("./client");
+  const repos = [
+    { full_name: "me/popular", name: "popular", owner: { login: "me" }, private: false, fork: false, stargazers_count: 2, default_branch: "main" },
+    { full_name: "me/quiet", name: "quiet", owner: { login: "me" }, private: false, fork: false, stargazers_count: 0, default_branch: "main" },
+    { full_name: "me/hidden", name: "hidden", owner: { login: "me" }, private: true, fork: false, stargazers_count: 5, default_branch: "main" },
+    { full_name: "me/broken", name: "broken", owner: { login: "me" }, private: false, fork: false, stargazers_count: 1, default_branch: "main" },
+  ];
+  const stargazerCalls = [];
+  const request = async (baseUrl, token, path, method, body, headers) => {
+    if (path.startsWith("/user/repos")) return path.includes("page=1") ? repos : [];
+    if (path.includes("/stargazers")) {
+      stargazerCalls.push({ path, accept: headers?.Accept });
+      if (path.startsWith("/repos/me/broken/")) throw new Error("boom");
+      return [
+        { starred_at: "2026-09-01T00:00:00Z", user: { login: "old", html_url: "https://github.com/old" } },
+        { starred_at: "2026-09-12T00:00:00Z", user: { login: "new", html_url: "https://github.com/new" } },
+      ];
+    }
+    return [];
+  };
+
+  const result = await syncGithub({ baseUrl: "https://api.github.com", token: "t" }, { request });
+  assert.deepEqual(stargazerCalls.map(c => c.path.split("?")[0]).sort(), ["/repos/me/broken/stargazers", "/repos/me/popular/stargazers"]);
+  assert.ok(stargazerCalls.every(c => c.accept === "application/vnd.github.star+json"));
+  assert.deepEqual(result.stargazers.map(s => `${s.projectId}:${s.login}`), ["me/popular:new", "me/popular:old"]);
+  assert.equal(result.projects.length, 4);
 });

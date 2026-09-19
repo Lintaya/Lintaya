@@ -45,6 +45,44 @@ function normalizeGithubRunStatus(run) {
   return statuses[run.conclusion] || run.conclusion || null;
 }
 
+// Quien dio estrella, para el block "GitHub — estrellas". Solo repos publicos,
+// propios (sin forks) y con alguna estrella: son los unicos que el block
+// ensena, y asi un repo sin estrellas no cuesta ninguna llamada. GitHub ya no
+// sirve esta lista sin autenticar; la cabecera star+json es la que trae la
+// fecha. Tope de 3 paginas (300) por repo para que un repo muy popular no
+// alargue la sincronizacion; y un fallo aqui no tumba el resto del sync.
+const STARGAZER_PAGES = 3;
+
+async function collectStargazers(cfg, projects, request) {
+  const starred = projects.filter(p => p.visibility === "public" && !p.fork && p.stars > 0);
+  const results = await Promise.all(starred.map(async (project) => {
+    const people = [];
+    try {
+      for (let page = 1; page <= STARGAZER_PAGES; page += 1) {
+        const batch = await request(cfg.baseUrl, cfg.token,
+          `/repos/${project.id}/stargazers?per_page=100&page=${page}`, "GET", null,
+          { Accept: "application/vnd.github.star+json" });
+        const list = Array.isArray(batch) ? batch : [];
+        people.push(...list);
+        if (list.length < 100) break;
+      }
+    } catch {
+      return [];
+    }
+    return people
+      .filter(entry => entry?.user?.login)
+      .map(entry => ({
+        projectId: project.id,
+        projectName: project.name,
+        login: entry.user.login,
+        avatarUrl: entry.user.avatar_url || null,
+        url: entry.user.html_url || null,
+        starredAt: entry.starred_at || null,
+      }));
+  }));
+  return results.flat().sort((a, b) => Date.parse(b.starredAt || 0) - Date.parse(a.starredAt || 0));
+}
+
 async function syncGithub(cfg, options = {}) {
   const request = options.request || githubRequest;
   const repositoryPages = await collectPages({
@@ -217,6 +255,9 @@ async function syncGithub(cfg, options = {}) {
       group: owner || "—",
       topics: repository.topics || [],
       visibility: repository.private ? "private" : "public",
+      // Viene en la misma respuesta de /user/repos: contarlas no cuesta una
+      // llamada mas. Quien las dio si necesita otra (ver /stargazers).
+      stars: Number.isFinite(repository.stargazers_count) ? repository.stargazers_count : null,
       pipelineStatus,
       language: repository.language || null,
       openMRs,
@@ -230,8 +271,9 @@ async function syncGithub(cfg, options = {}) {
   allCommits.sort((a, b) => new Date(b.date) - new Date(a.date));
   allPullRequests.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   allIssues.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const stargazers = await collectStargazers(cfg, projects, request);
   return {
-    projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests, issues: allIssues,
+    projects, deployments: allDeployments, commits: allCommits, pullRequests: allPullRequests, issues: allIssues, stargazers,
     pagination: { projects: { pages: repositoryPages.pageCount, truncated: repositoryPages.truncated } },
   };
 }

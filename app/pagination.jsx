@@ -22,11 +22,24 @@ function usePagination(items, { key, defaultPageSize = 25 } = {}) {
   });
   const [page, setPage] = React.useState(0);
 
-  // `items` is expected to be a memoized, already-filtered array — a new
-  // reference only when the caller's own filter/search/sort inputs change.
-  // Resetting to page 0 there (rather than on items.length) also catches a
-  // filter change that happens to keep the same count.
-  React.useEffect(() => { setPage(0); }, [items]);
+  // Volver a la página 0 cuando cambia el CONTENIDO de la lista (otro filtro,
+  // otra búsqueda), no cuando solo cambia la referencia del array. Antes se
+  // comparaba la referencia, y un llamador que reconstruía su lista filtrada
+  // en cada render (el catálogo de Bloques lo hacía) reseteaba la página en el
+  // mismo instante en que "Siguiente" la avanzaba: el botón no hacía nada.
+  // Se compara por id (o por el elemento si no tiene), así que un filtro que
+  // deja la misma cantidad pero otras filas también resetea.
+  const signature = React.useMemo(
+    () => items.map((item) => (item && typeof item === "object" && "id" in item ? `${item.__kind || ""}:${item.id}` : item)),
+    [items],
+  );
+  const previousSignature = React.useRef(signature);
+  React.useEffect(() => {
+    const prev = previousSignature.current;
+    previousSignature.current = signature;
+    const same = prev.length === signature.length && prev.every((value, i) => value === signature[i]);
+    if (!same) setPage(0);
+  }, [signature]);
 
   const setPageSize = React.useCallback((size) => {
     setPageSizeState(size);
@@ -85,7 +98,15 @@ function useNarrowViewport(maxWidth = 640) {
 // panels too narrow for the full text (e.g. Board Builder's sidebar, or any
 // page on a phone screen), where the wording wraps mid-word instead of just
 // shrinking.
+// El boton del asistente (✦, ai-chat.jsx) vive fijo abajo a la derecha, 52 px
+// mas 16 de margen: justo donde cae "Siguiente" cuando la barra es lo ultimo
+// de una lista larga, y lo tapaba. Cada pagina hace scroll en su propio
+// contenedor, asi que el hueco lo pone la barra: con el scroll al final queda
+// por encima del boton. No aplica a la barra compacta de una barra lateral.
+const ASSISTANT_CLEARANCE = 56;
+
 function PaginationBar({ page, setPage, pageSize, setPageSize, totalPages, total, pageSizeOptions = PAGE_SIZE_OPTIONS, style, compact = false }) {
+  const inSidebar = compact;
   const narrow = useNarrowViewport();
   const locale = window.I18N.useLocale();
   const t = window.I18N.t;
@@ -106,7 +127,8 @@ function PaginationBar({ page, setPage, pageSize, setPageSize, totalPages, total
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-        padding: "10px 2px", fontSize: 11.5, color: "var(--muted-fg)", flexWrap: "wrap", ...style,
+        padding: "10px 2px", fontSize: 11.5, color: "var(--muted-fg)", flexWrap: "wrap",
+        ...(inSidebar ? {} : { marginBottom: ASSISTANT_CLEARANCE }), ...style,
       }}>
         <div>{t("pagination.range", "", { from, to, total })}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -121,7 +143,8 @@ function PaginationBar({ page, setPage, pageSize, setPageSize, totalPages, total
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-      padding: "10px 2px", fontSize: 12.5, color: "var(--muted-fg)", flexWrap: "wrap", ...style,
+      padding: "10px 2px", fontSize: 12.5, color: "var(--muted-fg)", flexWrap: "wrap",
+      marginBottom: ASSISTANT_CLEARANCE, ...style,
     }}>
       <div>{t("pagination.range", "", { from, to, total })}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

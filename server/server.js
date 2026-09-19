@@ -558,7 +558,7 @@ const insecureAgent = new https.Agent({ rejectUnauthorized: false });
 // ── Plane.so connector ────────────────────────────────────────────────────────
 // Lives in server/connectors/community/plane (registered below).
 
-// Descriptor por tipo para los 8 conectores "simples" e instantiable (gitlab,
+// Descriptor por tipo para los conectores "simples" (gitlab,
 // github, bitbucket, outline, portainer, qportal, outlook, plane) — usado por
 // el loop genérico de /api/connectors/status más abajo. `configFields` son
 // estáticos de la config (van antes del spread de `status`, que puede
@@ -628,6 +628,20 @@ const SIMPLE_CONNECTOR_SHAPE = {
   plane: {
     configFields: cfg => ({ baseUrl: cfg?.baseUrl || null, workspace: cfg?.workspace || null }),
     dataFields: data => ({ projects: data?.projects || [] }),
+  },
+  // Dos tiempos, como Outlook: configurado = app guardada; conectado = cuenta
+  // autorizada y sin caducar. Se deduce de authorUrn/expiresAt, que son
+  // públicos: el token puede vivir en el almacén cifrado y no estar aquí.
+  linkedin: {
+    configured: cfg => !!cfg?.clientId,
+    configFields: cfg => ({
+      connected: !!cfg?.authorUrn && (!cfg?.expiresAt || Date.parse(cfg.expiresAt) > Date.now()),
+      user: cfg?.name || null,
+      expiresAt: cfg?.expiresAt || null,
+    }),
+    dataFields: data => ({
+      published: Object.values(data?.posts || {}).filter(post => post?.phase === "published").length,
+    }),
   },
   "lintaya-remote": {
     configFields: cfg => ({ baseUrl: cfg?.baseUrl || null }),

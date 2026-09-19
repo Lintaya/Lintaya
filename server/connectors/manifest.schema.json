@@ -95,6 +95,11 @@
           "type": "string",
           "minLength": 1
         },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Base URL of the upstream API. Shown as the endpoint of connector cards that have no stored row."
+        },
         "supportedUntil": {
           "type": "string",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"

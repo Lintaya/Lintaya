@@ -232,7 +232,7 @@ test("every connector this repository ships registers against a fake app", () =>
     },
   });
 
-  assert.equal(registered.length, 7);
+  assert.equal(registered.length, 8);
   assert.ok(routes.length > 40, `expected the full route surface, got ${routes.length}`);
 
   // Each connector claimed routes under its own id.

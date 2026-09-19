@@ -93,6 +93,17 @@ function AnthropicLogoIcon({ size = 20 }) {
   );
 }
 
+// Marca oficial de LinkedIn (Simple Icons): el "in" en blanco sobre el azul
+// de la marca. Sin ella salia el monograma generico "LI", identico al de
+// Lintaya Remote en la misma grilla.
+function LinkedinLogoIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path fill="white" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  );
+}
+
 // `size` es opcional — sin él, cada Logo usa su propio default (los mismos
 // que ya se ven en esta pantalla). block-catalog.jsx sí lo pasa, para encajar
 // el logo real dentro de un badge de otro tamaño (ver window.connectorIconContent).
@@ -107,6 +118,7 @@ function connectorIconContent(id, icon, size) {
   if (id === "portainer") return <PortainerLogoIcon size={size} />;
   if (id === "outline") return <OutlineLogoIcon size={size} />;
   if (id === "ucsm") return <CiscoLogoIcon size={size} />;
+  if (id === "linkedin") return <LinkedinLogoIcon size={size} />;
   return icon;
 }
 
@@ -118,6 +130,7 @@ const CONNECTOR_TIER_BY_ID = Object.freeze({
   github: "community",
   gitlab: "community",
   bitbucket: "community",
+  linkedin: "community",
   plane: "community",
   outline: "community",
   portainer: "community",
@@ -210,6 +223,35 @@ function ConnectorTierBadge({ id, tier: explicitTier, compact = false }) {
   );
 }
 
+// Estado del contrato del conector ("lifecycle" del manifiesto) y su versión
+// SemVer. Es independiente del tier: un conector Community puede ser beta o
+// estable. La guía de conectores (docs/connectors/DEVELOPMENT_GUIDE.md §6) pide
+// que se vea cuando no es "stable"; la versión se muestra siempre, porque es lo
+// que se cita al reportar un fallo.
+const CONNECTOR_LIFECYCLE_META = {
+  development: { label: "In development", color: "#64748b" },
+  beta:        { label: "Beta",           color: "#b45309" },
+  stable:      { label: "Stable",         color: "#16a34a" },
+  deprecated:  { label: "Deprecated",     color: "#dc2626" },
+};
+function ConnectorLifecycleBadge({ lifecycle, version }) {
+  window.I18N.useLocale();
+  const t = window.I18N.t;
+  const meta = CONNECTOR_LIFECYCLE_META[lifecycle];
+  const label = meta && lifecycle !== "stable" ? t(`connectors.lifecycle.${lifecycle}`, meta.label) : null;
+  const text = [label, version ? `v${version}` : null].filter(Boolean).join(" · ");
+  if (!text) return null;
+  const color = meta?.color || "var(--muted-fg)";
+  return (
+    <span title={t("connectors.lifecycle.title", "", { lifecycle: meta ? t(`connectors.lifecycle.${lifecycle}`, meta.label) : "—", version: version || "—" })} style={{
+      display: "inline-flex", alignItems: "center", height: 22, padding: "0 7px",
+      borderRadius: 999, border: `1px solid color-mix(in srgb, ${color} 30%, var(--border))`,
+      background: `color-mix(in srgb, ${color} 10%, white)`, color,
+      fontSize: 10, fontWeight: 700, lineHeight: 1, whiteSpace: "nowrap", fontFamily: "var(--font-mono)",
+    }}>{text}</span>
+  );
+}
+
 const STATUS_META = {
   ok:      { label: "Connected",     dot: "var(--ok)",      bg: "color-mix(in srgb, var(--ok) 14%, white)",   fg: "var(--ok)",      icon: "●" },
   warn:    { label: "Warning",       dot: "var(--warn)",    bg: "color-mix(in srgb, var(--warn) 16%, white)", fg: "#9a6f00",        icon: "▲" },
@@ -227,6 +269,13 @@ window.STATUS_META = STATUS_META;
 // itemsSynced } para sync) — `fields` se mezcla en liveStatuses, `detail` es
 // el fragmento de texto que log/toast insertan tal cual.
 const SIMPLE_ONPULSE = {
+  // Sync no trae datos de LinkedIn (no hay API de lectura para un perfil
+  // personal): vuelve a leer nombre y foto, y cuenta lo publicado desde aqui.
+  linkedin: {
+    displayName: "LinkedIn",
+    test: r => ({ fields: { user: r.name }, detail: r.name || "" }),
+    sync: r => ({ fields: { user: r.name }, detail: `${r.name || ""} \u00b7 ${r.published} publicadas`, itemsSynced: r.published }),
+  },
   gitlab: {
     displayName: "GitLab",
     test: r => ({ fields: { user: r.user }, detail: connectorResponseText(r, r.user) }),
@@ -1231,6 +1280,176 @@ function BitbucketConfigPanel({ onSaved, id = "bitbucket" }) {
   );
 }
 
+// ─── Config panel (LinkedIn) ──────────────────────────────────────
+// A diferencia del resto, LinkedIn no se configura pegando un token: las
+// credenciales identifican a la APLICACIÓN, no al usuario, y la sesión se
+// obtiene con un OAuth que ocurre en el navegador (la contraseña se escribe en
+// LinkedIn, nunca acá). Por eso el panel tiene dos tiempos: guardar la app y
+// después autorizar la cuenta.
+function LinkedinConfigPanel({ onSaved, id = "linkedin" }) {
+  window.I18N.useLocale();
+  const t = window.I18N.t;
+  const [schema, setSchema]         = useState(null);
+  const [values, setValues]         = useState({});
+  const [profile, setProfile]       = useState(null);
+  const [configured, setConfigured] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [err, setErr]               = useState("");
+  const [loaded, setLoaded]         = useState(false);
+  const poll = React.useRef(null);
+  // El servidor responde con codigos linkedin-*; se traducen igual que en el bloque.
+  const liMessage = (error) => {
+    const code = [error?.message, error?.code].find(c => typeof c === "string" && c.startsWith("linkedin-"));
+    return code ? t(`ui.linkedin.error.${code}`, code) : (error?.message || "");
+  };
+
+  useEffect(() => {
+    setLoaded(false);
+    Promise.all([
+      window.HQ_API.request(`/api/connectors/${id}/config-schema`),
+      window.HQ_API.request(`/api/connectors/${id}/config`),
+      window.HQ_API.request(`/api/connectors/${id}/profile`).catch(() => null),
+    ])
+      .then(([schemaRes, cfg, prof]) => {
+        setSchema(schemaRes);
+        setConfigured(!!cfg.configured);
+        // El secreto nunca vuelve del servidor: solo se precargan los campos
+        // que no lo son, y el campo del secreto queda vacío a propósito.
+        if (cfg.configured) setValues(v => ({ ...v, clientId: cfg.clientId || "", headline: cfg.headline || "" }));
+        setProfile(prof);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [id]);
+
+  useEffect(() => () => clearInterval(poll.current), []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!values.clientId) { setErr(t("ui.linkedin.clientIdRequired", "The Client ID is required.")); return; }
+    if (!configured && !values.clientSecret) { setErr(t("ui.linkedin.clientSecretRequired", "The Client Secret is required.")); return; }
+    setSaving(true); setErr("");
+    try {
+      await window.HQ_API.request(`/api/connectors/${id}/config`, {
+        method: "POST",
+        body: {
+          clientId: (values.clientId || "").trim(),
+          ...(values.clientSecret ? { clientSecret: values.clientSecret } : {}),
+          headline: (values.headline || "").trim() || null,
+        },
+      });
+      setConfigured(true);
+      // keepOpen: guardar la app es solo el primer tiempo. El modal de Nueva
+      // conexión se cerraba aquí y nunca llegaba a verse el botón Conectar.
+      onSaved({ keepOpen: true });
+      window.dispatchEvent(new CustomEvent("toast", { detail: { msg: t("connectors.config.saved", "", { provider: "LinkedIn" }), kind: "ok" } }));
+    } catch (error) {
+      setErr(liMessage(error) || t("connectors.saveFailed"));
+    } finally { setSaving(false); }
+  };
+
+  const connect = async () => {
+    setErr("");
+    try {
+      const { url } = await window.HQ_API.request(`/api/connectors/${id}/oauth/start`);
+      const popup = window.open(url, "linkedin-oauth", "width=620,height=740");
+      // LinkedIn vuelve en una ventana aparte, así que la única forma de
+      // enterarse de que ya autorizó es preguntar cada tanto.
+      clearInterval(poll.current);
+      const startedAt = Date.now();
+      poll.current = setInterval(async () => {
+        const prof = await window.HQ_API.request(`/api/connectors/${id}/profile`).catch(() => null);
+        if (prof?.connected) {
+          clearInterval(poll.current);
+          setProfile(prof);
+          // Hasta aquí no había conexión que celebrar: ahora sí se avisa al
+          // modal de Nueva conexión para que cierre.
+          onSaved({ connected: true });
+          return;
+        }
+        // Si la ventana se cerró y la sesión no llegó, LinkedIn no devolvió la
+        // autorización. Casi siempre es la URL de retorno sin registrar: sus
+        // páginas de error no vuelven a Lintaya, así que hay que decirlo aquí.
+        if (popup?.closed || Date.now() - startedAt > 180000) {
+          clearInterval(poll.current);
+          setErr(t("ui.linkedin.oauthNoReturn", "LinkedIn did not send the authorization back. The usual cause is that the redirect URL above is not registered, exactly as shown, in your app's Auth tab."));
+        }
+      }, 2000);
+    } catch (error) { setErr(liMessage(error)); }
+  };
+
+  if (!loaded) return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0", color: "var(--muted-fg)", fontSize: 12 }}>
+      <Spinner size={12} /> {t("connectors.config.loading")}
+    </div>
+  );
+
+  const blue = {
+    height: 30, padding: "0 14px", background: "#0a66c2", color: "white", border: 0, borderRadius: 5,
+    fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+    display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start",
+  };
+
+  return (
+    <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {schema && (
+        <window.SchemaFields schema={schema} values={values} connectorId="linkedin"
+          onChange={(key, v) => setValues(prev => ({ ...prev, [key]: v }))} />
+      )}
+
+      <div style={{ fontSize: 10.5, color: "var(--muted-fg)", lineHeight: 1.6 }}>
+        {t("ui.linkedin.appHelp", "Create an app in the LinkedIn developer portal, associate it with a Page you administer, and add the products \u201cSign In with LinkedIn using OpenID Connect\u201d and \u201cShare on LinkedIn\u201d.")}
+        {" "}
+        <a href="https://www.linkedin.com/developers/apps" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+          {t("ui.linkedin.openPortal", "Open the portal")}
+        </a>
+        <br />
+        {t("ui.linkedin.redirectHelp", "Register this redirect URL:")} <code style={{ fontFamily: "var(--font-mono)" }}>{`${location.origin}/api/connectors/${id}/oauth/callback`}</code>
+      </div>
+
+      {err && <div style={{ fontSize: 11.5, color: "var(--err)", background: "color-mix(in srgb,var(--err) 8%,white)", border: "1px solid color-mix(in srgb,var(--err) 20%,var(--border))", borderRadius: 5, padding: "6px 8px" }}>{err}</div>}
+
+      <button type="submit" disabled={saving} style={{ ...blue, opacity: saving ? .7 : 1, cursor: saving ? "not-allowed" : "pointer" }}>
+        {saving && <Spinner size={11} color="white" />}
+        {saving ? t("connectors.saving") : t("connectors.config.saveConfig")}
+      </button>
+
+      {/* Segundo tiempo: la cuenta. Solo tiene sentido una vez guardada la app. */}
+      {configured && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {profile?.connected ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {profile.picture && <img src={profile.picture} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{profile.name}</div>
+                  {profile.expiresInDays != null && (
+                    <div style={{ fontSize: 11, color: profile.expiresInDays <= 10 ? "var(--err)" : "var(--muted-fg)" }}>
+                      {t("ui.linkedin.expiresIn", "The LinkedIn authorization expires in {days} day(s). Reconnect to keep publishing.", { days: profile.expiresInDays })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button type="button" onClick={connect} style={{ height: 28, padding: "0 12px", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", border: "1px solid var(--border)", background: "white", color: "var(--fg)", borderRadius: 5, cursor: "pointer", alignSelf: "flex-start" }}>
+                {t("ui.linkedin.reconnect", "Reconnect")}
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 11.5, color: "var(--muted-fg)", lineHeight: 1.6 }}>
+                {t("ui.linkedin.connectHelp", "You sign in on LinkedIn\u2019s own page; Lintaya never sees your password. Authorize from the browser on the machine running the server.")}
+              </div>
+              <button type="button" onClick={connect} style={blue}>
+                {t("ui.linkedin.connect", "Connect LinkedIn")}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </form>
+  );
+}
+
 // ─── Config panel (Outline) ────────────────────────────────────────────────────
 function OutlineConfigPanel({ onSaved, id = "outline" }) {
   const locale = window.I18N.useLocale();
@@ -1416,7 +1635,7 @@ function ConnectorCard({ conn, liveStatus, account, onSelect, onPulse, busy }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <div style={{
           width: 38, height: 38, borderRadius: 8,
-          background: `linear-gradient(135deg, ${conn.color}, color-mix(in srgb, ${conn.color} 65%, black))`,
+          background: `linear-gradient(135deg, ${connectorTint(conn)}, color-mix(in srgb, ${connectorTint(conn)} 65%, black))`,
           color: "white",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)",
@@ -2053,6 +2272,7 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
   const isGitlab    = conn.type === "gitlab";
   const isGithub    = conn.type === "github";
   const isBitbucket = conn.type === "bitbucket";
+  const isLinkedin  = conn.type === "linkedin";
   const isOutline   = conn.type === "outline";
   const isUcsm      = conn.id === "ucsm";
   const isAnthropic = conn.id === "anthropic";
@@ -2102,15 +2322,16 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
         <div style={{ display: "flex", alignItems: "center", gap: 10, alignSelf: "stretch", display: "flex", alignItems: "flex-end", padding: "0 14px 6px", borderBottom: "2px solid var(--accent)" }}>
           <div style={{
             width: 28, height: 28, borderRadius: 6,
-            background: `linear-gradient(135deg, ${conn.color}, color-mix(in srgb, ${conn.color} 65%, black))`,
+            background: `linear-gradient(135deg, ${connectorTint(conn)}, color-mix(in srgb, ${connectorTint(conn)} 65%, black))`,
             color: "white",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontWeight: 700, fontSize: 11, fontFamily: "var(--font-mono)",
-          }}>{conn.id === "anthropic" ? <AnthropicLogoIcon size={15} /> : isGitlab ? <GitlabLogoIcon size={26} /> : isGithub ? <GithubLogoIcon size={15} /> : isBitbucket ? <BitbucketLogoIcon size={16} /> : isPlane ? <PlaneLogoIcon size={16} /> : (conn.id === "vcenter" || conn.id === "vc-mex") ? <VMwareLogoIcon size={16} /> : conn.id === "bw" ? <BitwardenLogoIcon size={16} /> : isPortainer ? <PortainerLogoIcon size={16} /> : isOutline ? <OutlineLogoIcon size={16} /> : conn.id === "ucsm" ? <CiscoLogoIcon size={16} /> : conn.icon}</div>
+          }}>{conn.id === "anthropic" ? <AnthropicLogoIcon size={15} /> : isGitlab ? <GitlabLogoIcon size={26} /> : isGithub ? <GithubLogoIcon size={15} /> : isBitbucket ? <BitbucketLogoIcon size={16} /> : isPlane ? <PlaneLogoIcon size={16} /> : (conn.id === "vcenter" || conn.id === "vc-mex") ? <VMwareLogoIcon size={16} /> : conn.id === "bw" ? <BitwardenLogoIcon size={16} /> : isPortainer ? <PortainerLogoIcon size={16} /> : isOutline ? <OutlineLogoIcon size={16} /> : conn.id === "ucsm" ? <CiscoLogoIcon size={16} /> : connectorIconContent(conn.type || conn.id, conn.icon, 16)}</div>
           <div>
             <ConnectorNameEditor conn={conn} onRenamed={onRenamed} />
           </div>
           <ConnectorTierBadge id={conn.id} tier={conn.tier} />
+          <ConnectorLifecycleBadge lifecycle={conn.lifecycle} version={conn.connectorVersion} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
@@ -2346,6 +2567,14 @@ function ConnectorDetail({ conn, liveStatus, liveLog, account, onClose, onPulse,
             <div style={{ background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
               <div style={sectionLabel}>{t("connectors.detail.bitbucketConfig")}</div>
               <BitbucketConfigPanel id={conn.id} onSaved={(info) => { onConfigSaved(conn.id, info); setShowConfig(false); }} />
+            </div>
+          )}
+
+          {/* LinkedIn config form */}
+          {isLinkedin && showConfig && (
+            <div style={{ background: "var(--muted)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 }}>
+              <div style={sectionLabel}>{t("connectors.detail.linkedinConfig", "LinkedIn credentials")}</div>
+              <LinkedinConfigPanel id={conn.id} onSaved={(info) => { onConfigSaved(conn.id, info); }} />
             </div>
           )}
 
@@ -3194,9 +3423,15 @@ const secondaryBtn = { height: 30, padding: "0 12px", background: "white", color
 // a branded logo, without requiring an edit to this view.
 const CONNECTOR_PICKER_COLORS = Object.freeze({
   anthropic: ANTHROPIC_ACCENT, bitbucket: "#0052CC", bw: "#175ddc",
-  github: "#24292f", gitlab: "#380D75", outline: "#27272a", outlook: "#0078d4",
+  github: "#24292f", gitlab: "#380D75", linkedin: "#0a66c2", outline: "#27272a", outlook: "#0078d4",
   plane: "#f97316", portainer: "#C080FF", qportal: "#0ea5e9", ucsm: "#049fd9", vcenter: "#ffffff",
 });
+
+// Color de marca para tarjetas que el servidor sintetiza del manifiesto (sin
+// fila propia en la base), que llegan con un azul generico.
+function connectorTint(conn) {
+  return (conn?.manifestManaged && CONNECTOR_PICKER_COLORS[conn.type || conn.id]) || conn?.color;
+}
 
 function pickerColor(id) {
   return CONNECTOR_PICKER_COLORS[id] || "var(--accent)";
@@ -3271,6 +3506,7 @@ const CUSTOM_CONFIG_PANELS = Object.freeze({
   github: ({ onSaved, id }) => <GithubConfigPanel onSaved={onSaved} id={id} />,
   bitbucket: ({ onSaved, id }) => <BitbucketConfigPanel onSaved={onSaved} id={id} />,
   outline: ({ onSaved, id }) => <OutlineConfigPanel onSaved={onSaved} id={id} />,
+  linkedin: ({ onSaved, id }) => <LinkedinConfigPanel onSaved={onSaved} id={id} />,
   ucsm: ({ onSaved }) => <UcsmConfigPanel onSaved={onSaved} />,
   anthropic: ({ onSaved }) => <AnthropicConfigPanel onSaved={onSaved} />,
 });
@@ -3367,8 +3603,12 @@ function NewConnectionModal({ onClose, onSaved }) {
         });
       } catch { /* el nombre es cosmético: no tirar una conexión ya guardada */ }
     }
-    setSaved(true);
     onSaved({ id: targetId || selectedConnector?.id, ...info });
+    // Un conector de dos tiempos (LinkedIn: guardar la app, luego autorizar la
+    // cuenta) pide seguir abierto tras el primero; el panel vuelve a llamar
+    // cuando la conexión está completa.
+    if (info?.keepOpen) return;
+    setSaved(true);
     setTimeout(() => onClose(), 1200);
   };
 

@@ -19,7 +19,11 @@ const { randomUUID } = require("node:crypto");
 const { normalizeAssignedTags, applyAssignedTags } = require("./tags");
 
 const MAX_CONTENT_LENGTH = 200_000;
-const BLOCK_KINDS = new Set(["connector", "content", "qr"]);
+const BLOCK_KINDS = new Set(["connector", "content", "qr", "linkedin-post"]);
+// Mismo limite y mismo conteo (puntos de codigo) que el conector de LinkedIn
+// al publicar y que el contador del Block Builder: si cualquiera de los tres
+// contara distinto, se podria guardar un post que luego no se puede publicar.
+const LINKEDIN_MAX_LENGTH = 3000;
 const QR_EC_LEVELS = new Set(["L", "M", "Q", "H"]);
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -44,6 +48,26 @@ function validateQrConfig(record) {
   if (!style || typeof style !== "object" || !QR_EC_LEVELS.has(style.ecLevel) || style.pattern !== "square" || style.corners !== "square" || !HEX_COLOR.test(style.fgColor) || !HEX_COLOR.test(style.bgColor)) throw new Error("invalid-qr-style");
 }
 
+// Un block "linkedin-post" ES la publicacion: su texto y su enlace viven en
+// `payload`, igual que el valor de un QR. El estado de publicacion no vive aqui
+// sino en el conector (server/connectors/community/linkedin/publisher.js).
+function validateLinkedinPost(record) {
+  const { payload } = record;
+  if (!record.connectorId || !String(record.connectorId).trim()) throw new Error("linkedin-connector-required");
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("linkedin-body-required");
+  if (typeof payload.body !== "string" || !payload.body.trim()) throw new Error("linkedin-body-required");
+  const link = payload.link == null || payload.link === "" ? null : String(payload.link).trim();
+  if (link) {
+    let parsed;
+    try { parsed = new URL(link); } catch { throw new Error("linkedin-invalid-link"); }
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("linkedin-invalid-link");
+  }
+  // El enlace se publica al final del texto, asi que cuenta para el limite.
+  const published = link && !payload.body.includes(link) ? `${payload.body.trimEnd()}\n\n${link}` : payload.body;
+  if ([...published].length > LINKEDIN_MAX_LENGTH) throw new Error("linkedin-body-too-long");
+  if (payload.linkAsFirstComment !== undefined && typeof payload.linkAsFirstComment !== "boolean") throw new Error("linkedin-invalid-post");
+}
+
 function validateCompleteBlock(record) {
   const kind = validateKind(record.kind);
   if (!record.title || !String(record.title).trim()) throw new Error("title-required");
@@ -51,6 +75,7 @@ function validateCompleteBlock(record) {
   if (kind === "content" && (!record.content || !String(record.content).trim())) throw new Error("content-required");
   if (kind === "content" && String(record.content).length > MAX_CONTENT_LENGTH) throw new Error("content-too-large");
   if (kind === "qr") validateQrConfig(record);
+  if (kind === "linkedin-post") validateLinkedinPost(record);
   return kind;
 }
 
@@ -83,6 +108,14 @@ function createCustomBlockRecord({ kvGet, kvSet }, { kind, connectorId, blockId,
     ? { ...shared, format: format === "html" ? "html" : "md", content: String(content), prompt: prompt ? String(prompt) : null, rules: rules ? String(rules) : null }
     : blockKind === "qr" ? {
         ...shared, payload, logo, style,
+      } : blockKind === "linkedin-post" ? {
+        ...shared,
+        connectorId: String(connectorId),
+        payload: {
+          body: String(payload.body),
+          link: payload.link ? String(payload.link).trim() : null,
+          linkAsFirstComment: payload.linkAsFirstComment === true,
+        },
       } : {
         ...shared,
         connectorId: String(connectorId),
@@ -108,7 +141,7 @@ function registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditA
       if (err.message === "builder-dynamic-qr-disabled") return res.status(400).json({ error: err.message, errorCode: "builder.dynamicQrDisabled", errorParams: {} });
       return sendAppError(res, AppError.badRequest(err.message), req);
     }
-    res.locals.auditMessage = `Crear block "${block.title}"${block.kind === "connector" ? ` (${block.connectorId}.${block.blockId})` : " (contenido)"}`;
+    res.locals.auditMessage = `Crear block "${block.title}"${block.kind === "connector" ? ` (${block.connectorId}.${block.blockId})` : block.kind === "linkedin-post" ? ` (publicacion de ${block.connectorId})` : " (contenido)"}`;
     res.json(block);
   });
 
@@ -146,6 +179,17 @@ function registerCustomBlocksRoutes({ app, db, requireAuth, kvGet, kvSet, auditA
     } else if (updated.kind === "content") {
       delete updated.connectorId; delete updated.blockId; delete updated.scope; delete updated.limit;
       delete updated.payload; delete updated.logo; delete updated.style;
+    } else if (updated.kind === "linkedin-post") {
+      delete updated.blockId; delete updated.scope; delete updated.limit;
+      delete updated.content; delete updated.format; delete updated.prompt; delete updated.rules;
+      delete updated.logo; delete updated.style;
+      if (updated.payload && typeof updated.payload === "object") {
+        updated.payload = {
+          body: String(updated.payload.body ?? ""),
+          link: updated.payload.link ? String(updated.payload.link).trim() : null,
+          linkAsFirstComment: updated.payload.linkAsFirstComment === true,
+        };
+      }
     } else if (updated.kind === "connector") {
       delete updated.content; delete updated.format; delete updated.prompt; delete updated.rules;
       delete updated.payload; delete updated.logo; delete updated.style;

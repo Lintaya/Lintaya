@@ -123,14 +123,14 @@ function registerGithubRoutes(options) {
     if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
     const startedAt = now();
     try {
-      const { projects, deployments, commits, pullRequests, issues } = await sync(cfg, { request });
+      const { projects, deployments, commits, pullRequests, issues, stargazers } = await sync(cfg, { request });
       const latency = `${Math.max(0, now() - startedAt)}ms`;
       const syncedAt = isoNow();
       const deploymentCount = deployments.length;
       const commitCount = commits.length;
       const total = projects.length + deploymentCount + commitCount;
 
-      store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], syncedAt });
+      store.setData({ projects, deployments, commits, pullRequests: pullRequests || [], issues: issues || [], stargazers: stargazers || [], syncedAt });
       store.setStatus({
         status: "ok",
         latency,
@@ -222,6 +222,43 @@ function registerGithubRoutes(options) {
   // donde meter el repositorio, y meterlo en el id cambiaria un shape que ya
   // esta publicado y fijado por tests. Asi que el sha se resuelve aqui, contra
   // los commits que el propio sync guardo, que ya saben de que repo son.
+  // Quién le dio estrella a un repo, y cuándo. GitHub dejó de servir esta
+  // lista sin autenticación, así que va con el token del conector. Solo para
+  // repos ya sincronizados: esta ruta no es un proxy a cualquier repo ajeno.
+  // La cabecera star+json es la que añade `starred_at`; sin ella GitHub
+  // devuelve solo los usuarios.
+  app.get(`/api/connectors/${id}/projects/:projectId/stargazers`, requireAuth, guardAsyncRoute(async (req, res) => {
+    const cfg = store.getConfig();
+    if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
+    const projectId = String(req.params.projectId || "");
+    const known = (store.getData()?.projects || []).find(project => project.id === projectId);
+    if (!known) return res.status(404).json({ error: "project-not-synced" });
+
+    const PER_PAGE = 100;
+    const MAX_PAGES = 10;
+    const stargazers = [];
+    let truncated = false;
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const batch = await request(cfg.baseUrl, cfg.token,
+        `/repos/${projectId}/stargazers?per_page=${PER_PAGE}&page=${page}`, "GET", null,
+        { Accept: "application/vnd.github.star+json" });
+      const list = Array.isArray(batch) ? batch : [];
+      stargazers.push(...list);
+      if (list.length < PER_PAGE) break;
+      if (page === MAX_PAGES) truncated = true;
+    }
+    const items = stargazers
+      .map(entry => ({
+        login: entry.user?.login || null,
+        avatarUrl: entry.user?.avatar_url || null,
+        url: entry.user?.html_url || null,
+        starredAt: entry.starred_at || null,
+      }))
+      .filter(entry => entry.login)
+      .sort((a, b) => Date.parse(b.starredAt || 0) - Date.parse(a.starredAt || 0));
+    return res.json({ projectId, total: items.length, truncated, stargazers: items });
+  }));
+
   app.get(`/api/connectors/${id}/commits/:sha`, requireAuth, guardAsyncRoute(async (req, res) => {
     const cfg = store.getConfig();
     if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
@@ -408,6 +445,65 @@ function registerGithubRoutes(options) {
           url: p.webUrl,
           ...(p.openMRs > 0 ? { badge: { text: `${p.openMRs} PR${p.openMRs === 1 ? "" : "s"}`, color: "#2563eb" } } : {}),
         })),
+        updatedAt: data?.syncedAt || null,
+      };
+    },
+  });
+
+  // Estrellas de tus repos públicos propios. Dos formas según el alcance:
+  //   - Todos (sin ?scope=): una fila por repo con su ★ N, de más a menos.
+  //     En Home, pulsar la fila abre quién le dio estrella (StargazersModal).
+  //   - Un repo (?scope=owner/repo): una fila por persona, la más reciente
+  //     primero, enlazando a su perfil.
+  // Todo sale de lo que guardó el sync (el conteo viene en /user/repos y las
+  // personas en collectStargazers, client.js), así que pintar el block no
+  // llama a GitHub. Fuera los privados, donde solo da estrella quien ya tiene
+  // acceso, y los forks, que son proyectos ajenos.
+  registerBlockRoute({
+    app,
+    requireAuth,
+    id,
+    blockId: "stars",
+    getBlock: (req) => {
+      if (!store.getConfig()) return null;
+      const data = store.getData();
+      const { scope, limit } = req?.query || {};
+      const max = Number(limit) || 30;
+      const projects = (data?.projects || [])
+        .filter(p => p.visibility === "public" && !p.fork && Number.isFinite(p.stars));
+
+      if (scope) {
+        const project = projects.find(p => p.id === scope);
+        const people = project
+          ? (data?.stargazers || []).filter(s => s.projectId === scope)
+          : [];
+        return {
+          items: [...people]
+            .sort((a, b) => Date.parse(b.starredAt || 0) - Date.parse(a.starredAt || 0))
+            .slice(0, max)
+            .map(s => ({
+              id: `${s.projectId}:${s.login}`,
+              title: s.login,
+              subtitle: `\u2605 ${s.projectName}`,
+              timestamp: s.starredAt,
+              url: s.url,
+            })),
+          updatedAt: data?.syncedAt || null,
+          emptyMessage: project ? "Nadie le ha dado estrella todavía." : "Este repo no es público, o no es tuyo: aquí solo salen tus repos públicos.",
+        };
+      }
+
+      return {
+        items: [...projects]
+          .sort((a, b) => (b.stars - a.stars) || String(a.name).localeCompare(String(b.name)))
+          .slice(0, max)
+          .map(p => ({
+            id: p.id,
+            title: p.name,
+            subtitle: p.description || p.path,
+            url: p.webUrl ? `${p.webUrl}/stargazers` : null,
+            badge: { text: `\u2605 ${p.stars}`, color: "#b45309" },
+          })),
         updatedAt: data?.syncedAt || null,
       };
     },
