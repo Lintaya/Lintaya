@@ -324,3 +324,31 @@ test("QR blocks accept an icon logo and reject a malformed icon key", async () =
     assert.equal(bad.status, 400, `icon ${JSON.stringify(icon)} should be rejected`);
   }
 });
+
+test("POST /api/home/custom-blocks stores a linkedin-post block with its text and link", async () => {
+  const { app, headers, store } = setup();
+  const res = await request(app, "POST", "/api/home/custom-blocks", { headers, body: {
+    kind: "linkedin-post", connectorId: "linkedin", title: "Lanzamiento",
+    payload: { body: "Hoy lanzamos 🚀", link: " https://example.test/post ", linkAsFirstComment: false },
+  } });
+  assert.equal(res.status, 200);
+  const saved = store.get("custom-blocks")[0];
+  assert.equal(saved.kind, "linkedin-post");
+  assert.equal(saved.connectorId, "linkedin");
+  assert.deepEqual(saved.payload, { body: "Hoy lanzamos 🚀", link: "https://example.test/post", linkAsFirstComment: false });
+  assert.equal(saved.blockId, undefined);
+});
+
+test("a linkedin-post block is validated like the connector will publish it", async () => {
+  const { app, headers } = setup();
+  const post = (payload, extra = {}) => request(app, "POST", "/api/home/custom-blocks", { headers, body: { kind: "linkedin-post", connectorId: "linkedin", title: "P", payload, ...extra } });
+
+  assert.equal((await post({ body: "   " })).status, 400);
+  assert.equal((await post({ body: "ok", link: "javascript:alert(1)" })).status, 400);
+  assert.equal((await post({ body: "ok" }, { connectorId: "" })).status, 400);
+  // Puntos de código: 3000 emojis caben, uno más no.
+  assert.equal((await post({ body: "🚀".repeat(3000) })).status, 200);
+  assert.equal((await post({ body: "🚀".repeat(3001) })).status, 400);
+  // El enlace se publica al final del texto y cuenta para el límite.
+  assert.equal((await post({ body: "x".repeat(2990), link: "https://example.test/long" })).status, 400);
+});

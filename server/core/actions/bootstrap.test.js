@@ -29,13 +29,13 @@ test("registers every connector type this repository ships", () => {
   const types = new Set(registry.listActions().map((a) => a.connectorTypeId));
   assert.deepEqual(
     [...types].sort(),
-    ["bitbucket", "bw", "github", "gitlab", "outline", "plane", "portainer"].sort(),
+    ["bitbucket", "bw", "github", "gitlab", "linkedin", "outline", "plane", "portainer"].sort(),
   );
 });
 
 test("every type registers at least status/sync (or their equivalent read+write pair)", () => {
   const registry = setup();
-  for (const typeId of ["gitlab", "github", "bitbucket", "plane", "outline", "portainer", "bw"]) {
+  for (const typeId of ["gitlab", "github", "bitbucket", "plane", "outline", "portainer", "bw", "linkedin"]) {
     const actions = registry.listActionsForType(typeId);
     assert.ok(actions.length >= 2, `${typeId} should register at least 2 actions, got ${actions.length}`);
   }
@@ -50,7 +50,9 @@ test("the inventory of remote destructive provider actions is explicit and gated
   // Esta lista se amplía a mano a propósito: que una acción nueva rompa este
   // test es la señal de que alguien tiene que mirar si merece ser destructiva.
   // github.merge-pull-request lo es porque reescribe la rama destino.
-  assert.deepEqual(destructive, ["github.merge-pull-request", "outline.delete-document", "plane.delete-issue"]);
+  // linkedin.delete-post lo es porque borra una publicación pública y LinkedIn
+  // no tiene papelera: lo borrado no se recupera.
+  assert.deepEqual(destructive, ["github.merge-pull-request", "linkedin.delete-post", "outline.delete-document", "plane.delete-issue"]);
 });
 
 test("throws when registerAllActions is called without bitwarden's required runBw/readVaultItems", () => {

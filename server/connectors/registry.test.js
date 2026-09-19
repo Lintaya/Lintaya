@@ -26,10 +26,10 @@ test("loads every connector from its tier folder", () => {
   // connectors the machine running this happens to have installed rather than
   // what the repository ships — which is what this test is about.
   const shipped = loadConnectorManifests({ userDir: tempDir() });
-  assert.equal(shipped.size, 7);
+  assert.equal(shipped.size, 8);
   assert.deepEqual(
     [...shipped.keys()].sort(),
-    ["bitbucket", "bw", "github", "gitlab", "outline", "plane", "portainer"],
+    ["bitbucket", "bw", "github", "gitlab", "linkedin", "outline", "plane", "portainer"],
   );
 
   const tierCounts = { community: 0, enterprise: 0, development: 0 };
@@ -43,7 +43,7 @@ test("loads every connector from its tier folder", () => {
   // Los tiers enterprise y development ya no se entregan aquí: sus seis
   // conectores viven en su propio repositorio y se instalan bajo
   // LINTAYA_CONNECTORS_DIR (ADR-014 Fase 3).
-  assert.deepEqual(tierCounts, { community: 7, enterprise: 0, development: 0 });
+  assert.deepEqual(tierCounts, { community: 8, enterprise: 0, development: 0 });
 });
 
 test("exposes safe connector metadata for API responses", () => {

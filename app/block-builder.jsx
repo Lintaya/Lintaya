@@ -775,11 +775,17 @@ function BlockBuilder({ onClose, editing }) {
   // caso de uso es algo que ya armaste con una IA afuera (ChatGPT, Claude,
   // lo que sea) y solo querés pegar como un block más, usable en Home o en
   // cualquier Board igual que uno conectado a datos reales.
-  const [kind, setKind] = useState(() => ["content", "qr"].includes(editing?.kind) ? editing.kind : "connector");
+  const [kind, setKind] = useState(() => ["content", "qr", "linkedin-post"].includes(editing?.kind) ? editing.kind : "connector");
   const [qrMode, setQrMode] = useState(() => editing?.payload?.mode === "dynamic" ? "dynamic" : "manual");
   const [dynamicEnabled, setDynamicEnabled] = useState(() => editing?.payload?.mode === "dynamic");
   useEffect(() => { window.HQ_API.request("/api/settings/builder").then(settings => setDynamicEnabled(settings.qr?.dynamicEnabled === true || editing?.payload?.mode === "dynamic")).catch(() => {}); }, []);
   const [qrValue, setQrValue] = useState(() => editing?.payload?.value || "");
+  // Un block "linkedin-post" ES la publicacion: su texto y su enlace viven
+  // en el propio registro, igual que el valor de un QR.
+  const [liBody, setLiBody] = useState(() => editing?.payload?.body || "");
+  const [liLink, setLiLink] = useState(() => editing?.payload?.link || "");
+  const [liProfile, setLiProfile] = useState(null);
+  const linkedinMax = window.LINKEDIN_MAX_LENGTH || 3000;
   // Tipo de contenido (Wi-Fi, contacto, evento…) solo en modo estático: un QR
   // dinámico redirige a una URL. qrValue sigue siendo lo único que se guarda;
   // el formulario lo arma con window.QRPayload y, al editar, lo reconstruye a
@@ -975,6 +981,25 @@ function BlockBuilder({ onClose, editing }) {
   };
 
   const step1Done = !!connector;
+
+  // Se filtra por TIPO y no por id: una segunda conexion de LinkedIn tiene que
+  // aparecer igual que la primera (mismo criterio que los scopes de arriba).
+  const linkedinConnectors = useMemo(() => connectors.filter(c => c.type === "linkedin"), [connectors]);
+
+  // El nombre, la foto y la cabecera de la vista previa salen de la cuenta
+  // conectada: sin esto la tarjeta mentiria sobre como se va a ver el post.
+  // Tambien se relee al guardar la configuracion del conector: el titular se
+  // escribe ahi, y con el Builder ya abierto la vista previa seguia mostrando
+  // el perfil de antes hasta volver a elegir la conexion.
+  useEffect(() => {
+    if (kind !== "linkedin-post" || !connectorId || !window.linkedInLoadProfile) return;
+    let alive = true;
+    const load = () => window.linkedInLoadProfile(connectorId).then(profile => { if (alive) setLiProfile(profile); });
+    const onChanged = (e) => { if (!e.detail?.id || e.detail.id === connectorId) load(); };
+    load();
+    window.addEventListener("hq:connector-config-changed", onChanged);
+    return () => { alive = false; window.removeEventListener("hq:connector-config-changed", onChanged); };
+  }, [kind, connectorId]);
   // Depende de step1Done, no solo de dataType: en edición, dataType/scope se
   // precargan desde `editing` antes de que `connectors` termine de cargar
   // (fetch async), así que dataType puede estar seteado con connector aún
@@ -985,18 +1010,23 @@ function BlockBuilder({ onClose, editing }) {
 
   const connectorCanSave = step1Done && step2Done && step3Done;
   const contentCanSave = !!format && content.trim().length > 0;
-  const canSave = kind === "content" ? contentCanSave : kind === "qr" ? !!qrValue.trim() : connectorCanSave;
+  // Mismo criterio que el servidor: puntos de codigo, no unidades UTF-16.
+  // Con el enlace incluido: se publica al final del texto y cuenta para el limite.
+  const liPublished = window.linkedInComposeText ? window.linkedInComposeText(liBody, liLink) : liBody;
+  const liLength = window.linkedInCountChars ? window.linkedInCountChars(liPublished) : liPublished.length;
+  const linkedinCanSave = !!connector && !!liBody.trim() && liLength <= linkedinMax;
+  const canSave = kind === "content" ? contentCanSave : kind === "qr" ? !!qrValue.trim() : kind === "linkedin-post" ? linkedinCanSave : connectorCanSave;
 
   // Nombre por defecto, derivado de la selección — solo se usa como
   // placeholder/fallback; el campo "Nombre" en sí queda vacío hasta que el
   // usuario escribe algo (si se precargara como value, un clic a mitad de
   // texto insertaría ahí en vez de reemplazarlo).
   const autoTitle = useMemo(() => {
-    if (!connector || !dataType) return null;
+    if (kind !== "connector" || !connector || !dataType) return null;
     const dt = connector.dataTypes.find(d => d.id === dataType);
     const scopeLabel = connector.scopes.find(s => s.id === scope)?.label;
     return `${dt.label}${scopeLabel ? " — " + scopeLabel : ""}`;
-  }, [connector, dataType, scope]);
+  }, [kind, connector, dataType, scope]);
 
   // En edición sí se precarga el título real (a diferencia del placeholder-
   // only de creación): acá no hay auto-título "en movimiento" pisando lo que
@@ -1006,7 +1036,7 @@ function BlockBuilder({ onClose, editing }) {
   const [icon, setIcon] = useState(() => editing?.icon || null);
   const [active, setActive] = useState(() => editing ? editing.active !== false : true);
   const [tags, setTags] = useState(() => editing?.tags || []);
-  const blockTitle = title.trim() || autoTitle || (kind === "content" ? window.I18N.t("ui.blocks.aiBlock", "AI block") : kind === "qr" ? window.I18N.t("ui.blocks.qrTitle", "QR code") : null);
+  const blockTitle = title.trim() || autoTitle || (kind === "content" ? window.I18N.t("ui.blocks.aiBlock", "AI block") : kind === "qr" ? window.I18N.t("ui.blocks.qrTitle", "QR code") : kind === "linkedin-post" ? (liBody.trim().split(/\s+/).slice(0, 6).join(" ") || window.I18N.t("ui.blocks.linkedinPost", "LinkedIn post")) : null);
 
   // Datos reales del block — un solo fetch, compartido por el preview y la
   // tabla .md (antes cada uno llamaba genPreviewItems() por separado). No
@@ -1060,6 +1090,9 @@ function BlockBuilder({ onClose, editing }) {
       }
       const body = kind === "content"
         ? { kind: "content", title: blockTitle, description: description.trim() || null, icon, active, tags, format, content, prompt: prompt.trim() || null, rules: (rules != null && rules.trim()) ? rules : null }
+        : kind === "linkedin-post"
+        ? { kind: "linkedin-post", connectorId: connector.id, title: blockTitle, description: description.trim() || null, icon, active, tags,
+            payload: { body: liBody, link: liLink.trim() || null, linkAsFirstComment: false } }
         : kind === "qr"
           // El nivel de corrección que se guarda es el que eligió el usuario.
           // Poner el logo sube el default a Q (ver setQrLogo), pero elegir H
@@ -1157,7 +1190,7 @@ function BlockBuilder({ onClose, editing }) {
       {!isFixed && <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
         <div style={labelStyle}>{window.I18N.t("boards.type", "Type")}</div>
         <div role="group" aria-label={bbt("blockBuilder.blockType", "Block type")} style={{ display: "flex", gap: 5 }}>
-          {[["connector", window.I18N.t("boards.connector", "Connector")], ["content", "IA"], ["qr", window.I18N.t("ui.blocks.qr", "QR")]].map(([k, l]) => {
+          {[["connector", window.I18N.t("boards.connector", "Connector")], ["content", "IA"], ["qr", window.I18N.t("ui.blocks.qr", "QR")], ["linkedin-post", "LinkedIn"]].map(([k, l]) => {
             const on = kind === k;
             return (
               <button key={k} type="button" aria-pressed={on} onClick={() => setKind(k)} style={{
@@ -1207,6 +1240,23 @@ function BlockBuilder({ onClose, editing }) {
             <div>
               <div style={labelStyle}>{window.I18N.t("boards.connector", "Connector")}</div>
               <StepConnector connectors={isFixed ? connectors.filter(c => c.id === connectorId) : connectors} value={connectorId} onSelect={isFixed ? () => {} : selectConnector} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {kind === "linkedin-post" && (
+        <div>
+          {loadingCatalog ? (
+            <div style={{ fontSize: 12, color: "var(--muted-fg)" }}>{window.I18N.t("connectors.newConnection.loadingConnectors", "Loading connectors\u2026")}</div>
+          ) : linkedinConnectors.length === 0 ? (
+            <div style={{ fontSize: 11.5, color: "var(--muted-fg)", lineHeight: 1.5 }}>
+              {window.I18N.t("ui.blocks.linkedinNoConnector", "Configure the LinkedIn connector first, then come back to write the post.")}
+            </div>
+          ) : (
+            <div>
+              <div style={labelStyle}>{window.I18N.t("boards.connector", "Connector")}</div>
+              <StepConnector connectors={linkedinConnectors} value={connectorId} onSelect={selectConnector} />
             </div>
           )}
         </div>
@@ -1369,7 +1419,47 @@ function BlockBuilder({ onClose, editing }) {
     </div>
   );
 
-  const configContent = kind === "qr" ? (
+  const configContent = kind === "linkedin-post" ? (
+    !step1Done ? (
+      <div style={{ fontSize: 12, color: "var(--muted-fg)" }}>{window.I18N.t("ui.blocks.selectConnector", "Choose a connector first.")}</div>
+    ) : (
+      <div style={{ maxWidth: mobile ? "none" : 520, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <div style={labelStyle}>{window.I18N.t("ui.blocks.linkedinBody", "Post text")}</div>
+          <textarea value={liBody} onChange={e => setLiBody(e.target.value)} rows={10}
+            aria-label={window.I18N.t("ui.blocks.linkedinBody", "Post text")}
+            placeholder={window.I18N.t("ui.blocks.linkedinBodyPlaceholder", "What do you want to share?")}
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1px solid var(--border)",
+              borderRadius: 6, background: "white", color: "var(--fg)", font: "inherit", fontSize: 13,
+              lineHeight: 1.5, resize: "vertical", outline: "none",
+            }} />
+          <div style={{ display: "flex", gap: 10, alignItems: "baseline", marginTop: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: liLength > linkedinMax ? "var(--err)" : "var(--muted-fg)" }}>
+              {liLength}/{linkedinMax}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.5 }}>
+              {window.I18N.t("ui.blocks.linkedinSeeMoreHint", "Only the first lines show in the feed; the rest hides behind \u201csee more\u201d.")}
+            </span>
+          </div>
+        </div>
+        <div>
+          <div style={labelStyle}>{window.I18N.t("ui.blocks.linkedinLink", "Link (optional)")}</div>
+          <input type="url" value={liLink} onChange={e => setLiLink(e.target.value)} placeholder="https://…"
+            aria-label={window.I18N.t("ui.blocks.linkedinLink", "Link (optional)")}
+            style={{
+              width: "100%", boxSizing: "border-box", padding: "8px 10px", border: "1px solid var(--border)",
+              borderRadius: 6, background: "white", color: "var(--fg)", font: "inherit", fontSize: 13, outline: "none",
+            }} />
+          {liLink.trim() && (
+            <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.5, marginTop: 6 }}>
+              {window.I18N.t("ui.linkedin.linkWarning", "LinkedIn shows posts with external links to fewer people. Consider putting the link in the first comment instead.")}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  ) : kind === "qr" ? (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {qrMode === "manual" && window.QRPayload && (
         <div>
@@ -1591,7 +1681,14 @@ function BlockBuilder({ onClose, editing }) {
   );
 
   const qrPreview = qrPreviewValue({ mode: qrMode, destination: qrValue, baseUrl: qrBaseUrl, shortUrl: qrShortUrl });
-  const previewContent = kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrPreview} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={qrLogoValue} size={240} />{qrMode === "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.4 }}>{window.I18N.t("ui.blocks.qrPreviewRepresentative", "Preview uses a representative short link; the final code is assigned when you save.")}</div>}</div> : kind === "content" ? (
+  const previewContent = kind === "linkedin-post" ? (
+    <div>
+      <div style={{ ...labelStyle, marginBottom: 8 }}>{window.I18N.t("tags.preview", "Preview")}</div>
+      {window.LinkedInPostCard
+        ? <window.LinkedInPostCard profile={liProfile} body={liBody} link={liLink.trim() || null} />
+        : <div style={{ fontSize: 12, color: "var(--muted-fg)" }}>{window.I18N.t("ui.blocks.loadingData", "Loading\u2026")}</div>}
+    </div>
+  ) : kind === "qr" ? <div><div style={labelStyle}>{window.I18N.t("tags.preview", "Preview")}</div><window.QRCodeSvg value={qrPreview} style={{ ecLevel: qrEc, fgColor: qrFg, bgColor: qrBg }} logo={qrLogoValue} size={240} />{qrMode === "dynamic" && <div style={{ fontSize: 11, color: "var(--muted-fg)", lineHeight: 1.4 }}>{window.I18N.t("ui.blocks.qrPreviewRepresentative", "Preview uses a representative short link; the final code is assigned when you save.")}</div>}</div> : kind === "content" ? (
     <>
       <div style={{ ...labelStyle, marginBottom: 8 }}>{window.I18N.t("tags.preview", "Preview")}</div>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
@@ -1681,8 +1778,11 @@ function BlockBuilder({ onClose, editing }) {
 
           {/* centro: tipo de dato + alcance y tamaño */}
           {showConfig && (
-            <section aria-label={window.I18N.t("ui.blocks.config", "Block configuration")} style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "16px 18px 24px" }}>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <section aria-label={window.I18N.t("ui.blocks.config", "Block configuration")} style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "16px 18px 24px", position: "relative" }}>
+              {/* El botón flota en la esquina en vez de ocupar su propia fila:
+                  ocupándola empujaba el contenido 34 px hacia abajo y la primera
+                  etiqueta de esta columna no quedaba a la altura de "Nombre". */}
+              <div style={{ position: "absolute", top: 16, right: 18, zIndex: 1 }}>
                 <button onClick={() => setShowConfig(false)} title={window.I18N.t("ui.blocks.closeConfig", "Close — show only the preview")} style={{
                   width: 26, height: 26, display: "inline-flex", alignItems: "center", justifyContent: "center",
                   border: "1px solid var(--border)", background: "white", borderRadius: 6, cursor: "pointer", color: "var(--muted-fg)", fontSize: 15, lineHeight: 1, flexShrink: 0,
@@ -1696,7 +1796,10 @@ function BlockBuilder({ onClose, editing }) {
           {/* derecha: preview — toma todo el ancho restante cuando el panel central está cerrado */}
           <aside aria-label="Block preview" style={{
             ...(showConfig ? { width: rightWidth, flexShrink: 0 } : { flex: 1, minWidth: 0 }),
-            background: "var(--muted)", padding: "16px 14px 24px", overflowY: "auto",
+            // El preview de un post usa el gris del feed de LinkedIn, para que
+            // la tarjeta se vea sobre el mismo fondo que tendra de verdad.
+            background: kind === "linkedin-post" ? (window.LINKEDIN_FEED_BG || "#f4f2ee") : "var(--muted)",
+            padding: "16px 14px 24px", overflowY: "auto",
           }}>
             {previewContent}
           </aside>

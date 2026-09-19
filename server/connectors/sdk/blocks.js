@@ -23,8 +23,11 @@ function normalizeBlockItem(item) {
 
 /**
  * Mounts the standard block route for one declared block. `getBlock(req)` may
- * be sync or async and returns `{ items, updatedAt }`; items that lack the
- * required id/title are dropped rather than failing the whole block.
+ * be sync or async and returns `{ items, updatedAt, emptyMessage? }`; items
+ * that lack the required id/title are dropped rather than failing the whole
+ * block. `emptyMessage` replaces the panel's generic "no synced data — hit
+ * Sync" when an empty list has another cause (nothing pending yet), so the
+ * block does not send the user to a Sync that would change nothing.
  *
  * `req` is passed through so a connector can read `req.query.scope` /
  * `req.query.limit` to serve a scoped/limited slice of its already-synced
@@ -42,7 +45,11 @@ function registerBlockRoute(options) {
       const block = await getBlock(req);
       if (!block) return res.status(400).json({ error: "connector-not-configured" });
       const items = (block.items || []).map(normalizeBlockItem).filter(Boolean);
-      return res.json({ items, updatedAt: block.updatedAt || null });
+      return res.json({
+        items,
+        updatedAt: block.updatedAt || null,
+        ...(block.emptyMessage ? { emptyMessage: String(block.emptyMessage) } : {}),
+      });
     } catch (error) {
       return res.status(502).json({ error: error.message });
     }

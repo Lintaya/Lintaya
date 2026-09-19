@@ -54,6 +54,17 @@ function registerConnectorsRoutes({
         connectorTypeId: connector.id,
         manifestManaged: true,
         ...connector,
+        // El catálogo no trae los blocks, y sin ellos el detalle del conector
+        // decía "no tiene bloques disponibles" a un conector que sí los
+        // declara. Salen del mismo manifiesto que el resto de la tarjeta.
+        blocks: connector.blocks || (getConnectorManifest(connector.id)?.blocks || []).map((block) => ({ ...block })),
+        // Sin fila propia no hay endpoint guardado: la tarjeta decia "—". El
+        // manifiesto ya declara contra que API habla el conector.
+        endpoint: connector.endpoint || getConnectorManifest(connector.id)?.upstreamApi?.baseUrl || "",
+        // Versión y licencia, igual que las tarjetas con fila propia (ver
+        // connectorMetadata en connectors/registry.js): el detalle las muestra.
+        ...(getConnectorManifest(connector.id)?.version ? { connectorVersion: getConnectorManifest(connector.id).version } : {}),
+        ...(getConnectorManifest(connector.id)?.license ? { license: getConnectorManifest(connector.id).license } : {}),
       }));
     // Merge live status + endpoint config so UI knows if configured
     const enabledMap = kvGet("connector-enabled")?.value || {};

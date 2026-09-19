@@ -429,6 +429,16 @@ function ConnectorBlockPanel(props) {
       </Panel>
     );
   }
+  // Un block de publicacion de LinkedIn tampoco viene de un endpoint de
+  // conector: su texto vive en el propio registro del block, igual que el QR.
+  if (block.kind === "linkedin-post") {
+    if (window.LinkedInPostPanel) return <window.LinkedInPostPanel block={block} panelProps={panelProps} />;
+    return (
+      <Panel title={`${block.icon ? block.icon + " " : ""}${block.title}`} {...panelProps}>
+        <div style={{ padding: 14, fontSize: 12.5, color: "var(--muted-fg)" }}>{window.I18N.t("ui.blocks.loadingData", "Loading…")}</div>
+      </Panel>
+    );
+  }
   if ((block.connectorType || block.connectorId) === "plane" && block.blockId === "my-issues") {
     return <PlaneTasksPanel connectionId={block.connectorId} panelProps={panelProps} />;
   }
@@ -606,6 +616,9 @@ function GenericConnectorBlockPanel({ block, onItemClick, panelProps }) {
   const [loading, setLoading]     = useState(!isContent);
   const [error, setError]         = useState(null);
   const [syncing, setSyncing]     = useState(false);
+  // El block puede decir por que esta vacio ("nada pendiente"): el mensaje
+  // generico manda a sincronizar, y a veces sincronizar no cambia nada.
+  const [emptyMessage, setEmptyMessage] = useState(null);
   const [page, setPage]           = useState(0);
 
   const load = useCallback(() => {
@@ -617,7 +630,7 @@ function GenericConnectorBlockPanel({ block, onItemClick, panelProps }) {
     if (block.limit) qs.set("limit", String(block.limit));
     const suffix = qs.toString() ? `?${qs}` : "";
     return window.HQ_API.request(`/api/connectors/${block.connectorId}/blocks/${block.blockId}${suffix}`)
-      .then(d => { setItems(d.items || []); setError(null); })
+      .then(d => { setItems(d.items || []); setEmptyMessage(d.emptyMessage || null); setError(null); })
       .catch(e => setError(e.message));
   }, [isContent, block.connectorId, block.blockId, block.scope, block.limit]);
 
@@ -682,7 +695,7 @@ function GenericConnectorBlockPanel({ block, onItemClick, panelProps }) {
       ) : error ? (
         <div style={{ padding: 14, color: "var(--err)", fontSize: 12.5 }}>{error}</div>
       ) : items.length === 0 ? (
-        <div style={{ padding: 14, color: "var(--muted-fg)", fontSize: 13 }}>{t("home.block.noSyncedData")}</div>
+        <div style={{ padding: 14, color: "var(--muted-fg)", fontSize: 13 }}>{emptyMessage || t("home.block.noSyncedData")}</div>
       ) : (() => {
         const { pageItems, totalPages, safePage } = paginate(items, page);
         return (
@@ -758,6 +771,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
   const [modalDoc, setModalDoc] = useState(null);
   const [modalPR, setModalPR] = useState(null);
   const [modalCommit, setModalCommit] = useState(null);
+  const [modalStars, setModalStars] = useState(null);
   const [modalIssue, setModalIssue] = useState(null);
 
   // Qportal data
@@ -1058,6 +1072,7 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
       {modalDoc && <DocumentDetailModal doc={modalDoc} onClose={() => setModalDoc(null)} />}
       {modalPR && window.PullRequestDetailModal && <window.PullRequestDetailModal pr={modalPR} onClose={() => setModalPR(null)} />}
       {modalCommit && window.CommitDetailModal && <window.CommitDetailModal commit={modalCommit} onClose={() => setModalCommit(null)} />}
+      {modalStars && window.StargazersModal && <window.StargazersModal repo={modalStars} onClose={() => setModalStars(null)} />}
       {modalIssue && window.IssueDetailModal && <window.IssueDetailModal issue={modalIssue} onClose={() => setModalIssue(null)} />}
 
       {(() => {
@@ -1388,6 +1403,10 @@ function HomeView({ onNavigate, liveVMs, liveHosts, liveMeta }) {
         // que capturarle el click lo llevaria a un 404 en vez de a GitHub.
         connectorBlocks.forEach(candidate => {
           if ((candidate.connectorType || candidate.connectorId) !== "github") return;
+          // Sin alcance, cada fila es un repo: abre quien le dio estrella.
+          if (candidate.blockId === "stars") {
+            blockItemHandlers[candidate.id] = item => setModalStars({ provider: candidate.connectorId, id: item.id, name: item.title });
+          }
           if (candidate.blockId === "open-pull-requests") {
             blockItemHandlers[candidate.id] = item => setModalPR({ ...item, connectorId: candidate.connectorId });
           }

@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "github",
   "displayName": "GitHub",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "tier": "community",
   "lifecycle": "beta",
   "license": "Apache-2.0",
@@ -55,6 +55,12 @@
       "id": "repos-overview",
       "title": "GitHub — mis repos",
       "icon": "📦",
+      "type": "list"
+    },
+    {
+      "id": "stars",
+      "title": "GitHub — estrellas",
+      "icon": "★",
       "type": "list"
     }
   ],

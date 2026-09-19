@@ -32,6 +32,7 @@ const BLOCK_CONNECTOR_STYLE = {
   github:    { icon: "GH", color: "#1c1917" },
   outline:   { icon: "OL", color: "#0f172a" },
   bitbucket: { icon: "BB", color: "#0052cc" },
+  linkedin:  { icon: "in", color: "#0a66c2" },
   portainer: { icon: "PT", color: "#13bef9" },
   bitwarden: { icon: "BW", color: "#175ddc" },
   outlook:   { icon: "OU", color: "#0078d4" },
@@ -242,22 +243,27 @@ function BlockCatalogView({ isMobile }) {
   // forma de cambiar a otra.
   const tagOptions = window.tagFilterOptions ? window.tagFilterOptions([...(connectorBlocks || []), ...customBlocks]) : [];
 
-  const filteredConnectorBlocks = (connectorBlocks || []).filter(b => matches(b, false));
-  const filteredCustomBlocks = customBlocks.filter(b => matches(b, true));
-  const visibleCount = filteredConnectorBlocks.length + filteredCustomBlocks.length;
-
   // One combined, ordered list for pagination — the table shows Fijo rows
   // then Custom rows as a single continuous list, so a page boundary should
   // cut across both, not paginate each kind separately. usePagination (and
   // its internal hooks) must run every render, so this stays above the
   // "Cargando…" early return below — never call it conditionally.
-  const allFiltered = React.useMemo(
-    () => [
-      ...filteredConnectorBlocks.map(b => ({ ...b, __kind: "fixed" })),
-      ...filteredCustomBlocks.map(b => ({ ...b, __kind: "custom" })),
-    ],
-    [filteredConnectorBlocks, filteredCustomBlocks],
-  );
+  // El filtrado va DENTRO del memo, con el estado del que depende de verdad:
+  // antes los dos .filter() se hacían fuera en cada render, el memo recibía
+  // arrays nuevos siempre, y la paginación volvía a la página 1 sola.
+  const { filteredConnectorBlocks, filteredCustomBlocks, allFiltered } = React.useMemo(() => {
+    const fixed = (connectorBlocks || []).filter(b => matches(b, false));
+    const custom = customBlocks.filter(b => matches(b, true));
+    return {
+      filteredConnectorBlocks: fixed,
+      filteredCustomBlocks: custom,
+      allFiltered: [
+        ...fixed.map(b => ({ ...b, __kind: "fixed" })),
+        ...custom.map(b => ({ ...b, __kind: "custom" })),
+      ],
+    };
+  }, [connectorBlocks, customBlocks, layout, connectorFilter, typeFilter, estadoFilter, tagFilter, term]);
+  const visibleCount = filteredConnectorBlocks.length + filteredCustomBlocks.length;
   const pagination = usePagination(allFiltered, { key: "blocks-catalog" });
   const pageConnectorBlocks = pagination.pageItems.filter(b => b.__kind === "fixed");
   const pageCustomBlocks = pagination.pageItems.filter(b => b.__kind === "custom");

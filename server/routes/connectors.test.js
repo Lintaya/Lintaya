@@ -245,6 +245,8 @@ test("registered manifests appear as non-persisted cards when an older database 
     displayName: "Example",
     capabilities: ["items.read"],
     config: { fields: [] },
+    // Sin blocks en el manifiesto de ejemplo: lista vacia, no ausente.
+    blocks: [],
     type: "example",
     transport: "http",
     os: null,

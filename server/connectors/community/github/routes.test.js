@@ -396,3 +396,93 @@ test("the token never leaks into the failure log", async () => {
   assert.equal(JSON.stringify(response.body).includes("secret-pat"), false);
   assert.equal(JSON.stringify(harness.logs).includes("secret-pat"), false);
 });
+
+test("stargazers: lists who starred a synced repo, newest first, with the star+json header", async () => {
+  const calls = [];
+  const harness = createEnvelopeHarness({
+    request: async (baseUrl, token, path, method, body, headers) => {
+      calls.push({ path, headers });
+      return [
+        { starred_at: "2026-08-01T10:00:00Z", user: { login: "older", avatar_url: "https://avatars.example.test/1", html_url: "https://github.com/older" } },
+        { starred_at: "2026-09-10T10:00:00Z", user: { login: "newer", avatar_url: "https://avatars.example.test/2", html_url: "https://github.com/newer" } },
+      ];
+    },
+  });
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "t" });
+  harness.values.set("connector-data-github", { projects: [{ id: "acme/app" }] });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/projects/:projectId/stargazers", { params: { projectId: "acme/app" } });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.total, 2);
+  assert.deepEqual(response.body.stargazers.map(s => s.login), ["newer", "older"]);
+  assert.equal(calls[0].path, "/repos/acme/app/stargazers?per_page=100&page=1");
+  assert.equal(calls[0].headers.Accept, "application/vnd.github.star+json");
+});
+
+test("stargazers: refuses repos that were never synced instead of proxying any repo", async () => {
+  let called = false;
+  const harness = createEnvelopeHarness({ request: async () => { called = true; return []; } });
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "t" });
+  harness.values.set("connector-data-github", { projects: [{ id: "acme/app" }] });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/projects/:projectId/stargazers", { params: { projectId: "someone/else" } });
+  assert.equal(response.status, 404);
+  assert.equal(called, false);
+});
+
+test("stars block, all repos: one row per own public repo with its count, most starred first", async () => {
+  const harness = createEnvelopeHarness();
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "t" });
+  harness.values.set("connector-data-github", {
+    syncedAt: "2026-09-18T00:00:00Z",
+    projects: [
+      { id: "me/app", name: "app", path: "me/app", description: "The app", visibility: "public", fork: false, stars: 2, webUrl: "https://github.com/me/app" },
+      { id: "me/lib", name: "lib", path: "me/lib", visibility: "public", fork: false, stars: 5, webUrl: "https://github.com/me/lib" },
+      { id: "me/secret", name: "secret", visibility: "private", fork: false, stars: 1, webUrl: "https://github.com/me/secret" },
+      { id: "me/forked", name: "forked", visibility: "public", fork: true, stars: 9, webUrl: "https://github.com/me/forked" },
+    ],
+    stargazers: [
+      { projectId: "me/app", projectName: "app", login: "ana", url: "https://github.com/ana", starredAt: "2026-09-01T00:00:00Z" },
+      { projectId: "me/lib", projectName: "lib", login: "bob", url: "https://github.com/bob", starredAt: "2026-09-15T00:00:00Z" },
+      { projectId: "me/app", projectName: "app", login: "cai", url: "https://github.com/cai", starredAt: "2026-09-10T00:00:00Z" },
+      { projectId: "me/secret", projectName: "secret", login: "dee", starredAt: "2026-09-17T00:00:00Z" },
+    ],
+  });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/blocks/stars", {});
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.items.map(i => i.id), ["me/lib", "me/app"]);
+  assert.equal(response.body.items[0].badge.text, "\u2605 5");
+  assert.equal(response.body.items[1].subtitle, "The app");
+  assert.equal(response.body.items[0].url, "https://github.com/me/lib/stargazers");
+});
+
+test("stars block, one repo: one row per person who starred it, newest first", async () => {
+  const harness = createEnvelopeHarness();
+  harness.values.set("connector-config-github", { baseUrl: "https://api.github.com", token: "t" });
+  harness.values.set("connector-data-github", {
+    syncedAt: "2026-09-18T00:00:00Z",
+    projects: [
+      { id: "me/app", name: "app", path: "me/app", description: "The app", visibility: "public", fork: false, stars: 2, webUrl: "https://github.com/me/app" },
+      { id: "me/lib", name: "lib", path: "me/lib", visibility: "public", fork: false, stars: 5, webUrl: "https://github.com/me/lib" },
+      { id: "me/secret", name: "secret", visibility: "private", fork: false, stars: 1, webUrl: "https://github.com/me/secret" },
+      { id: "me/forked", name: "forked", visibility: "public", fork: true, stars: 9, webUrl: "https://github.com/me/forked" },
+    ],
+    stargazers: [
+      { projectId: "me/app", projectName: "app", login: "ana", url: "https://github.com/ana", starredAt: "2026-09-01T00:00:00Z" },
+      { projectId: "me/lib", projectName: "lib", login: "bob", url: "https://github.com/bob", starredAt: "2026-09-15T00:00:00Z" },
+      { projectId: "me/app", projectName: "app", login: "cai", url: "https://github.com/cai", starredAt: "2026-09-10T00:00:00Z" },
+      { projectId: "me/secret", projectName: "secret", login: "dee", starredAt: "2026-09-17T00:00:00Z" },
+    ],
+  });
+
+  const response = await harness.invoke("GET", "/api/connectors/github/blocks/stars", { query: { scope: "me/app" } });
+  assert.deepEqual(response.body.items.map(i => i.title), ["cai", "ana"]);
+  assert.equal(response.body.items[0].subtitle, "\u2605 app");
+  assert.equal(response.body.items[0].url, "https://github.com/cai");
+  assert.equal(response.body.items[0].timestamp, "2026-09-10T00:00:00Z");
+
+  // Un repo privado no muestra a nadie, aunque se pida por su id.
+  const hidden = await harness.invoke("GET", "/api/connectors/github/blocks/stars", { query: { scope: "me/secret" } });
+  assert.deepEqual(hidden.body.items, []);
+});
