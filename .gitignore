@@ -26,6 +26,9 @@ server/gitlab-clones/
 server/vault-seed.js
 # BW_CLIENTID / BW_CLIENTSECRET — copy start-dev.example.js → start-dev.js
 server/start-dev.js
+
+# API token generated on first start when LINTAYA_TOKEN is unset
+server/.lintaya-token
 # Bitwarden installation key
 bitwarden/settings.env
 

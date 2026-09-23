@@ -76,10 +76,11 @@ npm run check
 npm run dev
 ```
 
-Open `http://localhost:3000`. The development command uses local demonstration
-defaults only. For a configurable local server, copy
-`server/start-dev.example.js` to the gitignored `server/start-dev.js`, set a
-strong `LINTAYA_TOKEN`, and run:
+Open `http://localhost:3000`. With no `LINTAYA_TOKEN` set, the server generates
+its own API token on first start, prints it once and keeps it in the gitignored
+`server/.lintaya-token`; paste that value into the app when it asks. For a
+configurable local server, copy `server/start-dev.example.js` to the gitignored
+`server/start-dev.js` and run:
 
 ```powershell
 node .\start-dev.js

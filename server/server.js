@@ -27,6 +27,7 @@ const {
 const { connectorManifests, connectorMetadata, getConnectorConfigSchema, getConnectorManifest, isSupportedHere, listAutoSyncTargets, listConnectorBlocks, listConnectorCatalog } = require("./connectors/registry");
 const { registerConnectorInstance, registerConnectors } = require("./connectors/loader");
 const { loadConfig } = require("./core/config");
+const { discardStoredToken, resolveApiToken, startupRefusal, tokenWarning } = require("./core/token");
 const { createWorkloadSources } = require("./core/services/workload-sources");
 const {
   MAIN_MIGRATIONS,
@@ -91,17 +92,19 @@ const { registerBackupRoutes } = require("./routes/backups");
 const log = createLogger({ component: "server" });
 const SSH_ALGS = SSH_ALGORITHMS;
 
-const config = loadConfig(process.env, {
-  requireToken: require.main === module,
-  serverDir: __dirname,
-});
+const config = loadConfig(process.env, { serverDir: __dirname });
+
+// Authentication is resolved outside loadConfig because a missing token is not
+// a configuration error any more: an install without LINTAYA_TOKEN gets its own
+// generated one instead of a credential this repository publishes.
+const apiToken = resolveApiToken({ env: process.env, serverDir: __dirname });
 
 const APP_VERSION = fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim();
 
 const PORT = config.http.port;
 const HOST = config.http.host;
 const ROOT = config.rootDir;
-const TOKEN = config.http.token;
+const TOKEN = apiToken.token;
 const app = createApp({ token: TOKEN, version: APP_VERSION });
 
 const db = openDatabase({
@@ -1380,11 +1383,47 @@ app.get("/{*splat}", (req, res) => {
 app.use(errorMiddleware(log));
 
 function startServer() {
-  if (!TOKEN) {
-    throw new Error("LINTAYA_TOKEN env var not set. Set it before starting the server.");
+  if (apiToken.source === "generated") {
+    console.log(`Generated an API token for this install and stored it in ${apiToken.file}.`);
+    // Only an operator watching a terminal gets the value itself. Under a
+    // service manager, CI or any log collector, stdout outlives the boot and
+    // reaches more people than the 0600 file does — printing it there would
+    // turn a one-time bootstrap secret into a durable logged credential.
+    if (process.stdout.isTTY) {
+      console.log(`Token: ${TOKEN} — paste it into the app when it asks, and keep it out of Git.`);
+    } else {
+      console.log("Read that file to get the token, then paste it into the app when it asks.");
+    }
+  } else if (apiToken.source === "file") {
+    console.log(`Using the API token stored in ${apiToken.file}.`);
   }
 
+  const refusal = startupRefusal(TOKEN, HOST);
+  if (refusal) throw new Error(refusal);
+
+  const weakToken = tokenWarning(TOKEN);
+  if (weakToken) log.warn(`[auth] ${weakToken}`);
+
   httpServer.listen(PORT, HOST, () => {
+    // Only now that the replacement is actually serving. Rotating the old
+    // generated token away any earlier — at resolution, before the port is
+    // even claimed — would have thrown away the credential every browser
+    // still holds on the way to a start that never happened.
+    if (apiToken.source === "env" && apiToken.staleStored) {
+      try {
+        discardStoredToken(__dirname);
+        console.log("LINTAYA_TOKEN is set, so the previously generated token file was removed.");
+      } catch (error) {
+        // Fail closed: leaving it there means a later start without
+        // LINTAYA_TOKEN would silently accept the token we just replaced.
+        log.error(`[auth] ${error.message}`);
+        httpServer.close();
+        closeResources();
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     console.log(`Local: http://localhost:${PORT}`);
     log.info("Lintaya running", {
       url: `http://${HOST}:${PORT}`,

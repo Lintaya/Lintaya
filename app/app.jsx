@@ -569,7 +569,7 @@ function AuthGate() {
     ? t("authGate.setupTitle", "Welcome to Lintaya")
     : t("authGate.title", "Session expired");
   const description = firstRun
-    ? t("authGate.setupDesc", "This is a fresh install. Enter your access token to unlock Lintaya — you will find it in server/start-dev.js. It stays in this browser, and the server never sends it back.")
+    ? t("authGate.setupDesc", "This is a fresh install. Enter your access token to unlock Lintaya — the server printed it when it started and keeps it in server/.lintaya-token, unless you set LINTAYA_TOKEN yourself. It stays in this browser, and the server never sends it back.")
     : t("authGate.desc", "Your Lintaya access token is missing or no longer valid. Enter it again to keep working -- nothing you had open was lost.");
   const submitLabel = busy
     ? (firstRun ? t("authGate.connecting", "Unlocking…") : t("authGate.reconnecting", "Reconnecting…"))
@@ -581,6 +581,16 @@ function AuthGate() {
     if (!trimmed || busy) return;
     setBusy(true);
     window.HQ_API.setToken(trimmed);
+    if (!window.HQ_API.isTokenPersisted()) {
+      // Web Storage is blocked (embedded browsers, partitioned storage), so the
+      // token only exists in memory: reloading would throw it away and reopen
+      // this same prompt, with no way in. Close the gate instead and let the
+      // client keep using it for this page load — views that already gave up
+      // stay empty until the user navigates, which beats an unbreakable loop.
+      setBusy(false);
+      setOpen(false);
+      return;
+    }
     // Every piece of app state that depends on auth was fetched once at
     // mount via plain effects, not a shared store — a full reload is the
     // simplest way to have all of them re-fetch with the new token. Same

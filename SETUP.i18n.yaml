@@ -2,5 +2,5 @@
 # After confirming both documents say the same thing, refresh with:
 # node scripts/verify-translation-pairing.mjs --write SETUP.md
 
-SETUP.md: 46097f4088c21a03f4f70a9459ce034bf008d8c5
-SETUP.es.md: 3f4cd8a27319ee5c429b84ebb4b3b15ebf36fc7a
+SETUP.md: 18e45137e6f2cbc21a4549d71468534968a20bc2
+SETUP.es.md: 54cb1c3031722bf791fee4adedb1765bf6053e46

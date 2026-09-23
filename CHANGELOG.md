@@ -7,6 +7,51 @@ Semantic Versioning, beginning with prereleases before the first stable release.
 
 ## [Unreleased]
 
+### Security
+
+- A first deploy no longer comes up holding a credential that is published in
+  this repository. The app used to hand itself the token `dev-token` on
+  `http://localhost:3000` and write it over whatever was in storage, so that
+  origin was authenticated for anyone who could open it — and an install that
+  had set a real `LINTAYA_TOKEN` lost it on every reload and answered 401 to
+  its own owner. No origin is authenticated by default now: one with no token
+  stored asks for one.
+- An install with no `LINTAYA_TOKEN` generates its own on first start and keeps
+  it in the gitignored `server/.lintaya-token`, so it is usable without ever
+  falling back to a shared value. The file is created with an exclusive open,
+  so two processes starting at once cannot each mint a token and overwrite the
+  other's, and the value is printed only to a terminal — never into the stdout
+  a service manager or CI job keeps and shows to more people than the file
+  does. Setting `LINTAYA_TOKEN` deletes the stored file, so losing that
+  variable in a later deploy cannot silently re-accept the token it replaced —
+  but only once the replacement server is actually serving, so a start that
+  dies on a busy port or a refused token still leaves the credential every
+  browser holds to roll back to.
+  Both guarantees fail closed: a token file that cannot be deleted stops the
+  start rather than surviving the rotation, and one that does not hold a whole
+  generated token stops the start rather than authenticating on whatever a
+  process killed mid-write left behind — a prefix is a shorter, guessable
+  credential, not a token.
+- Dropping the published defaults from this repository does nothing for an
+  install that already copied one into its own `start-dev.js`, so the server
+  now refuses to start while it holds a documented example token and binds
+  anywhere other than loopback, and says which of the two ways out to take. A
+  token that is merely short, or public on a local-only bind, is called out in
+  the startup log instead.
+- The demo vault lost its `dev-master` default in every `NODE_ENV` — without
+  `VAULT_MASTER_PASSWORD` the Passwords tab stays locked and says so. `npm run
+  dev` no longer injects either credential, and `start-dev.example.js` ships
+  them commented out instead of working.
+- The access-token prompt no longer traps a browser that blocks Web Storage.
+  It used to store the token, get nothing back, reload, and ask again forever.
+  Each store is now written on its own and read back to confirm it took, a
+  store that refuses the new token has its stale one cleared so it cannot
+  outrank the store that did accept it, a token that could not be persisted
+  takes precedence over whatever a store would not let go of, and the gate
+  closes without reloading instead of looping. Signing out checks the same
+  thing: a browser that keeps the token anyway is said so plainly, rather than
+  reloading into a session the user was just told had ended.
+
 ### Changed
 
 - Home's two zones are separated by the same handle the Dashboard uses, and at

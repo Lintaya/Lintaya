@@ -97,7 +97,9 @@ function loadConfig(env = process.env, options = {}) {
         min: 1000,
         max: 24 * 60 * 60 * 1000,
       }),
-      masterPassword: env.VAULT_MASTER_PASSWORD || (nodeEnv === "production" ? "" : "dev-master"),
+      // No default, in any NODE_ENV: a published master password would unlock
+      // the demo vault of every install that never set one of its own.
+      masterPassword: env.VAULT_MASTER_PASSWORD || "",
       clientId: env.BW_CLIENTID || "",
       clientSecret: env.BW_CLIENTSECRET || "",
     },
