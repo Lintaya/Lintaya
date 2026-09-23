@@ -15,7 +15,7 @@ test("loadConfig returns safe development defaults", () => {
   assert.equal(config.database.reposPath, path.join(serverDir, "repos.db"));
   assert.equal(config.database.disableSeeds, false);
   assert.equal(config.vault.mode, "bitwarden");
-  assert.equal(config.vault.masterPassword, "dev-master");
+  assert.equal(config.vault.masterPassword, "");
   assert.equal(config.secretStore.mode, "legacy");
 });
 

@@ -808,7 +808,7 @@ function PasswordsView() {
             <input
               value={apiToken}
               onChange={(event) => setApiToken(event.target.value)}
-              placeholder="dev-token"
+              placeholder="LINTAYA_TOKEN"
               style={inputStyle}
             />
           </label>

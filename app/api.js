@@ -4,47 +4,104 @@
   // client's API token — see the note at the status check below.
   const VAULT_AUTH_CODES = new Set(["WRONG_MASTER_PASSWORD", "VAULT_LOCKED"]);
 
-  function getToken() {
-    try {
-      // localStorage persists across reloads/tabs — no need to re-enter every session
-      const saved = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
-      if (saved) return saved;
-    } catch (error) {
-      // Some embedded browser contexts disable Web Storage. The local
-      // development server still has an explicit, non-secret dev token.
-    }
+  // Last resort for embedded contexts that disable Web Storage: the token the
+  // user just typed, kept for this page load only. Without it the gate would
+  // accept a token, fail to store it, and open again on the next request —
+  // forever, with no way in.
+  let memoryToken = "";
+  // Separate from memoryToken being truthy, because logging out sets it to the
+  // empty string on purpose: a store that silently ignores removeItem would
+  // otherwise keep handing back the token the user just signed out of.
+  let memoryTokenSet = false;
+  // Whether the last setToken() outlives a reload. The auth gate reloads to
+  // re-fetch everything with the new token, which is only safe when something
+  // will still be holding it afterwards.
+  let tokenPersisted = false;
 
-    return location.hostname === "localhost" && location.port === "3000" ? "dev-token" : "";
-  }
+  // Getters, not the Storage objects themselves: with cookies or site data
+  // blocked, merely reading `window.localStorage` throws — before any try/catch
+  // around getItem could ever run. Every access goes through one of these.
+  const localStore = () => window.localStorage;
+  const sessionStore = () => window.sessionStorage;
 
-  function setToken(token) {
+  function readStored(getStore) {
     try {
-      const next = (token || "").trim();
-      if (next) {
-        localStorage.setItem(TOKEN_KEY, next);
-        sessionStorage.setItem(TOKEN_KEY, next);
-      } else {
-        localStorage.removeItem(TOKEN_KEY);
-        sessionStorage.removeItem(TOKEN_KEY);
-      }
-      return next;
+      return getStore().getItem(TOKEN_KEY) || "";
     } catch (error) {
       return "";
     }
   }
 
-  // The local development server (`npm run dev`) intentionally uses the
-  // fixed dev-token. Keep its browser origin usable even when it still has a
-  // token from another local instance (for example :3001) in storage. This is
-  // strictly limited to the development origin; LAN/VPN and production hosts
-  // always retain the user-provided token.
-  try {
-    if (location.hostname === "localhost" && location.port === "3000") {
-      setToken("dev-token");
+  function getToken() {
+    // A token that could not be persisted is still the newest one this page
+    // has. Reading storage first would hand back the very value the user just
+    // replaced — or signed out of — from a store that would not let go of it,
+    // and every request would keep using the token they already replaced.
+    if (memoryTokenSet && !tokenPersisted) return memoryToken;
+
+    // localStorage persists across reloads/tabs — no need to re-enter every session
+    const saved = readStored(localStore) || readStored(sessionStore);
+    if (saved) return saved;
+
+    // No origin gets a token for free — not even localhost. A default here
+    // would be a credential published in this repository.
+    return memoryToken;
+  }
+
+  // Each store is written on its own: one of them being blocked (Safari's
+  // partitioned storage blocks localStorage while leaving sessionStorage
+  // alone, and vice versa) must not cost the token the other could have kept.
+  //
+  // A store that refuses the new value must not be left holding the old one
+  // either. localStorage is read first, so a stale token surviving there would
+  // outrank the fresh one in sessionStorage after the reload and put the user
+  // back in front of the same prompt, with the same token, forever.
+  function writeStored(getStore, value) {
+    try {
+      const store = getStore();
+      if (value) store.setItem(TOKEN_KEY, value);
+      else store.removeItem(TOKEN_KEY);
+      // Quota and private-mode quirks can accept a write and keep the old value
+      // anyway, so trust the read-back rather than the absence of an exception.
+      if (readStored(getStore) === value) return true;
+    } catch (error) {
+      // Same cleanup either way — a throw and a silently ignored write leave
+      // the store in the same state.
     }
-  } catch (error) {
-    // Storage can be unavailable in a restrictive browser context; request()
-    // will then behave normally and surface the server authentication result.
+    try {
+      getStore().removeItem(TOKEN_KEY);
+    } catch (removeError) {
+      // Nothing else to try: the caller decides what an unusable store means.
+    }
+    return false;
+  }
+
+  function setToken(token) {
+    const next = (token || "").trim();
+    memoryToken = next;
+    memoryTokenSet = true;
+    const local = writeStored(localStore, next);
+    const session = writeStored(sessionStore, next);
+    // Persisted means the next read finds this token and nothing else. Since
+    // getToken reads localStorage first, a stale value still sitting there
+    // outranks a good one in sessionStorage — and no amount of success on the
+    // session side makes the pair usable.
+    const leftover = readStored(localStore);
+    const staleWins = leftover !== "" && leftover !== next;
+    tokenPersisted = Boolean(next) && (local || session) && !staleWins;
+    return next;
+  }
+
+  function isTokenPersisted() {
+    return tokenPersisted;
+  }
+
+  // Whether a token would still be found after a reload. Signing out has to
+  // check this: a store that ignores removeItem without complaining would hand
+  // the token straight back on the next load, leaving the user signed in after
+  // being told they were signed out.
+  function hasStoredToken() {
+    return readStored(localStore) !== "" || readStored(sessionStore) !== "";
   }
 
   function clearToken() {
@@ -174,6 +231,8 @@
   window.HQ_API = {
     getToken,
     setToken,
+    isTokenPersisted,
+    hasStoredToken,
     clearToken,
     request,
     downloadBackup,

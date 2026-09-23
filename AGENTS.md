@@ -47,7 +47,9 @@ The `/api/ai-context` endpoint returns:
 - Usage examples
 - Tips for working with the API
 
-**Token location:** `server/start-dev.js` (look for `TOKEN = "..."`) or `server/personal-hq.db`.
+**Token location:** `server/.lintaya-token` (generated on first start when `LINTAYA_TOKEN`
+is unset), or `LINTAYA_TOKEN` in `server/start-dev.js` when the install pins its own. There
+is no default token: an origin with no token stored gets 401 on every `/api/*`.
 
 ## Rules for working here
 

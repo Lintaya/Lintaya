@@ -1,11 +1,19 @@
 // start-dev.example.js — Dev entry-point with environment configuration.
 // Copy this file to start-dev.js and fill in your real values.
 // start-dev.js is gitignored so your secrets stay local.
-process.env.LINTAYA_TOKEN = process.env.LINTAYA_TOKEN || "change-me-strong-token";
+// Leave LINTAYA_TOKEN unset and the server generates one on first start, stores
+// it in the gitignored server/.lintaya-token and prints it once. Set it here
+// only to pin a token of your own — and then make it long and unique, because
+// every value that ships in this repository is public by definition.
+// process.env.LINTAYA_TOKEN = "<your own long, unique token>";
 process.env.VAULT_MODE    = process.env.VAULT_MODE    || "demo"; // "demo" | "bitwarden"
 process.env.LINTAYA_SECRET_STORE = process.env.LINTAYA_SECRET_STORE || "legacy"; // "legacy" | "local"
-// Required when LINTAYA_SECRET_STORE=local; keep it outside the repository.
-process.env.LINTAYA_SECRET_KEY = process.env.LINTAYA_SECRET_KEY || "change-this-local-secret-key";
+// Required when LINTAYA_SECRET_STORE=local (16 characters minimum); keep it
+// outside the repository. Unused in "legacy" mode, which is the default.
+// process.env.LINTAYA_SECRET_KEY = "<a strong key kept outside git>";
+// Master password for the demo vault. Without it the Passwords tab stays
+// locked and answers VAULT_MASTER_PASSWORD_NOT_CONFIGURED — there is no default.
+// process.env.VAULT_MASTER_PASSWORD = "<your own demo vault password>";
 process.env.PORT          = process.env.PORT          || "3000";
 // Where connectors that do not ship with Lintaya are installed (ADR-014).
 // Defaults to ~/.lintaya/connectors/; set it only to keep them somewhere else.

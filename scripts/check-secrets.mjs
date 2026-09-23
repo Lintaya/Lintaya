@@ -19,6 +19,7 @@ const forbiddenPaths = [
   /(^|\/)\.env(?:\.|$)/i,
   /^server\/vault-seed\.js$/i,
   /^server\/start-dev\.js$/i,
+  /^server\/\.lintaya-token$/i,
   /^bitwarden\/settings\.env$/i,
   /\.(?:pem|p12|pfx|key)$/i,
   /(?:^|\/)(?:id_rsa|id_ed25519)$/i,

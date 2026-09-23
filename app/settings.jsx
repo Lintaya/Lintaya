@@ -204,6 +204,16 @@ function ProfilePane({ tweaks, onSetTweak }) {
             onClick={() => {
               if (!confirm(st("settings.profile.signOutConfirm", "Sign out of this browser? You will need to enter the token again."))) return;
               window.HQ_API.setToken("");
+              if (window.HQ_API.hasStoredToken()) {
+                // The browser kept the token despite being told to drop it.
+                // Reloading would read it straight back and sign the user in
+                // again right after telling them they were signed out.
+                alert(st(
+                  "settings.profile.signOutStuck",
+                  "This browser would not let Lintaya delete the stored token. You are signed out here until the tab is closed — clear this site's data to sign out for good.",
+                ));
+                return;
+              }
               location.reload();
             }}
             style={{

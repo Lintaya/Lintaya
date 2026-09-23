@@ -30,9 +30,11 @@ npm run check
 npm run dev
 ```
 
-Open http://localhost:3000. This command injects local demonstration defaults.
-It is appropriate for development only and must not be used as a shared or
-production configuration.
+Open http://localhost:3000. On the first start, with no LINTAYA_TOKEN in the
+environment, the server generates a random API token, prints it once and stores
+it in server/.lintaya-token, which Git ignores. Paste that value into the app
+when it asks for the access token. No origin is authenticated by default, not
+even localhost.
 
 ## Create a local configuration
 
@@ -42,7 +44,11 @@ Copy the example without committing the resulting file:
 Copy-Item start-dev.example.js start-dev.js
 ```
 
-Set LINTAYA_TOKEN to a strong, unique value in start-dev.js, then start the server:
+Leave LINTAYA_TOKEN commented out to keep the generated token, or set it to a
+strong, unique value of your own. The server refuses to start when the token is
+one of the example values published in this repository and HOST is not
+loopback; set a unique token, or bind to HOST=127.0.0.1 for a local-only run.
+Then start the server:
 
 ```powershell
 node .\start-dev.js

@@ -76,10 +76,12 @@ npm run check
 npm run dev
 ```
 
-Abre `http://localhost:3000`. El comando de desarrollo usa únicamente valores
-locales de demostración. Para un servidor local configurable, copia
+Abre `http://localhost:3000`. Si no defines `LINTAYA_TOKEN`, el servidor genera
+su propio token de API en el primer arranque, lo imprime una vez y lo conserva en
+`server/.lintaya-token`, ignorado por Git; pega ese valor en la aplicación cuando
+lo pida. Para un servidor local configurable, copia
 `server/start-dev.example.js` al archivo ignorado por Git
-`server/start-dev.js`, define un `LINTAYA_TOKEN` fuerte y ejecuta:
+`server/start-dev.js` y ejecuta:
 
 ```powershell
 node .\start-dev.js
