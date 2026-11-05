@@ -19,6 +19,24 @@ const { createConnectorStore } = require("../core/services/connector-store");
 // this repo's one shared tree-layout module from server-side code.
 const ZoneTree = require("../../app/zone-tree.js");
 
+// The URL a connection's stored config points at: `host` (vCenter),
+// `serverUrl` (Bitwarden) or `baseUrl` (every HTTP connector schema). Any
+// user:password embedded in the URL is dropped — the card is not a place a
+// credential may surface.
+function configuredEndpoint(cfg) {
+  const raw = [cfg?.host, cfg?.serverUrl, cfg?.baseUrl].find((v) => typeof v === "string" && v.trim());
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.trim());
+    if (!url.username && !url.password) return raw.trim();
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  } catch {
+    return raw.trim(); // a bare host/IP such as vCenter's "10.1.2.3"
+  }
+}
+
 function registerConnectorsRoutes({
   app, requireAuth, kvGet, kvSet, kvGetByPrefix, auditActivity,
   stmtConnList, stmtConnGet, stmtConnInsert, stmtConnUpdate, stmtConnDelete, parseConn,
@@ -84,11 +102,10 @@ function registerConnectorsRoutes({
                        // is already signed into the local Outlook desktop app.
                        : c.id === "outlook-local" ? true
                        : !!cfg;
-      // Use live endpoint if configured
-      const liveEndpoint = c.id === "vcenter" ? (cfg?.host || c.endpoint)
-                         : c.id === "bw"     ? (cfg?.serverUrl || c.endpoint)
-                         : c.id === "plane"  ? (cfg?.baseUrl || c.endpoint)
-                         : c.endpoint;
+      // The seeded row only carries a placeholder (e.g. GitLab's
+      // "http://10.0.0.1/api/v4"), so show the URL this connection is actually
+      // configured with — for every type, not just vCenter/Bitwarden/Plane.
+      const liveEndpoint = configuredEndpoint(cfg) || c.endpoint;
       // El tipo base (ej. "gitlab") de esta card — igual al propio id salvo que
       // sea una instancia extra ("gitlab3"). El frontend lo usa para saber qué
       // ícono/ConfigPanel/dispatcher de Test-Sync reutilizar sin adivinar por

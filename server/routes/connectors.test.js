@@ -217,6 +217,31 @@ test("warn and error still count as connected — only offline hides the module"
   }
 });
 
+test("a card shows the connection's configured URL, not the seeded placeholder, for any connector type", async () => {
+  const { invoke } = setup({
+    rows: [
+      { id: "gitlab", name: "GitLab", endpoint: "http://10.0.0.1/api/v4" },
+      { id: "outline", name: "Outline", endpoint: "https://10.0.0.1/api" },
+      { id: "vcenter", name: "vCenter", endpoint: "" },
+      { id: "ucsm", name: "UCSM", endpoint: "https://10.0.0.1/nuova" },
+    ],
+    configs: {
+      "connector-config-gitlab": { baseUrl: "https://gitlab.example.test", token: "glpat-secret" },
+      "connector-config-outline": { baseUrl: "https://ops:hunter2@outline.example.test/", apiKey: "ol-secret" },
+      "connector-config-vcenter": { host: "10.20.30.40" },
+    },
+  });
+  const result = await invoke("GET", "/api/connectors");
+  const endpoint = (id) => result.body.find((c) => c.id === id).endpoint;
+  assert.equal(endpoint("gitlab"), "https://gitlab.example.test");
+  // Credentials embedded in the URL never reach the card.
+  assert.equal(endpoint("outline"), "https://outline.example.test/");
+  assert.equal(endpoint("vcenter"), "10.20.30.40");
+  // Nothing configured yet: keep the seeded hint.
+  assert.equal(endpoint("ucsm"), "https://10.0.0.1/nuova");
+  assert.doesNotMatch(JSON.stringify(result.body.map((c) => c.endpoint)), /secret|hunter2/);
+});
+
 test("outlook-local reports configured with no stored config — it has no credentials to save", async () => {
   const catalog = [{ id: "outlook-local", displayName: "Outlook Local (COM)", capabilities: ["mail.read"], config: { fields: [] } }];
   const { invoke } = setup({ catalog }); // no configs entry for connector-config-outlook-local
