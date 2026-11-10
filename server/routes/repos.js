@@ -36,6 +36,16 @@ const {
 const { getConnectorConfig } = require("../core/services/connector-store");
 const { gitFailureError } = require("../core/services/git-errors");
 
+// Which script starts network-tools. On Windows it must be run_windows.py: the repo's package is
+// called `nt`, like CPython's builtin, and that runner imports Flask before re-pointing `nt` to the
+// repo. wsgi.py only exposes `app` for `flask --app wsgi:app run` / a WSGI server — run directly it
+// imports the app without that order (and crashes on Windows) and never starts serving.
+function networkToolsEntrypoint(clonePath, platform = process.platform, exists = fs.existsSync) {
+  const windowsRunner = path.join(clonePath, "run_windows.py");
+  if (platform === "win32" && exists(windowsRunner)) return windowsRunner;
+  return path.join(clonePath, "wsgi.py");
+}
+
 // GitLab accepts a project as its number or as "group/repo", but the latter must reach the API
 // with its slash encoded (group%2Frepo). Express hands the route param over already decoded.
 function gitlabProjectRef(id) {
@@ -489,7 +499,9 @@ function registerReposRoutes({
     });
   }
 
-  async function waitForNetworkToolsReady(timeoutMs = 15000) {
+  // The first start on Windows takes well over 15 s (venv launcher + Werkzeug reloader + the tool
+  // catalog scan), and giving up earlier reported a failed Play while the server came up anyway.
+  async function waitForNetworkToolsReady(timeoutMs = 120000) {
     const started = Date.now();
     let lastProbe = null;
     while (Date.now() - started < timeoutMs) {
@@ -530,7 +542,7 @@ function registerReposRoutes({
       return { clonePath, url: NETWORK_TOOLS_URL, status: "running", alreadyRunning: true, health: ready };
     }
 
-    const entrypoint = path.join(clonePath, "wsgi.py");
+    const entrypoint = networkToolsEntrypoint(clonePath);
     const frameAncestors = ["'self'"];
     if (parentOrigin && /^https?:\/\//i.test(parentOrigin)) frameAncestors.push(parentOrigin.replace(/\/$/, ""));
     if (!frameAncestors.some(v => /127\.0\.0\.1:3000|localhost:3000/.test(v))) {
@@ -574,7 +586,11 @@ function registerReposRoutes({
   function stopNetworkToolsProcess() {
     const child = networkToolsRuntime.child;
     const pid = networkToolsRuntime.pid || child?.pid;
-    if (child && !child.killed) {
+    if (process.platform === "win32" && pid) {
+      // run_windows.py serves through Werkzeug's reloader, a second python process that holds the
+      // port; killing only the parent would leave it behind. /T takes the whole tree.
+      try { spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); } catch (_) {}
+    } else if (child && !child.killed) {
       try { child.kill(); } catch (_) {}
     } else if (pid) {
       try { process.kill(pid); } catch (_) {}
@@ -3056,4 +3072,4 @@ function registerReposRoutes({
   return { attachRepoSettings, attachCloneState, reposDb, commitIdentityFor };
 }
 
-module.exports = { registerReposRoutes, gitlabProjectRef };
+module.exports = { registerReposRoutes, gitlabProjectRef, networkToolsEntrypoint };

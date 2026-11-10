@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { AppError, sendAppError } = require("../core/errors");
-const { registerReposRoutes, gitlabProjectRef } = require("./repos");
+const { registerReposRoutes, gitlabProjectRef, networkToolsEntrypoint } = require("./repos");
 
 function setup({ commitIdentity, resolveConnectorType } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lintaya-repos-"));
@@ -503,4 +503,13 @@ test("a GitLab project given as group/repo keeps its slash encoded for the API",
   // Express decodes /projects/acme%2Finventory/file to "acme/inventory"; GitLab needs it encoded back
   assert.equal(gitlabProjectRef("acme/inventory"), "acme%2Finventory");
   assert.equal(gitlabProjectRef("grupo/sub grupo/repo"), "grupo%2Fsub%20grupo%2Frepo");
+});
+
+test("network-tools starts from run_windows.py on Windows and from wsgi.py elsewhere", () => {
+  const clone = path.join("C:", "repos", "network-tools");
+  const has = (file) => file === path.join(clone, "run_windows.py");
+  assert.equal(networkToolsEntrypoint(clone, "win32", has), path.join(clone, "run_windows.py"));
+  assert.equal(networkToolsEntrypoint(clone, "linux", has), path.join(clone, "wsgi.py"));
+  // an older clone without the Windows runner keeps the previous entry point
+  assert.equal(networkToolsEntrypoint(clone, "win32", () => false), path.join(clone, "wsgi.py"));
 });

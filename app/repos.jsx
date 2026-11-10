@@ -4073,14 +4073,44 @@ function ReposView({ provider = "gitlab", connectorType, connectorName }) {
           onLinked={(r) => handleLinkedRepo(linkingRepo.id, r)} />
       )}
 
-      {browserTarget && window.AppBrowser && (
-        <window.AppBrowser
+      {browserTarget && (
+        <RepoAppBrowser
           url={browserTarget.url}
           title={browserTarget.app?.name || browserTarget.label}
           appColor={browserTarget.app?.color}
           onClose={() => setBrowserTarget(null)}
         />
       )}
+    </div>
+  );
+}
+
+// Full-screen viewer for an app a repo runs locally (network-tools, VS Code Web, a Play'd dev
+// server). Open/Play used to hand the URL to window.AppBrowser, which nothing defines, so the click
+// started the app and then showed nothing. A shell-provided AppBrowser still wins when present.
+function RepoAppBrowser({ url, title, appColor, onClose }) {
+  const Viewer = window.AppBrowser || RepoIframeViewer;
+  return <Viewer url={url} title={title} appColor={appColor} onClose={onClose} />;
+}
+
+function RepoIframeViewer({ url, title, appColor, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 700, background: "white", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
+        <span style={{ width: 10, height: 10, borderRadius: 999, background: appColor || "var(--muted-fg)", flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+        <span style={{ fontSize: 12, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{url}</span>
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", fontSize: 12, whiteSpace: "nowrap" }}>
+          ↗ {window.I18N?.t("ui.repos.openInNewTab", "Open in new tab") || "Open in new tab"}
+        </a>
+        <button onClick={onClose} aria-label="Close" style={{ background: "none", border: 0, cursor: "pointer", color: "var(--muted-fg)", fontSize: 20, lineHeight: 1 }}>×</button>
+      </div>
+      <iframe src={url} title={title} style={{ flex: 1, width: "100%", border: 0 }} />
     </div>
   );
 }
