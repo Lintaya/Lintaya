@@ -146,6 +146,47 @@ function registerOutlineRoutes(options) {
     }
   }));
 
+  // A collection's "Overview" tab is its description (Markdown). :id takes the UUID or the
+  // urlId at the end of the collection URL (…/collection/<slug>-<urlId>/overview).
+  app.get(`/api/connectors/${id}/collections/:id`, requireAuth, guardAsyncRoute(async (req, res) => {
+    const cfg = store.getConfig();
+    if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
+    try {
+      const response = await request(cfg.baseUrl, cfg.apiKey, "/api/collections.info", { id: req.params.id });
+      const collection = response?.data;
+      if (!collection) return res.status(404).json({ error: "collection-not-found" });
+      return res.json({
+        id: collection.id,
+        urlId: collection.urlId,
+        name: collection.name,
+        description: collection.description ?? "",
+        updatedAt: collection.updatedAt,
+      });
+    } catch (error) {
+      return res.status(502).json({ error: safeError(error, cfg) });
+    }
+  }));
+
+  app.patch(`/api/connectors/${id}/collections/:id`, requireAuth, guardAsyncRoute(async (req, res) => {
+    const cfg = store.getConfig();
+    if (!cfg) return res.status(400).json({ error: "connector-not-configured" });
+    const { description } = req.body || {};
+    if (typeof description !== "string") return res.status(400).json({ error: "description-required" });
+    try {
+      const response = await request(cfg.baseUrl, cfg.apiKey, "/api/collections.update", {
+        id: req.params.id,
+        description,
+      });
+      const collection = response?.data;
+      log("ok", `Colección actualizada · ${collection?.name || req.params.id}`);
+      return res.json({ ok: true, id: collection?.id, name: collection?.name, updatedAt: collection?.updatedAt });
+    } catch (error) {
+      const message = safeError(error, cfg);
+      log("err", `Collection update FAIL · ${message}`);
+      return res.status(502).json({ error: message });
+    }
+  }));
+
   app.post(`/api/connectors/${id}/test`, requireAuth, guardAsyncRoute(async (req, res) => {
     const cfg = store.getConfig();
     if (!cfg) return res.status(400).json({ ok: false, error: "connector-not-configured" });

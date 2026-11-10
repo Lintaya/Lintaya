@@ -127,6 +127,32 @@ test("document creation and update routes preserve their contracts", async () =>
 
 });
 
+test("a collection overview is read and replaced through its description", async () => {
+  const calls = [];
+  const harness = createHarness({
+    request: async (_baseUrl, _apiKey, path, body) => {
+      calls.push({ path, body });
+      if (path === "/api/collections.info") {
+        return { data: { id: "coll-uuid", urlId: "Xy7Kq2LmPz", name: "Engineering", description: "Old", updatedAt: "t0" } };
+      }
+      return { data: { id: "coll-uuid", name: "Engineering", updatedAt: "t1" } };
+    },
+  });
+  configure(harness);
+
+  const read = await harness.invoke("GET", "/api/connectors/outline/collections/:id", { params: { id: "Xy7Kq2LmPz" } });
+  assert.deepEqual(read.body, { id: "coll-uuid", urlId: "Xy7Kq2LmPz", name: "Engineering", description: "Old", updatedAt: "t0" });
+
+  const missing = await harness.invoke("PATCH", "/api/connectors/outline/collections/:id", { params: { id: "coll-uuid" }, body: {} });
+  assert.equal(missing.status, 400);
+
+  const updated = await harness.invoke("PATCH", "/api/connectors/outline/collections/:id", {
+    params: { id: "coll-uuid" }, body: { description: "New overview" },
+  });
+  assert.deepEqual(updated.body, { ok: true, id: "coll-uuid", name: "Engineering", updatedAt: "t1" });
+  assert.deepEqual(calls.at(-1), { path: "/api/collections.update", body: { id: "coll-uuid", description: "New overview" } });
+});
+
 test("legacy document trash delegates to the canonical destructive action and never calls Outline", async () => {
   let actionCall = null;
   const harness = createHarness({

@@ -37,6 +37,14 @@ before the connector can move from beta to stable.
 - `PATCH /api/connectors/outline/documents/:id`
 - `POST /api/connectors/outline/documents/:id/delete` (legacy compatibility
   alias; returns `202 pending-approval`)
+- `GET /api/connectors/outline/collections/:id`
+- `PATCH /api/connectors/outline/collections/:id` (body `{ description }`)
+
+A collection's **Overview** tab is its `description` (Markdown), not a document:
+it is read with `collections.info` and replaced as a whole with
+`collections.update`. `:id` accepts the collection UUID or the short `urlId`
+at the end of its URL (`/collection/<slug>-<urlId>/overview`). The PATCH
+replaces the whole overview, so read it first and send it back edited.
 
 Document deletion is an Outline recoverable trash operation rather than a
 permanent provider delete. Both the canonical action
