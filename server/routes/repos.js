@@ -36,6 +36,12 @@ const {
 const { getConnectorConfig } = require("../core/services/connector-store");
 const { gitFailureError } = require("../core/services/git-errors");
 
+// GitLab accepts a project as its number or as "group/repo", but the latter must reach the API
+// with its slash encoded (group%2Frepo). Express hands the route param over already decoded.
+function gitlabProjectRef(id) {
+  return encodeURIComponent(String(id));
+}
+
 function registerReposRoutes({
   app, requireAuth, kvGet, kvSet, auditWrite, connectorLog,
   resolveConnectorType, config, insecureAgent, AppError, sendAppError,
@@ -1955,14 +1961,14 @@ function registerReposRoutes({
   const PROVIDERS = {
     gitlab: {
       async getProject(cfg, id) {
-        const p = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${id}`);
+        const p = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(id)}`);
         return { id: String(p.id), name: p.name, path: p.path_with_namespace, cloneUrl: p.http_url_to_repo || p.ssh_url_to_repo, defaultBranch: p.default_branch || "main" };
       },
       cloneAuthHeader(cfg) {
         return "Basic " + Buffer.from(`oauth2:${cfg.token}`, "utf8").toString("base64");
       },
       async listBranches(cfg, id) {
-        const data = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${id}/repository/branches?per_page=100`);
+        const data = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(id)}/repository/branches?per_page=100`);
         return (Array.isArray(data) ? data : []).map(b => ({ name: b.name, protected: !!b.protected, default: !!b.default }));
       },
       async listTree(cfg, id, ref) {
@@ -1973,7 +1979,7 @@ function registerReposRoutes({
         let hitPageCap = false;
         for (let page = 1; page <= MAX_PAGES; page += 1) {
           const data = await gitlabRequest(cfg.baseUrl, cfg.token,
-            `/api/v4/projects/${id}/repository/tree?recursive=true&per_page=100&page=${page}&ref=${encodeURIComponent(ref || "")}`);
+            `/api/v4/projects/${gitlabProjectRef(id)}/repository/tree?recursive=true&per_page=100&page=${page}&ref=${encodeURIComponent(ref || "")}`);
           const items = Array.isArray(data) ? data : [];
           blobs.push(...items.filter(f => f.type === "blob"));
           if (items.length < 100) break;
@@ -1987,7 +1993,7 @@ function registerReposRoutes({
       },
       async getFile(cfg, id, filePath, ref) {
         const mime = imageMimeForPath(filePath);
-        const rawPath = `/api/v4/projects/${id}/repository/files/${encodeURIComponent(filePath)}/raw?ref=${encodeURIComponent(ref || "")}`;
+        const rawPath = `/api/v4/projects/${gitlabProjectRef(id)}/repository/files/${encodeURIComponent(filePath)}/raw?ref=${encodeURIComponent(ref || "")}`;
         if (mime) {
           const buf = await gitlabRequest(cfg.baseUrl, cfg.token, rawPath, "GET", null, null, "buffer");
           return { content: buf.toString("base64"), encoding: "base64", mime };
@@ -2003,7 +2009,7 @@ function registerReposRoutes({
         const folders = [], files = [];
         for (let page = 1; page <= 5; page += 1) {
           const data = await gitlabRequest(cfg.baseUrl, cfg.token,
-            `/api/v4/projects/${id}/repository/tree?path=${encodeURIComponent(dirPath || "")}&per_page=100&page=${page}&ref=${encodeURIComponent(ref || "")}`);
+            `/api/v4/projects/${gitlabProjectRef(id)}/repository/tree?path=${encodeURIComponent(dirPath || "")}&per_page=100&page=${page}&ref=${encodeURIComponent(ref || "")}`);
           const items = Array.isArray(data) ? data : [];
           for (const it of items) {
             (it.type === "tree" ? folders : files).push({ name: it.name, path: it.path });
@@ -2016,11 +2022,11 @@ function registerReposRoutes({
       },
       async listPipelines(cfg, id, ref) {
         const data = await gitlabRequest(cfg.baseUrl, cfg.token,
-          `/api/v4/projects/${id}/pipelines?ref=${encodeURIComponent(ref || "")}&per_page=10&order_by=id&sort=desc`);
+          `/api/v4/projects/${gitlabProjectRef(id)}/pipelines?ref=${encodeURIComponent(ref || "")}&per_page=10&order_by=id&sort=desc`);
         const list = Array.isArray(data) ? data : [];
         // Fill in sha/duration from the detail endpoint (list endpoint omits them)
         const detailed = await Promise.all(list.map(p =>
-          gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${id}/pipelines/${p.id}`).catch(() => p)
+          gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(id)}/pipelines/${p.id}`).catch(() => p)
         ));
         return detailed.map(p => ({
           id: p.id, status: p.status, ref: p.ref,
@@ -2032,7 +2038,7 @@ function registerReposRoutes({
         }));
       },
       async listPipelineJobs(cfg, id, pipelineId) {
-        const jobs = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${id}/pipelines/${pipelineId}/jobs?per_page=100`);
+        const jobs = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(id)}/pipelines/${pipelineId}/jobs?per_page=100`);
         const jobList = Array.isArray(jobs) ? jobs : [];
         // GitLab returns newest-first; reverse to stage/creation order for a left-to-right build waterfall
         return jobList.map(j => ({
@@ -2042,17 +2048,17 @@ function registerReposRoutes({
         })).reverse();
       },
       async getJobTrace(cfg, id, jobId) {
-        const t = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${id}/jobs/${jobId}/trace`, "GET", null, null, "text").catch(() => "");
+        const t = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(id)}/jobs/${jobId}/trace`, "GET", null, null, "text").catch(() => "");
         return typeof t === "string" ? t : "";
       },
       async triggerPipeline(cfg, id, ref) {
         const p = await gitlabRequest(cfg.baseUrl, cfg.token,
-          `/api/v4/projects/${id}/pipeline?ref=${encodeURIComponent(ref)}`, "POST");
+          `/api/v4/projects/${gitlabProjectRef(id)}/pipeline?ref=${encodeURIComponent(ref)}`, "POST");
         return { id: p.id, status: p.status, webUrl: p.web_url };
       },
       async listFileCommits(cfg, id, filePath, ref, limit) {
         const data = await gitlabRequest(cfg.baseUrl, cfg.token,
-          `/api/v4/projects/${id}/repository/commits?path=${encodeURIComponent(filePath)}&ref_name=${encodeURIComponent(ref || "")}&per_page=${limit}`);
+          `/api/v4/projects/${gitlabProjectRef(id)}/repository/commits?path=${encodeURIComponent(filePath)}&ref_name=${encodeURIComponent(ref || "")}&per_page=${limit}`);
         const list = Array.isArray(data) ? data : [];
         return list.map(c => ({
           sha: (c.id || "").slice(0, 8),
@@ -2820,7 +2826,7 @@ function registerReposRoutes({
         const all = [];
         for (let page = 1; page <= 50; page += 1) {
           const data = await gitlabRequest(cfg.baseUrl, cfg.token,
-            `/api/v4/projects/${req.params.id}/pipelines?ref=${encodeURIComponent(ref)}&per_page=100&order_by=id&sort=asc&page=${page}`);
+            `/api/v4/projects/${gitlabProjectRef(req.params.id)}/pipelines?ref=${encodeURIComponent(ref)}&per_page=100&order_by=id&sort=asc&page=${page}`);
           const list = Array.isArray(data) ? data : [];
           all.push(...list);
           if (list.length < 100) break;
@@ -2910,7 +2916,7 @@ function registerReposRoutes({
     const { path: _ignoredPath, ...body } = req.body || {};
     if (!Object.keys(body).length) return sendAppError(res, AppError.badRequest("no-fields"), req);
     try {
-      const updated = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${req.params.id}`, "PUT", body);
+      const updated = await gitlabRequest(cfg.baseUrl, cfg.token, `/api/v4/projects/${gitlabProjectRef(req.params.id)}`, "PUT", body);
       res.locals.auditMessage = `Proyecto editado · ${req.params.id} · campos: ${Object.keys(body).join(", ")}`;
       res.json({ ok: true, id: updated?.id, name: updated?.name, path: updated?.path });
     } catch (err) {
@@ -2967,7 +2973,7 @@ function registerReposRoutes({
     if (!userId) return sendAppError(res, AppError.badRequest("userId required"), req);
     try {
       const member = await gitlabRequest(cfg.baseUrl, cfg.token,
-        `/api/v4/projects/${req.params.id}/members`, "POST", { user_id: userId, access_level: accessLevel });
+        `/api/v4/projects/${gitlabProjectRef(req.params.id)}/members`, "POST", { user_id: userId, access_level: accessLevel });
       res.locals.auditMessage = `Miembro agregado · proyecto ${req.params.id} · user_id ${userId} · nivel ${accessLevel}`;
       res.json({ ok: true, id: member?.id, accessLevel: member?.access_level });
     } catch (err) {
@@ -3050,4 +3056,4 @@ function registerReposRoutes({
   return { attachRepoSettings, attachCloneState, reposDb, commitIdentityFor };
 }
 
-module.exports = { registerReposRoutes };
+module.exports = { registerReposRoutes, gitlabProjectRef };

@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { AppError, sendAppError } = require("../core/errors");
-const { registerReposRoutes } = require("./repos");
+const { registerReposRoutes, gitlabProjectRef } = require("./repos");
 
 function setup({ commitIdentity, resolveConnectorType } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lintaya-repos-"));
@@ -495,4 +495,12 @@ test("a recognized Git failure reaches the client as its own code, not the gener
   assert.equal(result.status, 400);
   assert.equal(result.body.code, "GIT_NOTHING_TO_COMMIT");
   assert.match(result.body.detail, /nothing staged/i);
+});
+
+test("a GitLab project given as group/repo keeps its slash encoded for the API", () => {
+  assert.equal(gitlabProjectRef(52), "52");
+  assert.equal(gitlabProjectRef("52"), "52");
+  // Express decodes /projects/acme%2Finventory/file to "acme/inventory"; GitLab needs it encoded back
+  assert.equal(gitlabProjectRef("acme/inventory"), "acme%2Finventory");
+  assert.equal(gitlabProjectRef("grupo/sub grupo/repo"), "grupo%2Fsub%20grupo%2Frepo");
 });
