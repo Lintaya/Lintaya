@@ -1517,6 +1517,16 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
     window.addEventListener("mouseup", onUp);
   };
   const [pinnedRepos, setPinnedRepos] = useState({});
+  // Connectors whose pinned repos are folded under their nav item. The chevron
+  // only appears while a connector has pins; with none it is a plain item.
+  const [foldedPins, setFoldedPins] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("hq.foldedPins")) || []; } catch { return []; }
+  });
+  const togglePins = provider => setFoldedPins(prev => {
+    const next = prev.includes(provider) ? prev.filter(x => x !== provider) : [...prev, provider];
+    try { localStorage.setItem("hq.foldedPins", JSON.stringify(next)); } catch {}
+    return next;
+  });
 
   useEffect(() => {
     const loadPinned = () => {
@@ -1878,12 +1888,30 @@ function Sidebar({ route, setRoute, onOpenCmd, onClose, style, dark = false, hid
                       }}>{it.badge}</span>
                     );
                   })()}
+                  {it.component === "ReposView" && (pinnedRepos[it.connectorId] || []).length > 0 && (() => {
+                    const open = !foldedPins.includes(it.connectorId);
+                    const label = open ? t("nav.pins.hide", "Hide pinned repositories") : t("nav.pins.show", "Show pinned repositories");
+                    return (
+                      <span role="button" tabIndex={0} aria-expanded={open} aria-label={label} title={label}
+                        onClick={event => { event.stopPropagation(); togglePins(it.connectorId); }}
+                        onKeyDown={event => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault(); event.stopPropagation(); togglePins(it.connectorId);
+                        }}
+                        style={{
+                          flexShrink: 0, display: "inline-flex", padding: 2, margin: -2, borderRadius: 4,
+                          color: "var(--muted-fg)", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s ease",
+                        }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                      </span>
+                    );
+                  })()}
                 </>}
               </button>
               {!compact && it.component === "ReposView" && (() => {
                 const provider = it.connectorId;
                 const list = pinnedRepos[provider] || [];
-                if (!list.length) return null;
+                if (!list.length || foldedPins.includes(provider)) return null;
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 1, margin: "1px 0 3px 30px" }}>
                     {list.map(r => (
