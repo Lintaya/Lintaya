@@ -377,6 +377,11 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
     (!term || row.title.toLowerCase().includes(term) || row.connectorLabel.toLowerCase().includes(term));
   const tagOptions = window.tagFilterOptions ? window.tagFilterOptions(boardRows) : [];
   const rows = allRows.filter(matches);
+  // "All" leaves disconnected boards out, so the counter says why the table
+  // holds fewer rows than the total and offers to show them.
+  const hiddenDisconnected = estadoFilter === "all"
+    ? allRows.filter(row => row.statusKey === "disconnected" && matches({ ...row, statusKey: "connected" })).length
+    : 0;
   const filtersActive = !!term
     || connectorFilter !== "all" || typeFilter !== "all"
     || estadoFilter !== "all" || tagFilter !== "all";
@@ -427,6 +432,14 @@ function ConnectorModulesPage({ modules = [], modulePages = [], onNavigate }) {
         )}
         <div style={{ marginLeft: "auto", flexShrink: 0, fontSize: 12, color: "var(--muted-fg)", whiteSpace: "nowrap" }}>
           <b style={{ color: "var(--fg)" }}>{rows.length}</b> / {totalCount}
+          {hiddenDisconnected > 0 && (<>
+            {" · "}
+            <button onClick={() => setEstadoFilter("disconnected")}
+              title={t("boards.showDisconnected", "Show disconnected boards")}
+              style={{ padding: 0, border: 0, background: "none", color: "var(--accent)", fontSize: 12, fontFamily: "inherit", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>
+              {t("boards.hiddenDisconnected", "{count} disconnected", { count: hiddenDisconnected })}
+            </button>
+          </>)}
         </div>
       </div>
 
