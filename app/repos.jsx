@@ -561,7 +561,7 @@ function RepoCard({ repo, providerLabel, onSelect, onClone, onLinkExisting, clon
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repo.name}</div>
-          <div style={{ fontSize: 10.5, color: "var(--muted-fg)", fontFamily: "var(--font-mono)" }}>{repo.path}</div>
+          <div title={repo.path} style={{ fontSize: 10.5, color: "var(--muted-fg)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repo.path}</div>
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           {repo.settings?.visible === false && (
@@ -614,7 +614,7 @@ function RepoCard({ repo, providerLabel, onSelect, onClone, onLinkExisting, clon
         </div>
       )}
 
-      <div style={{ fontSize: 10.5, color: "var(--muted-fg)", minHeight: 14, fontFamily: "var(--font-mono)" }}>
+      <div style={{ fontSize: 10.5, color: "var(--muted-fg)", minHeight: 14, fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
         {repo.localClone?.path
           ? `${repo.localClone.path}${repo.localClone.branch ? ` · ${repo.localClone.branch}` : ""}`
           : window.I18N.t("ui.repos.notCloned", "Not cloned locally")}
